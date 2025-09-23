@@ -30,10 +30,10 @@ export class User {
   refreshToken: string;
 
   @Column({ nullable: true })
-  passwordResetToken?: string;
+  passwordResetToken: string;
 
   @Column({ nullable: true })
-  passwordResetExpires?: Date;
+  passwordResetExpires: Date;
 
   @CreateDateColumn()
   createdAt: Date;
