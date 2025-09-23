@@ -78,26 +78,25 @@ export class AuthService {
     const user = await this.usersService.findByEmail(forgotPasswordDto.email);
     
     if (!user) {
-      // Don't reveal if email exists or not for security
-      return { message: 'If the email exists, a password reset link has been sent' };
+      throw new BadRequestException('Email not found in system');
     }
 
     const resetToken = crypto.randomBytes(32).toString('hex');
-    const resetExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+    const resetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
     await this.userRepository.update(user.id, {
       passwordResetToken: resetToken,
       passwordResetExpires: resetExpires,
     });
 
-    // TODO: Send email with reset token
-    // For now, we'll return the token (remove this in production)
-    console.log(`Password reset token for ${user.email}: ${resetToken}`);
+    // Generate reset URL (dummy for now - log it)
+    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/new-password?token=${resetToken}`;
+    
+    console.log(`Password reset URL for ${user.email}: ${resetUrl}`);
     
     return { 
-      message: 'If the email exists, a password reset link has been sent',
-      // Remove this in production
-      resetToken: resetToken 
+      message: 'Password reset link has been sent to your email',
+      resetUrl: resetUrl // For development/testing purposes
     };
   }
 
@@ -108,13 +107,23 @@ export class AuthService {
       },
     });
 
-    if (!user || !user.passwordResetExpires || user.passwordResetExpires < new Date()) {
-      throw new BadRequestException('Invalid or expired reset token');
+    if (!user) {
+      throw new BadRequestException('Invalid reset token');
+    }
+
+    if (!user.passwordResetExpires || user.passwordResetExpires < new Date()) {
+      // Clear expired token (sets to NULL in database)
+      await this.userRepository.update(user.id, {
+        passwordResetToken: undefined,
+        passwordResetExpires: undefined,
+      });
+      throw new BadRequestException('Reset token has expired. Please request a new password reset.');
     }
 
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(resetPasswordDto.newPassword, saltRounds);
 
+    // Reset password and clear reset token fields (sets to NULL in database)
     await this.userRepository.update(user.id, {
       password: hashedPassword,
       passwordResetToken: undefined,

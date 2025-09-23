@@ -9,14 +9,14 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 @Module({
   imports: [
     TypeOrmModule.forFeature([User]),
-    JwtModule.registerAsync({
-      imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET') || 'your-secret-key',
-        signOptions: { expiresIn: '15m' },
-      }),
-      inject: [ConfigService],
-    }),
+    // JwtModule.registerAsync({
+    //   imports: [ConfigModule],
+    //   useFactory: async (configService: ConfigService) => ({
+    //     secret: configService.get<string>('JWT_SECRET') || 'your-secret-key',
+    //     signOptions: { expiresIn: '15m' },
+    //   }),
+    //   inject: [ConfigService],
+    // }),
   ],
   controllers: [UsersController],
   providers: [UsersService],
