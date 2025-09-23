@@ -90,7 +90,7 @@ export class AuthService {
     });
 
     // Generate reset URL (dummy for now - log it)
-    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/new-password?token=${resetToken}`;
+    const resetUrl = `${process.env.FRONTEND_URL}/new-password?token=${resetToken}`;
     
     console.log(`Password reset URL for ${user.email}: ${resetUrl}`);
     
