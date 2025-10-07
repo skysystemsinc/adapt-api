@@ -5,6 +5,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { ApplicationTypeModule } from './modules/application-type/application-type.module';
 import databaseConfig from './config/database.config';
 
 @Module({
@@ -26,6 +27,7 @@ import databaseConfig from './config/database.config';
     // Feature Modules
     UsersModule,
     AuthModule,
+    ApplicationTypeModule,
   ],
   controllers: [AppController],
   providers: [AppService],
