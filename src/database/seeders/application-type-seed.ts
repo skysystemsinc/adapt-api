@@ -1,7 +1,6 @@
 import { DataSource } from 'typeorm';
 import { config } from 'dotenv';
 import { ApplicationTypeSeeder } from './application-type.seeder';
-import { AuthorityLevelSeeder } from './authority-level.seeder';
 
 // Load environment variables
 config();
@@ -18,24 +17,21 @@ const AppDataSource = new DataSource({
   logging: false,
 });
 
-async function runSeeders() {
+async function runApplicationTypeSeeder() {
   try {
-    console.log('🌱 Starting database seeding...\n');
+    console.log('🌱 Starting Application Type seeding...\n');
 
     await AppDataSource.initialize();
     console.log('✓ Database connection established\n');
 
-    // Run seeders
+    // Run application type seeder only
     const applicationTypeSeeder = new ApplicationTypeSeeder();
     await applicationTypeSeeder.run(AppDataSource);
 
-    const authorityLevelSeeder = new AuthorityLevelSeeder();
-    await authorityLevelSeeder.run(AppDataSource);
-
-    console.log('\n✅ Seeding completed successfully!');
+    console.log('\n✅ Application Type seeding completed successfully!');
     process.exit(0);
   } catch (error) {
-    console.error('❌ Seeding failed:', error);
+    console.error('❌ Application Type seeding failed:', error);
     process.exit(1);
   } finally {
     if (AppDataSource.isInitialized) {
@@ -44,5 +40,4 @@ async function runSeeders() {
   }
 }
 
-runSeeders();
-
+runApplicationTypeSeeder();
