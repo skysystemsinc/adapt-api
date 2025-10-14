@@ -6,6 +6,9 @@ import { AppService } from './app.service';
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ApplicationTypeModule } from './modules/application-type/application-type.module';
+import { FormsModule } from './modules/forms/forms.module';
+import { FormSubmissionsModule } from './modules/form-submissions/form-submissions.module';
+import { UploadsModule } from './modules/uploads/uploads.module';
 import databaseConfig from './config/database.config';
 
 @Module({
@@ -28,6 +31,9 @@ import databaseConfig from './config/database.config';
     UsersModule,
     AuthModule,
     ApplicationTypeModule,
+    FormsModule,
+    FormSubmissionsModule,
+    UploadsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
