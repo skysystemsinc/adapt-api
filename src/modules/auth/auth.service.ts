@@ -96,6 +96,7 @@ export class AuthService {
     
     return { 
       message: 'Password reset link has been sent to your email',
+      token: resetToken, // Return token directly in response
       resetUrl: resetUrl // For development/testing purposes
     };
   }
@@ -104,11 +105,12 @@ export class AuthService {
     const user = await this.userRepository.findOne({
       where: {
         passwordResetToken: resetPasswordDto.token,
+        email: resetPasswordDto.email,
       },
     });
 
     if (!user) {
-      throw new BadRequestException('Invalid reset token');
+      throw new BadRequestException('Invalid reset token or email');
     }
 
     if (!user.passwordResetExpires || user.passwordResetExpires < new Date()) {
