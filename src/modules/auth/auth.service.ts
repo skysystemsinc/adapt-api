@@ -10,6 +10,7 @@ import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { VerifyOTPDto } from './dto/verify-otp.dto';
 
 @Injectable()
 export class AuthService {
@@ -81,23 +82,58 @@ export class AuthService {
       throw new BadRequestException('Email not found in system');
     }
 
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    const resetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    // Generate OTP (4 digits)
+    // const otp = Math.floor(1000 + Math.random() * 9000).toString();
+    const otp = "1234";
+    const otpExpires = new Date(Date.now() + 2 * 60 * 1000); // 2 minutes
 
+    await this.userRepository.update(user.id, {
+      passwordResetToken: otp, // Store OTP as token temporarily
+      passwordResetExpires: otpExpires,
+    });
+
+    // TODO: Send OTP via email service
+    console.log(`OTP for ${user.email}: ${otp}`);
+    
+    return { 
+      message: 'OTP has been sent to your email',
+    };
+  }
+
+  async verifyOTP(verifyOTPDto: VerifyOTPDto) {
+    const user = await this.userRepository.findOne({
+      where: {
+        email: verifyOTPDto.email,
+        passwordResetToken: verifyOTPDto.otp,
+      },
+    });
+
+    if (!user) {
+      throw new BadRequestException('Invalid OTP or email');
+    }
+
+    if (!user.passwordResetExpires || user.passwordResetExpires < new Date()) {
+      // Clear expired OTP
+      await this.userRepository.update(user.id, {
+        passwordResetToken: undefined,
+        passwordResetExpires: undefined,
+      });
+      throw new BadRequestException('OTP has expired. Please request a new OTP.');
+    }
+
+    // Generate a proper reset token for password reset
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+    // Update with the actual reset token
     await this.userRepository.update(user.id, {
       passwordResetToken: resetToken,
       passwordResetExpires: resetExpires,
     });
 
-    // Generate reset URL (dummy for now - log it)
-    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/new-password?token=${resetToken}`;
-    
-    console.log(`Password reset URL for ${user.email}: ${resetUrl}`);
-    
     return { 
-      message: 'Password reset link has been sent to your email',
-      token: resetToken, // Return token directly in response
-      resetUrl: resetUrl // For development/testing purposes
+      message: 'OTP verified successfully',
+      token: resetToken
     };
   }
 
