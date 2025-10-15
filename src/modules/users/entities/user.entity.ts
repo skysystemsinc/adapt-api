@@ -35,6 +35,12 @@ export class User {
   @Column({ nullable: true })
   passwordResetExpires: Date;
 
+  @Column({ nullable: true, length: 4 })
+  otp: string;
+
+  @Column({ nullable: true })
+  otpExpires: Date;
+
   @CreateDateColumn()
   createdAt: Date;
 

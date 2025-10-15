@@ -88,8 +88,8 @@ export class AuthService {
     const otpExpires = new Date(Date.now() + 2 * 60 * 1000); // 2 minutes
 
     await this.userRepository.update(user.id, {
-      passwordResetToken: otp, // Store OTP as token temporarily
-      passwordResetExpires: otpExpires,
+      otp: otp, // Store OTP in dedicated field
+      otpExpires: otpExpires,
     });
 
     // TODO: Send OTP via email service
@@ -104,7 +104,7 @@ export class AuthService {
     const user = await this.userRepository.findOne({
       where: {
         email: verifyOTPDto.email,
-        passwordResetToken: verifyOTPDto.otp,
+        otp: verifyOTPDto.otp,
       },
     });
 
@@ -112,11 +112,11 @@ export class AuthService {
       throw new BadRequestException('Invalid OTP or email');
     }
 
-    if (!user.passwordResetExpires || user.passwordResetExpires < new Date()) {
+    if (!user.otpExpires || user.otpExpires < new Date()) {
       // Clear expired OTP
       await this.userRepository.update(user.id, {
-        passwordResetToken: undefined,
-        passwordResetExpires: undefined,
+        otp: undefined,
+        otpExpires: undefined,
       });
       throw new BadRequestException('OTP has expired. Please request a new OTP.');
     }
@@ -125,10 +125,12 @@ export class AuthService {
     const resetToken = crypto.randomBytes(32).toString('hex');
     const resetExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
-    // Update with the actual reset token
+    // Update with the actual reset token and clear OTP
     await this.userRepository.update(user.id, {
       passwordResetToken: resetToken,
       passwordResetExpires: resetExpires,
+      otp: undefined, // Clear OTP after successful verification
+      otpExpires: undefined, // Clear OTP expiration
     });
 
     return { 
