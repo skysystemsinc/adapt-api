@@ -11,6 +11,8 @@ import { Form } from './entities/form.entity';
 import { CreateFormDto } from './dto/create-form.dto';
 import { UpdateFormDto } from './dto/update-form.dto';
 import { FormResponseDto } from './dto/form-response.dto';
+import { FormFieldResponseDto } from './dto/form-field-response.dto';
+import { FormStepResponseDto } from './dto/form-step-response.dto';
 import { FormFieldsService } from './form-fields.service';
 
 @Injectable()
@@ -77,9 +79,18 @@ export class FormsService {
       order: { createdAt: 'DESC' },
     });
 
-    return plainToInstance(FormResponseDto, forms, {
-      excludeExtraneousValues: true,
-    });
+    // Transform to DTOs and add fields from form_fields table
+    const formDtos = await Promise.all(
+      forms.map(async (form) => {
+        const dto = plainToInstance(FormResponseDto, form, {
+          excludeExtraneousValues: true,
+        });
+        dto.steps = await this.getFieldsGroupedByStep(form.id);
+        return dto;
+      }),
+    );
+
+    return formDtos;
   }
 
   /**
@@ -92,9 +103,14 @@ export class FormsService {
       throw new NotFoundException(`Form with ID '${id}' not found`);
     }
 
-    return plainToInstance(FormResponseDto, form, {
+    const dto = plainToInstance(FormResponseDto, form, {
       excludeExtraneousValues: true,
     });
+
+    // Add fields grouped by step from form_fields table
+    dto.steps = await this.getFieldsGroupedByStep(id);
+
+    return dto;
   }
 
   /**
@@ -109,9 +125,14 @@ export class FormsService {
       throw new NotFoundException(`Public form with slug '${slug}' not found`);
     }
 
-    return plainToInstance(FormResponseDto, form, {
+    const dto = plainToInstance(FormResponseDto, form, {
       excludeExtraneousValues: true,
     });
+
+    // Add fields grouped by step from form_fields table
+    dto.steps = await this.getFieldsGroupedByStep(form.id);
+
+    return dto;
   }
 
   /**
@@ -192,6 +213,42 @@ export class FormsService {
     await this.formRepository.remove(form);
 
     return { message: `Form with ID '${id}' has been deleted successfully` };
+  }
+
+  /**
+   * Get fields from form_fields table grouped by step
+   */
+  private async getFieldsGroupedByStep(
+    formId: string,
+  ): Promise<FormStepResponseDto[]> {
+    // Fetch all fields for this form from form_fields table
+    const fields = await this.formFieldsService.getFieldsByFormId(formId);
+
+    // Group fields by step number
+    const fieldsByStep = new Map<number, FormFieldResponseDto[]>();
+
+    for (const field of fields) {
+      const fieldDto = plainToInstance(FormFieldResponseDto, field, {
+        excludeExtraneousValues: true,
+      });
+
+      if (!fieldsByStep.has(field.step)) {
+        fieldsByStep.set(field.step, []);
+      }
+      fieldsByStep.get(field.step)!.push(fieldDto);
+    }
+
+    // Convert Map to array of FormStepResponseDto
+    const steps: FormStepResponseDto[] = [];
+    fieldsByStep.forEach((fields, stepNumber) => {
+      steps.push({
+        stepNumber,
+        fields: fields.sort((a, b) => a.order - b.order), // Sort by order within step
+      });
+    });
+
+    // Sort steps by step number
+    return steps.sort((a, b) => a.stepNumber - b.stepNumber);
   }
 
   /**

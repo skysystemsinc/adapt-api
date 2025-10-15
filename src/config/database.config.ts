@@ -9,7 +9,7 @@ export default registerAs('database', (): TypeOrmModuleOptions => ({
   password: process.env.DB_PASSWORD || 'password',
   database: process.env.DB_NAME || 'ncmcl_db',
   entities: [__dirname + '/../**/*.entity{.ts,.js}'],
-  synchronize: false, // Only in development
+  synchronize: true, // Only in development
   logging: process.env.NODE_ENV === 'development',
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 }));
