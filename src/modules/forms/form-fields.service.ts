@@ -157,9 +157,10 @@ export class FormFieldsService {
 
       step.fields.forEach((field: any, fieldIndex: number) => {
         // Skip heading fields (they don't have form values)
-        if (field.type === 'heading') {
-          return;
-        }
+        // if (field.type === 'heading') {
+        //   return;
+        // }
+        // Commented out because we now allow heading fields
 
         // Generate fieldKey if missing
         const fieldKey = field.id || this.generateFieldKey(globalOrder);
