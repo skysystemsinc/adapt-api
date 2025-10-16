@@ -22,7 +22,7 @@ export class FormFieldsService {
   constructor(
     @InjectRepository(FormField)
     private readonly formFieldRepository: Repository<FormField>,
-  ) {}
+  ) { }
 
   /**
    * Sync fields from form schema JSON to form_fields table

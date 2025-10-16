@@ -27,19 +27,14 @@ export class FormsService {
    * Create a new form
    */
   async create(createFormDto: CreateFormDto): Promise<FormResponseDto> {
-    // Auto-generate slug from title
-    const baseSlug = this.generateSlug(createFormDto.title, []);
-    const newSlug = this.generateSlug(createFormDto.title, [baseSlug]);
-
-    // Check if slug already exists
-    const existingForm = await this.formRepository.findOne({
-      where: { slug: newSlug },
+    // Get all existing slugs from database
+    const existingForms = await this.formRepository.find({
+      select: ['slug'],
     });
-    if (existingForm) {
-      throw new ConflictException(
-        `Form with slug '${newSlug}' already exists`,
-      );
-    }
+    const existingSlugs = existingForms.map(form => form.slug);
+
+    // Auto-generate unique slug from title
+    const newSlug = this.generateSlug(createFormDto.title, existingSlugs);
 
     // Create form with defaults
     const form = this.formRepository.create({
@@ -269,10 +264,12 @@ export class FormsService {
     }
 
     let counter = 1;
-    let newSlug = `${slug}-${counter}`;
-    while (existingSlugs.includes(newSlug)) {
-      counter++;
-      newSlug = `${slug}-${counter}`;
+    let newSlug = `${slug}`;
+    if(existingSlugs.includes(newSlug)) {
+      while (existingSlugs.includes(newSlug)) {
+        newSlug = `${slug}-${counter}`;
+        counter++;
+      }
     }
 
     return newSlug;
