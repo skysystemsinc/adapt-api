@@ -30,6 +30,10 @@ export class FormFieldResponseDto {
   @Expose()
   isSingle: boolean;
 
+  @ApiProperty()
+  @Expose()
+  order: number;
+
   @ApiProperty({ required: false })
   @Expose()
   metadata?: any;
