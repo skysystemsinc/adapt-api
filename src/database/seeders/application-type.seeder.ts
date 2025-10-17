@@ -5,6 +5,9 @@ export class ApplicationTypeSeeder {
   public async run(dataSource: DataSource): Promise<void> {
     const repository = dataSource.getRepository(ApplicationType);
 
+    // Uncomment to delete all existing application types
+    // await dataSource.query(`TRUNCATE TABLE "${repository.metadata.tableName}" RESTART IDENTITY CASCADE`);
+
     const applicationTypes = [
       {
         name: 'Individual Application',
@@ -12,8 +15,8 @@ export class ApplicationTypeSeeder {
         isActive: true,
       },
       {
-        name: 'AOP',
-        slug: 'aop',
+        name: 'Partnership',
+        slug: 'partnership',
         isActive: true,
       },
       {

@@ -4,8 +4,6 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
-  BeforeInsert,
-  BeforeUpdate,
 } from 'typeorm';
 
 export enum FormStatus {
@@ -48,17 +46,5 @@ export class Form {
 
   @UpdateDateColumn()
   updatedAt: Date;
-
-  // Auto-generate slug from title before insert/update
-  @BeforeInsert()
-  @BeforeUpdate()
-  generateSlug() {
-    if (this.title && !this.slug) {
-      this.slug = this.title
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '');
-    }
-  }
 }
 

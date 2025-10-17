@@ -11,6 +11,10 @@ export class ApplicationTypeResponseDto {
     @ApiProperty()
     @Expose()
     name: string;
+
+    @ApiProperty()
+    @Expose()
+    slug: string;
   
     @ApiProperty()
     isActive: boolean;

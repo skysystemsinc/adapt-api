@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, Not } from 'typeorm';
 import { plainToInstance } from 'class-transformer';
 import { Form } from './entities/form.entity';
 import { CreateFormDto } from './dto/create-form.dto';
@@ -146,21 +146,17 @@ export class FormsService {
 
     // If title is being updated, regenerate slug
     if (updateFormDto.title && updateFormDto.title !== form.title) {
-      const baseSlug = this.generateSlug(updateFormDto.title, []);
-      const newSlug = this.generateSlug(updateFormDto.title, [baseSlug]);
+      // Get all existing slugs from database (excluding current form)
+      const existingForms = await this.formRepository.find({
+        select: ['slug'],
+        where: { id: Not(id) }, // Exclude current form
+      });
+      const existingSlugs = existingForms.map(form => form.slug);
 
-      // Check if new slug conflicts with another form
-      if (newSlug !== form.slug) {
-        const existingForm = await this.formRepository.findOne({
-          where: { slug: newSlug },
-        });
-        if (existingForm) {
-          throw new ConflictException(
-            `Form with slug '${newSlug}' already exists`,
-          );
-        }
-        form.slug = newSlug;
-      }
+      // Auto-generate unique slug from title
+      const newSlug = this.generateSlug(updateFormDto.title, existingSlugs);
+
+      form.slug = newSlug;
     }
 
     // Update fields
