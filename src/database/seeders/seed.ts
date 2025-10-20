@@ -1,6 +1,7 @@
 import { DataSource } from 'typeorm';
 import { config } from 'dotenv';
 import { ApplicationTypeSeeder } from './application-type.seeder';
+import { UserSeeder } from './user.seeder';
 
 // Load environment variables
 config();
@@ -27,6 +28,9 @@ async function runSeeders() {
     // Run seeders
     const applicationTypeSeeder = new ApplicationTypeSeeder();
     await applicationTypeSeeder.run(AppDataSource);
+
+    const userSeeder = new UserSeeder();
+    await userSeeder.run(AppDataSource);
 
     console.log('\n✅ Seeding completed successfully!');
     process.exit(0);
