@@ -9,6 +9,7 @@ import { ApplicationTypeModule } from './modules/application-type/application-ty
 import { FormsModule } from './modules/forms/forms.module';
 import { FormSubmissionsModule } from './modules/form-submissions/form-submissions.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
+import { RegistrationApplicationModule } from './modules/registration-application/registration-application.module';
 import databaseConfig from './config/database.config';
 
 @Module({
@@ -34,6 +35,7 @@ import databaseConfig from './config/database.config';
     FormsModule,
     FormSubmissionsModule,
     UploadsModule,
+    RegistrationApplicationModule,
   ],
   controllers: [AppController],
   providers: [AppService],
