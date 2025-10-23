@@ -1,9 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, Like } from 'typeorm';
 import { RegistrationApplication, ApplicationStatus } from './entities/registration-application.entity';
 import { RegistrationApplicationDetails, DetailStatus } from './entities/registration-application-details.entity';
 import { CreateRegistrationApplicationDto } from './dto/create-registration-application.dto';
+import { UpdateApplicationStatusDto } from './dto/update-application-status.dto';
+import { UpdateDetailStatusDto } from './dto/update-detail-status.dto';
+import { QueryRegistrationApplicationDto } from './dto/query-registration-application.dto';
 import { ApplicationType } from '../application-type/entities/application-type.entity';
 
 @Injectable()
@@ -21,6 +24,59 @@ export class RegistrationApplicationService {
     return this.registrationApplicationRepository.find({
       relations: ['details', 'applicationTypeId'],
     });
+  }
+
+  async findAllPaginated(query: QueryRegistrationApplicationDto) {
+    const { page = 1, limit = 10, status, applicationTypeId, search, sortBy = 'createdAt', sortOrder = 'DESC' } = query;
+
+    const queryBuilder = this.registrationApplicationRepository
+      .createQueryBuilder('application')
+      .leftJoin('application.applicationTypeId', 'applicationType')
+      .addSelect(['applicationType.name'])  // ← Only select name
+
+      .leftJoinAndSelect(
+        'application.details', 
+        'details',
+        'details.key IN (:...detailKey)',
+        { detailKey: ['applicationName', 'emailId'] }
+      );
+
+    // Filter by status
+    if (status) {
+      queryBuilder.andWhere('application.status = :status', { status });
+    }
+
+    // Filter by application type
+    if (applicationTypeId) {
+      queryBuilder.andWhere('application.applicationTypeIdId = :applicationTypeId', { applicationTypeId });
+    }
+
+    // Search in details (applicant name, email, etc.)
+    if (search) {
+      queryBuilder.andWhere(
+        '(details.value LIKE :search)',
+        { search: `%${search}%` }
+      );
+    }
+
+    // Sorting
+    queryBuilder.orderBy(`application.${sortBy}`, sortOrder);
+
+    // Pagination
+    const skip = (page - 1) * limit;
+    queryBuilder.skip(skip).take(limit);
+
+    const [data, total] = await queryBuilder.getManyAndCount();
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 
   findOne(id: string) {
@@ -73,6 +129,58 @@ export class RegistrationApplicationService {
   async remove(id: string) {
     await this.registrationApplicationRepository.delete(id);
     return { deleted: true };
+  }
+
+  // Admin methods
+  async findPendingApplications() {
+    return this.registrationApplicationRepository.find({
+      where: { status: ApplicationStatus.PENDING },
+      relations: ['details', 'applicationTypeId'],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async updateApplicationStatus(id: string, dto: UpdateApplicationStatusDto) {
+    const application = await this.registrationApplicationRepository.findOne({ where: { id } });
+    
+    if (!application) {
+      throw new NotFoundException(`Application with ID ${id} not found`);
+    }
+
+    application.status = dto.status;
+    if (dto.remarks) {
+      application.metadata = dto.remarks;
+    }
+
+    await this.registrationApplicationRepository.save(application);
+    return this.findOne(id);
+  }
+
+  async updateDetailStatus(applicationId: string, detailId: string, dto: UpdateDetailStatusDto) {
+    // Verify application exists
+    const application = await this.registrationApplicationRepository.findOne({ where: { id: applicationId } });
+    if (!application) {
+      throw new NotFoundException(`Application with ID ${applicationId} not found`);
+    }
+
+    // Find and update the detail
+    const detail = await this.registrationApplicationDetailsRepository.findOne({
+      where: { id: detailId },
+      relations: ['application'],
+    });
+
+    if (!detail) {
+      throw new NotFoundException(`Detail with ID ${detailId} not found`);
+    }
+
+    if (detail.application.id !== applicationId) {
+      throw new NotFoundException(`Detail ${detailId} does not belong to application ${applicationId}`);
+    }
+
+    detail.status = dto.status;
+    await this.registrationApplicationDetailsRepository.save(detail);
+
+    return this.findOne(applicationId);
   }
 }
 
