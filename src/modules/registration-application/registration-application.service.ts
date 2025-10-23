@@ -103,13 +103,14 @@ export class RegistrationApplicationService {
     
     const savedApplication = await this.registrationApplicationRepository.save(application);
     
+    data.formData.applicateType = applicationType.name;
     // Transform formData object into detail records
     if (data.formData && Object.keys(data.formData).length > 0) {
       const details = Object.entries(data.formData).map(([key, value]) => {
         return this.registrationApplicationDetailsRepository.create({
           application: savedApplication,
           key,
-          value: String(value), // Convert value to string
+          value: String(value),
           status: DetailStatus.PENDING,
         });
       });
