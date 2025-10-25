@@ -79,11 +79,24 @@ export class RegistrationApplicationService {
     };
   }
 
-  findOne(id: string) {
-    return this.registrationApplicationRepository.findOne({ 
+  async findOne(id: string) {
+    const application = await this.registrationApplicationRepository.findOne({ 
       where: { id },
       relations: ['details', 'applicationTypeId'],
     });
+
+    if (!application) {
+      return null;
+    }
+
+    // Sort details by createdAt to maintain consistent order
+    if (application.details) {
+      application.details.sort((a, b) => 
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      );
+    }
+
+    return application;
   }
 
   async create(data: CreateRegistrationApplicationDto, metadata?: { ipAddress?: string; userAgent?: string; referrer?: string }) {
