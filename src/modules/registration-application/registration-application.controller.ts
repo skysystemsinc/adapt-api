@@ -6,21 +6,21 @@ import { CreateRegistrationApplicationDto } from './dto/create-registration-appl
 import { SubmitRegistrationDto } from './dto/submit-registration.dto';
 import { RegistrationResponseDto } from './dto/registration-response.dto';
 
-@Controller('registration-application')
+@Controller()
 export class RegistrationApplicationController {
   constructor(private readonly registrationApplicationService: RegistrationApplicationService) {}
 
-  @Get()
+  @Get('registration-application')
   findAll() {
     return this.registrationApplicationService.findAll();
   }
 
-  @Get(':id')
+  @Get('registration-application/:id')
   findOne(@Param('id') id: string) {
     return this.registrationApplicationService.findOne(id);
   }
 
-  @Post()
+  @Post('registration-application')
   create(@Body() data: CreateRegistrationApplicationDto, @Req() request: Request) {
     // Automatically extract metadata from request
     const ipAddress = this.getClientIp(request);
@@ -62,12 +62,12 @@ export class RegistrationApplicationController {
     return request.ip || request.connection?.remoteAddress || 'unknown';
   }
 
-  @Put(':id')
+  @Put('registration-application/:id')
   update(@Param('id') id: string, @Body() data: Partial<RegistrationApplication>) {
     return this.registrationApplicationService.update(id, data);
   }
 
-  @Delete(':id')
+  @Delete('registration-application/:id')
   remove(@Param('id') id: string) {
     return this.registrationApplicationService.remove(id);
   }

@@ -14,9 +14,9 @@ export class RegistrationApplication {
     @PrimaryGeneratedColumn('uuid')
     id: string;
 
-    @OneToOne(() => ApplicationType)
+    @OneToOne(() => ApplicationType, { nullable: true })
     @JoinColumn({ name: 'applicationTypeId' })
-    applicationTypeId: ApplicationType;
+    applicationTypeId: ApplicationType | null;
 
     @OneToMany(() => RegistrationApplicationDetails, details => details.application, { cascade: true })
     details: RegistrationApplicationDetails[];

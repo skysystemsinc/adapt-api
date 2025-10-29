@@ -31,15 +31,13 @@ export class RegistrationApplicationService {
   ): Promise<RegistrationResponseDto> {
     return await this.registrationApplicationRepository.manager.transaction(
       async (transactionalEntityManager) => {
-        // 1. Find application type by slug
-        const applicationType = await transactionalEntityManager.findOne(ApplicationType, {
-          where: { slug: dto.applicationTypeSlug },
-        });
-
-        if (!applicationType) {
-          throw new NotFoundException(
-            `Application type with slug '${dto.applicationTypeSlug}' not found`,
-          );
+        // 1. Find application type by slug (optional)
+        let applicationType: ApplicationType | null = null;
+        if (dto.applicationTypeSlug) {
+          applicationType = await transactionalEntityManager.findOne(ApplicationType, {
+            where: { slug: dto.applicationTypeSlug },
+          });
+          // Don't throw error if not found - just set to null
         }
 
         // 2. Create registration application
@@ -63,6 +61,7 @@ export class RegistrationApplicationService {
             value: typeof fieldValue.value === 'object' 
               ? JSON.stringify(fieldValue.value) 
               : String(fieldValue.value),
+            label: fieldValue.label || null,
             status: DetailStatus.PENDING,
           }),
         );

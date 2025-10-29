@@ -17,7 +17,7 @@ import type { UploadFileResponseDto } from './dto/upload-file.dto';
 
 /**
  * MIME type mappings for file extensions
- * Used for validating file types against schema
+ * Used for validating file types against form field validation rules
  */
 const MIME_TYPE_MAP: Record<string, string[]> = {
   '.pdf': ['application/pdf'],
@@ -57,16 +57,16 @@ export class UploadsService {
   }
 
   /**
-   * Upload a file with dynamic validation from form schema
+   * Upload a file with dynamic validation from form_fields table
    */
   async uploadFile(
     formId: string,
-    fieldKey: string,
+    fieldId: string,
     file: any, // Multer file type
     userId?: string,
   ): Promise<UploadFileResponseDto> {
     this.logger.log(
-      `📤 Upload requested: Form=${formId}, Field=${fieldKey}, File=${file.originalname}`,
+      `📤 Upload requested: Form=${formId}, Field=${fieldId}, File=${file.originalname}`,
     );
 
     // 1. Validate form exists
@@ -75,22 +75,28 @@ export class UploadsService {
       throw new NotFoundException(`Form with ID '${formId}' not found`);
     }
 
-    // 2. Get field configuration from schema
-    const fieldConfig = this.getFieldConfig(form.schema, fieldKey);
-    if (!fieldConfig) {
+    // 2. Get field configuration from form_fields table (schema is deprecated)
+    const formField = await this.formFieldRepository.findOne({
+      where: {
+        id: fieldId,
+        formId: formId,
+      },
+    });
+
+    if (!formField) {
       throw new BadRequestException(
-        `Field '${fieldKey}' not found in form schema`,
+        `Field '${fieldId}' not found in form`,
       );
     }
 
-    if (fieldConfig.type !== 'file') {
+    if (formField.type !== 'file') {
       throw new BadRequestException(
-        `Field '${fieldKey}' is not a file field (type: ${fieldConfig.type})`,
+        `Field '${fieldId}' is not a file field (type: ${formField.type})`,
       );
     }
 
-    // 3. Get validation rules from field metadata
-    const validation = fieldConfig.validation || {};
+    // 3. Get validation rules from field validation property
+    const validation = formField.validation || {};
     const allowedTypes = validation.allowedTypes || [];
     const maxSizeMB = validation.maxSize || 10; // Default 10MB
 
@@ -161,33 +167,6 @@ export class UploadsService {
     }
   }
 
-  /**
-   * Get field configuration from form schema
-   */
-  private getFieldConfig(
-    schema: Record<string, any>,
-    fieldKey: string,
-  ): any | null {
-    if (!schema.steps || !Array.isArray(schema.steps)) {
-      return null;
-    }
-
-    for (const step of schema.steps) {
-      if (!step.fields || !Array.isArray(step.fields)) {
-        continue;
-      }
-
-      const field = step.fields.find((f: any) => f.id === fieldKey);
-      if (field) {
-        return {
-          ...field,
-          validation: field.validation || {},
-        };
-      }
-    }
-
-    return null;
-  }
 
   /**
    * Ensure upload directory exists

@@ -11,6 +11,14 @@ export class FieldValueDto {
   @ApiProperty({ description: 'Field value (any type)' })
   @IsNotEmpty()
   value: any;
+
+  @ApiProperty({ 
+    description: 'Resolved label at time of submission (for conditional labels)',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  label?: string;
 }
 
 export class SubmitRegistrationDto {
@@ -19,10 +27,13 @@ export class SubmitRegistrationDto {
   @IsNotEmpty()
   formId: string;
 
-  @ApiProperty({ description: 'Application type slug (extracted from form slug)' })
+  @ApiProperty({ 
+    description: 'Application type slug (extracted from form slug)',
+    required: false,
+  })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  applicationTypeSlug: string;
+  applicationTypeSlug?: string;
 
   @ApiProperty({ type: [FieldValueDto], description: 'Array of field values' })
   @IsArray()

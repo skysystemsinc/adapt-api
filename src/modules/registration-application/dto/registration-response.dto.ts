@@ -11,6 +11,9 @@ export class RegistrationDetailResponseDto {
   value: string;
 
   @Expose()
+  label: string | null;
+
+  @Expose()
   status: string;
 
   @Expose()
