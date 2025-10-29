@@ -24,8 +24,11 @@ export class FormField {
   @Column()
   fieldKey: string;
 
-  @Column()
+  @Column({ nullable: true })
   label: string;
+
+  @Column({ nullable: true })
+  title: string; // For heading fields
 
   @Column()
   type: string;
@@ -39,6 +42,15 @@ export class FormField {
   @Column({ default: false })
   isSingle: boolean; // For checkbox: true = single (boolean), false = multiple options
 
+  @Column({ nullable: true })
+  placeholder: string;
+
+  @Column({ type: 'jsonb', nullable: true })
+  validation: any; // Validation rules (min, max, pattern, etc.)
+
+  @Column({ type: 'jsonb', nullable: true })
+  conditions: any; // Conditional visibility rules
+
   @Column({ type: 'int' })
   order: number;
 
@@ -46,7 +58,10 @@ export class FormField {
   step: number;
 
   @Column({ type: 'jsonb', nullable: true })
-  metadata: any;
+  metadata: any; // Additional metadata (e.g., step title for first field in step)
+
+  @Column({ type: 'varchar', default: 'full' })
+  width: string; // 'full' or 'half' - controls field width in the form
 
   @CreateDateColumn()
   createdAt: Date;

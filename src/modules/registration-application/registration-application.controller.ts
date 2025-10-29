@@ -1,8 +1,10 @@
-import { Controller, Get, Post, Body, Param, Put, Delete, Req } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Put, Delete, Req, HttpCode, HttpStatus } from '@nestjs/common';
 import type { Request } from 'express';
 import { RegistrationApplicationService } from './registration-application.service';
 import { RegistrationApplication } from './entities/registration-application.entity';
 import { CreateRegistrationApplicationDto } from './dto/create-registration-application.dto';
+import { SubmitRegistrationDto } from './dto/submit-registration.dto';
+import { RegistrationResponseDto } from './dto/registration-response.dto';
 
 @Controller('registration-application')
 export class RegistrationApplicationController {
@@ -30,6 +32,25 @@ export class RegistrationApplicationController {
       userAgent: Array.isArray(userAgent) ? userAgent[0] : userAgent,
       referrer: Array.isArray(referrer) ? referrer[0] : referrer,
     });
+  }
+
+  @Post('registration-applications')
+  @HttpCode(HttpStatus.CREATED)
+  async submitRegistration(
+    @Body() dto: SubmitRegistrationDto,
+    @Req() request: Request,
+  ): Promise<RegistrationResponseDto> {
+    // Extract metadata from request
+    const ipAddress = this.getClientIp(request);
+    const userAgent = request.headers['user-agent'] || 'unknown';
+    const referrer = (request.headers['referer'] || request.headers['referrer'] || null) as string | null;
+
+    return this.registrationApplicationService.submitRegistration(
+      dto,
+      ipAddress,
+      Array.isArray(userAgent) ? userAgent[0] : userAgent,
+      referrer || undefined,
+    );
   }
 
   private getClientIp(request: Request): string {

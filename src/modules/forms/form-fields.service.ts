@@ -1,7 +1,15 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository, In, DataSource } from 'typeorm';
 import { FormField } from './entities/form-field.entity';
+import { CreateFieldDto } from './dto/create-field.dto';
+import { UpdateFieldDto } from './dto/update-field.dto';
+import { FieldOrderDto } from './dto/reorder-fields.dto';
 
 interface ParsedField {
   fieldKey: string;
@@ -22,6 +30,7 @@ export class FormFieldsService {
   constructor(
     @InjectRepository(FormField)
     private readonly formFieldRepository: Repository<FormField>,
+    private readonly dataSource: DataSource,
   ) { }
 
   /**
@@ -225,6 +234,202 @@ export class FormFieldsService {
   async deleteFieldsByFormId(formId: string): Promise<void> {
     await this.formFieldRepository.delete({ formId });
     this.logger.log(`Deleted fields for form ${formId}`);
+  }
+
+  /**
+   * Create a new field
+   */
+  async createField(
+    formId: string,
+    createFieldDto: CreateFieldDto,
+  ): Promise<FormField> {
+    // Check for duplicate fieldKey
+    const existing = await this.formFieldRepository.findOne({
+      where: { formId, fieldKey: createFieldDto.fieldKey },
+    });
+
+    if (existing) {
+      throw new BadRequestException(
+        `Field with key '${createFieldDto.fieldKey}' already exists in this form`,
+      );
+    }
+
+    const field = this.formFieldRepository.create({
+      formId,
+      ...createFieldDto,
+    });
+
+    const savedField = await this.formFieldRepository.save(field);
+    this.logger.log(`Created field ${savedField.id} (${savedField.fieldKey})`);
+
+    return savedField;
+  }
+
+  /**
+   * Update a field
+   */
+  async updateField(
+    fieldId: string,
+    updateFieldDto: UpdateFieldDto,
+  ): Promise<FormField> {
+    const field = await this.formFieldRepository.findOne({
+      where: { id: fieldId },
+    });
+
+    if (!field) {
+      throw new NotFoundException(`Field with ID '${fieldId}' not found`);
+    }
+
+    // If updating fieldKey, check for duplicates
+    if (updateFieldDto.fieldKey && updateFieldDto.fieldKey !== field.fieldKey) {
+      const existing = await this.formFieldRepository.findOne({
+        where: {
+          formId: field.formId,
+          fieldKey: updateFieldDto.fieldKey,
+        },
+      });
+
+      if (existing) {
+        throw new BadRequestException(
+          `Field with key '${updateFieldDto.fieldKey}' already exists in this form`,
+        );
+      }
+    }
+
+    // Apply updates
+    Object.assign(field, updateFieldDto);
+
+    const updatedField = await this.formFieldRepository.save(field);
+    this.logger.log(`Updated field ${fieldId} (${field.fieldKey})`);
+
+    return updatedField;
+  }
+
+  /**
+   * Delete a field
+   */
+  async deleteField(fieldId: string): Promise<{ message: string }> {
+    const field = await this.formFieldRepository.findOne({
+      where: { id: fieldId },
+    });
+
+    if (!field) {
+      throw new NotFoundException(`Field with ID '${fieldId}' not found`);
+    }
+
+    await this.formFieldRepository.remove(field);
+    this.logger.log(`Deleted field ${fieldId} (${field.fieldKey})`);
+
+    return {
+      message: `Field with ID '${fieldId}' has been deleted successfully`,
+    };
+  }
+
+  /**
+   * Reorder fields (TRANSACTIONAL - all or nothing)
+   * Updates order and step for multiple fields atomically using bulk updates
+   */
+  async reorderFields(
+    formId: string,
+    fieldOrders: FieldOrderDto[],
+  ): Promise<{ message: string }> {
+    if (!fieldOrders || fieldOrders.length === 0) {
+      throw new BadRequestException('fieldOrders array cannot be empty');
+    }
+
+    // Use a transaction to ensure atomicity
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Get all field IDs from the request
+      const fieldIds = fieldOrders.map((f) => f.id);
+      const uniqueFieldIds = [...new Set(fieldIds)];
+
+      // Check for duplicate IDs in the request
+      if (uniqueFieldIds.length !== fieldIds.length) {
+        throw new BadRequestException(
+          'Duplicate field IDs found in reorder request',
+        );
+      }
+
+      // Fetch all fields to verify they belong to this form
+      const fields = await queryRunner.manager.find(FormField, {
+        where: { formId, id: In(uniqueFieldIds) },
+      });
+
+      if (fields.length !== uniqueFieldIds.length) {
+        throw new BadRequestException(
+          `Some field IDs do not belong to form ${formId}`,
+        );
+      }
+
+      // Use Promise.all for parallel updates (more efficient than sequential loop)
+      await Promise.all(
+        fieldOrders.map((fieldOrder) =>
+          queryRunner.manager.update(
+            FormField,
+            { id: fieldOrder.id, formId },
+            {
+              order: fieldOrder.order,
+              step: fieldOrder.step,
+            },
+          ),
+        ),
+      );
+
+      await queryRunner.commitTransaction();
+      this.logger.log(
+        `Reordered ${fieldOrders.length} fields for form ${formId}`,
+      );
+
+      return { message: 'Fields reordered successfully' };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`Failed to reorder fields for form ${formId}:`, error);
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /**
+   * Delete all fields in a specific step (TRANSACTIONAL - all or nothing)
+   */
+  async deleteFieldsByStep(
+    formId: string,
+    stepNumber: number,
+  ): Promise<{ message: string }> {
+    // Use a transaction to ensure atomicity
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const result = await queryRunner.manager.delete(FormField, {
+        formId,
+        step: stepNumber,
+      });
+
+      await queryRunner.commitTransaction();
+      this.logger.log(
+        `Deleted ${result.affected || 0} fields from step ${stepNumber} of form ${formId}`,
+      );
+
+      return {
+        message: `${result.affected || 0} field(s) deleted from step ${stepNumber}`,
+      };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(
+        `Failed to delete fields from step ${stepNumber} of form ${formId}:`,
+        error,
+      );
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 }
 

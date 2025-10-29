@@ -42,6 +42,13 @@ export class FormSubmissionsService {
       );
     }
 
+    // Check if this is a registration form
+    if (form.slug.endsWith('-registration-form')) {
+      throw new BadRequestException(
+        'Registration forms should be submitted to /registration-applications endpoint',
+      );
+    }
+
     // Validate submitted fields against schema
     this.validateSubmittedFields(form.schema, submitFormDto.values);
 
