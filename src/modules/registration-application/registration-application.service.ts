@@ -97,15 +97,8 @@ export class RegistrationApplicationService {
 
     const queryBuilder = this.registrationApplicationRepository
       .createQueryBuilder('application')
-      .leftJoin('application.applicationTypeId', 'applicationType')
-      .addSelect(['applicationType.name'])  // ← Only select name
-
-      .leftJoinAndSelect(
-        'application.details', 
-        'details',
-        'details.key IN (:...detailKey)',
-        { detailKey: ['applicationName', 'emailId'] }
-      );
+      .leftJoinAndSelect('application.applicationTypeId', 'applicationType')
+      .leftJoinAndSelect('application.details', 'details');
 
     // Filter by status
     if (status) {
@@ -127,6 +120,8 @@ export class RegistrationApplicationService {
 
     // Sorting
     queryBuilder.orderBy(`application.${sortBy}`, sortOrder);
+    // Also order details by createdAt to maintain consistent order
+    queryBuilder.addOrderBy('details.createdAt', 'ASC');
 
     // Pagination
     const skip = (page - 1) * limit;
