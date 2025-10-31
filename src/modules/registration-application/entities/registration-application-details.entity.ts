@@ -22,6 +22,9 @@ export class RegistrationApplicationDetails {
     @Column({ type: 'text' })
     value: string;
 
+    @Column({ type: 'text', nullable: true })
+    label: string | null;
+
     @Column({ 
         type: 'enum',
         enum: DetailStatus,

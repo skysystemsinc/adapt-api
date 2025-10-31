@@ -49,10 +49,10 @@ export class UploadsController {
       type: 'object',
       properties: {
         formId: { type: 'string', format: 'uuid' },
-        fieldKey: { type: 'string' },
+        fieldId: { type: 'string', format: 'uuid' },
         file: { type: 'string', format: 'binary' },
       },
-      required: ['formId', 'fieldKey', 'file'],
+      required: ['formId', 'fieldId', 'file'],
     },
   })
   @ApiResponse({
@@ -65,13 +65,13 @@ export class UploadsController {
   @ApiResponse({ status: 429, description: 'Too many requests' })
   async uploadFile(
     @Body('formId') formId: string,
-    @Body('fieldKey') fieldKey: string,
+    @Body('fieldId') fieldId: string,
     @Body('userId') userId: string | undefined,
     @UploadedFile() file: any, // Multer file type
   ): Promise<UploadFileResponseDto> {
     console.log('📥 Upload request received:', {
       formId,
-      fieldKey,
+      fieldId,
       fileReceived: !!file,
       fileName: file?.originalname,
       fileSize: file?.size,
@@ -85,11 +85,11 @@ export class UploadsController {
       throw new BadRequestException('formId is required');
     }
 
-    if (!fieldKey) {
-      throw new BadRequestException('fieldKey is required');
+    if (!fieldId) {
+      throw new BadRequestException('fieldId is required');
     }
 
-    return this.uploadsService.uploadFile(formId, fieldKey, file, userId);
+    return this.uploadsService.uploadFile(formId, fieldId, file, userId);
   }
 
   @Get(':filename')

@@ -11,6 +11,10 @@ class SubmissionValueDto {
   @ApiProperty()
   @Expose()
   value: string;
+
+  @ApiProperty({ description: 'Resolved label at time of submission (for conditional labels)', nullable: true })
+  @Expose()
+  label: string | null;
 }
 
 export class FormSubmissionResponseDto {

@@ -29,6 +29,9 @@ export class FormSubmissionValue {
   @Column({ type: 'text' })
   value: string;
 
+  @Column({ type: 'text', nullable: true })
+  label: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

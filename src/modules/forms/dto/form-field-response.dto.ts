@@ -10,9 +10,13 @@ export class FormFieldResponseDto {
   @Expose()
   fieldKey: string;
 
-  @ApiProperty()
+  @ApiProperty({ required: false })
   @Expose()
-  label: string;
+  label?: string;
+
+  @ApiProperty({ required: false })
+  @Expose()
+  title?: string; // For heading fields
 
   @ApiProperty()
   @Expose()
@@ -30,6 +34,18 @@ export class FormFieldResponseDto {
   @Expose()
   isSingle: boolean;
 
+  @ApiProperty({ required: false })
+  @Expose()
+  placeholder?: string;
+
+  @ApiProperty({ required: false })
+  @Expose()
+  validation?: any;
+
+  @ApiProperty({ required: false })
+  @Expose()
+  conditions?: any;
+
   @ApiProperty()
   @Expose()
   order: number;
@@ -37,5 +53,9 @@ export class FormFieldResponseDto {
   @ApiProperty({ required: false })
   @Expose()
   metadata?: any;
+
+  @ApiProperty({ required: false, enum: ['full', 'half'], default: 'full' })
+  @Expose()
+  width?: 'full' | 'half';
 }
 

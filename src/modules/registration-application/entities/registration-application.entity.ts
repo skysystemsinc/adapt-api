@@ -14,9 +14,9 @@ export class RegistrationApplication {
     @PrimaryGeneratedColumn('uuid')
     id: string;
 
-    @OneToOne(() => ApplicationType)
+    @OneToOne(() => ApplicationType, { nullable: true })
     @JoinColumn({ name: 'applicationTypeId' })
-    applicationTypeId: ApplicationType;
+    applicationTypeId: ApplicationType | null;
 
     @OneToMany(() => RegistrationApplicationDetails, details => details.application, { cascade: true })
     details: RegistrationApplicationDetails[];
@@ -38,8 +38,11 @@ export class RegistrationApplication {
     @Column({ nullable: true })
     referrer: string;
 
-    @Column({ type: 'text', nullable: true })
-    metadata: string; // JSON string for any additional metadata
+    @Column({ nullable: true })
+    formId: string;
+
+    @Column({ type: 'jsonb', nullable: true })
+    metadata: any; // Changed from text to jsonb for better querying
 
     @CreateDateColumn()
     createdAt: Date;

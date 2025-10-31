@@ -27,6 +27,15 @@ export class FormFieldValueDto {
   })
   @Allow() // Allow any value type without strict validation
   value: any; // Can be string, number, boolean, array, object, File, etc.
+
+  @ApiProperty({
+    description: 'Resolved label at time of submission (for conditional labels)',
+    example: 'Preferred Contact Method',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  label?: string;
 }
 
 export class SubmitFormDto {

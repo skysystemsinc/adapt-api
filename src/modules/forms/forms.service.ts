@@ -25,8 +25,16 @@ export class FormsService {
 
   /**
    * Create a new form
+   * @deprecated Schema column is deprecated. Use form_fields table via FormFieldsController instead.
    */
   async create(createFormDto: CreateFormDto): Promise<FormResponseDto> {
+    // Deprecation warning
+    if (createFormDto.schema) {
+      console.warn(
+        '⚠️  DEPRECATED: Creating form with schema column. Please use form_fields table instead.',
+      );
+    }
+
     // Get all existing slugs from database
     const existingForms = await this.formRepository.find({
       select: ['slug'],
@@ -41,7 +49,7 @@ export class FormsService {
       title: createFormDto.title,
       description: createFormDto.description,
       slug: newSlug,
-      schema: createFormDto.schema, // Store frontend JSON exactly as-is
+      schema: createFormDto.schema, // DEPRECATED: kept for backward compatibility
       isPublic: true, // Default value
       status: 'published' as any, // Default value
     });
@@ -49,15 +57,17 @@ export class FormsService {
     // Save to database
     const savedForm = await this.formRepository.save(form);
 
-    // Sync fields to form_fields table
-    try {
-      await this.formFieldsService.syncFieldsFromSchema(
-        savedForm.id,
-        savedForm.schema,
-      );
-    } catch (error) {
-      console.error('❌ Failed to sync form fields:', error);
-      // Don't throw - form was created successfully, field sync is supplementary
+    // Sync fields to form_fields table (deprecated path)
+    if (createFormDto.schema) {
+      try {
+        await this.formFieldsService.syncFieldsFromSchema(
+          savedForm.id,
+          savedForm.schema,
+        );
+      } catch (error) {
+        console.error('❌ Failed to sync form fields:', error);
+        // Don't throw - form was created successfully, field sync is supplementary
+      }
     }
 
     // Return formatted response
@@ -68,6 +78,7 @@ export class FormsService {
 
   /**
    * Get all forms
+   * Returns forms with fields from form_fields table (not schema column)
    */
   async findAll(): Promise<FormResponseDto[]> {
     const forms = await this.formRepository.find({
@@ -80,6 +91,7 @@ export class FormsService {
         const dto = plainToInstance(FormResponseDto, form, {
           excludeExtraneousValues: true,
         });
+        // Get fields from form_fields table, grouped by step
         dto.steps = await this.getFieldsGroupedByStep(form.id);
         return dto;
       }),
@@ -90,6 +102,7 @@ export class FormsService {
 
   /**
    * Get a single form by ID
+   * Returns form with fields from form_fields table (not schema column)
    */
   async findOne(id: string): Promise<FormResponseDto> {
     const form = await this.formRepository.findOne({ where: { id } });
@@ -102,7 +115,7 @@ export class FormsService {
       excludeExtraneousValues: true,
     });
 
-    // Add fields grouped by step from form_fields table
+    // Get fields from form_fields table, grouped by step
     dto.steps = await this.getFieldsGroupedByStep(id);
 
     return dto;
@@ -110,6 +123,7 @@ export class FormsService {
 
   /**
    * Get a form by slug (public access)
+   * Returns form with fields from form_fields table (not schema column)
    */
   async findBySlug(slug: string): Promise<FormResponseDto> {
     const form = await this.formRepository.findOne({
@@ -124,7 +138,7 @@ export class FormsService {
       excludeExtraneousValues: true,
     });
 
-    // Add fields grouped by step from form_fields table
+    // Get fields from form_fields table, grouped by step
     dto.steps = await this.getFieldsGroupedByStep(form.id);
 
     return dto;
@@ -132,11 +146,19 @@ export class FormsService {
 
   /**
    * Update a form
+   * @deprecated Schema column is deprecated. Use form_fields table via FormFieldsController instead.
    */
   async update(
     id: string,
     updateFormDto: UpdateFormDto,
   ): Promise<FormResponseDto> {
+    // Deprecation warning
+    if (updateFormDto.schema !== undefined) {
+      console.warn(
+        '⚠️  DEPRECATED: Updating form with schema column. Please use form_fields table instead.',
+      );
+    }
+
     // Check if form exists
     const form = await this.formRepository.findOne({ where: { id } });
 
@@ -167,13 +189,13 @@ export class FormsService {
       form.description = updateFormDto.description;
     }
     if (updateFormDto.schema !== undefined) {
-      form.schema = updateFormDto.schema;
+      form.schema = updateFormDto.schema; // DEPRECATED: kept for backward compatibility
     }
 
     // Save updated form
     const updatedForm = await this.formRepository.save(form);
 
-    // Sync fields to form_fields table (if schema was updated)
+    // Sync fields to form_fields table (deprecated path)
     if (updateFormDto.schema !== undefined) {
       try {
         await this.formFieldsService.syncFieldsFromSchema(

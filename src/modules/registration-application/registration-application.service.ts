@@ -1,12 +1,15 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like } from 'typeorm';
+import { plainToInstance } from 'class-transformer';
 import { RegistrationApplication, ApplicationStatus } from './entities/registration-application.entity';
 import { RegistrationApplicationDetails, DetailStatus } from './entities/registration-application-details.entity';
 import { CreateRegistrationApplicationDto } from './dto/create-registration-application.dto';
 import { UpdateApplicationStatusDto } from './dto/update-application-status.dto';
 import { UpdateDetailStatusDto } from './dto/update-detail-status.dto';
 import { QueryRegistrationApplicationDto } from './dto/query-registration-application.dto';
+import { SubmitRegistrationDto } from './dto/submit-registration.dto';
+import { RegistrationResponseDto } from './dto/registration-response.dto';
 import { ApplicationType } from '../application-type/entities/application-type.entity';
 
 @Injectable()
@@ -20,6 +23,69 @@ export class RegistrationApplicationService {
     private applicationTypeRepository: Repository<ApplicationType>,
   ) {}
 
+  async submitRegistration(
+    dto: SubmitRegistrationDto,
+    ipAddress: string,
+    userAgent: string,
+    referrer?: string,
+  ): Promise<RegistrationResponseDto> {
+    return await this.registrationApplicationRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        // 1. Find application type by slug (optional)
+        let applicationType: ApplicationType | null = null;
+        if (dto.applicationTypeSlug) {
+          applicationType = await transactionalEntityManager.findOne(ApplicationType, {
+            where: { slug: dto.applicationTypeSlug },
+          });
+          // Don't throw error if not found - just set to null
+        }
+
+        // 2. Create registration application
+        const application = transactionalEntityManager.create(RegistrationApplication, {
+          formId: dto.formId,
+          applicationTypeId: applicationType,
+          status: ApplicationStatus.PENDING,
+          ipAddress,
+          userAgent,
+          referrer,
+          metadata: dto.metadata || {},
+        });
+
+        const savedApplication = await transactionalEntityManager.save(application);
+
+        // 3. Create details records
+        const details = dto.values.map((fieldValue) =>
+          transactionalEntityManager.create(RegistrationApplicationDetails, {
+            application: savedApplication,
+            key: fieldValue.fieldKey,
+            value: typeof fieldValue.value === 'object' 
+              ? JSON.stringify(fieldValue.value) 
+              : String(fieldValue.value),
+            label: fieldValue.label || null,
+            status: DetailStatus.PENDING,
+          }),
+        );
+
+        if (details.length > 0) {
+          await transactionalEntityManager.save(details);
+        }
+
+        // 4. Fetch complete application with details
+        const completeApplication = await transactionalEntityManager.findOne(
+          RegistrationApplication,
+          {
+            where: { id: savedApplication.id },
+            relations: ['details', 'applicationTypeId'],
+          },
+        );
+
+        return plainToInstance(RegistrationResponseDto, completeApplication, {
+          excludeExtraneousValues: true,
+        });
+      },
+    );
+  }
+
   findAll() {
     return this.registrationApplicationRepository.find({
       relations: ['details', 'applicationTypeId'],
@@ -31,15 +97,8 @@ export class RegistrationApplicationService {
 
     const queryBuilder = this.registrationApplicationRepository
       .createQueryBuilder('application')
-      .leftJoin('application.applicationTypeId', 'applicationType')
-      .addSelect(['applicationType.name'])  // ← Only select name
-
-      .leftJoinAndSelect(
-        'application.details', 
-        'details',
-        'details.key IN (:...detailKey)',
-        { detailKey: ['applicationName', 'emailId'] }
-      );
+      .leftJoinAndSelect('application.applicationTypeId', 'applicationType')
+      .leftJoinAndSelect('application.details', 'details');
 
     // Filter by status
     if (status) {
@@ -61,6 +120,8 @@ export class RegistrationApplicationService {
 
     // Sorting
     queryBuilder.orderBy(`application.${sortBy}`, sortOrder);
+    // Also order details by createdAt to maintain consistent order
+    queryBuilder.addOrderBy('details.createdAt', 'ASC');
 
     // Pagination
     const skip = (page - 1) * limit;
@@ -79,11 +140,24 @@ export class RegistrationApplicationService {
     };
   }
 
-  findOne(id: string) {
-    return this.registrationApplicationRepository.findOne({ 
+  async findOne(id: string) {
+    const application = await this.registrationApplicationRepository.findOne({ 
       where: { id },
       relations: ['details', 'applicationTypeId'],
     });
+
+    if (!application) {
+      return null;
+    }
+
+    // Sort details by createdAt to maintain consistent order
+    if (application.details) {
+      application.details.sort((a, b) => 
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      );
+    }
+
+    return application;
   }
 
   async create(data: CreateRegistrationApplicationDto, metadata?: { ipAddress?: string; userAgent?: string; referrer?: string }) {

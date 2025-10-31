@@ -11,12 +11,12 @@ export class UploadFileDto {
   formId: string;
 
   @ApiProperty({
-    description: 'Field key from form schema',
-    example: 'cnic-upload',
+    description: 'Field ID (UUID) from form_fields table',
+    example: 'd1ac02a6-a483-4a80-8a62-1f2de08dfaca',
   })
-  @IsString()
+  @IsUUID()
   @IsNotEmpty()
-  fieldKey: string;
+  fieldId: string;
 
   @ApiProperty({
     description: 'Optional user ID if authenticated',

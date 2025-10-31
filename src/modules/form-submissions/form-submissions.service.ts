@@ -10,6 +10,7 @@ import { plainToInstance } from 'class-transformer';
 import { FormSubmission, SubmissionStatus } from './entities/form-submission.entity';
 import { FormSubmissionValue } from './entities/form-submission-value.entity';
 import { Form } from '../forms/entities/form.entity';
+import { FormField } from '../forms/entities/form-field.entity';
 import { SubmitFormDto } from './dto/submit-form.dto';
 import { FormSubmissionResponseDto } from './dto/form-submission-response.dto';
 
@@ -22,11 +23,13 @@ export class FormSubmissionsService {
     private readonly submissionValueRepository: Repository<FormSubmissionValue>,
     @InjectRepository(Form)
     private readonly formRepository: Repository<Form>,
+    @InjectRepository(FormField)
+    private readonly formFieldRepository: Repository<FormField>,
   ) {}
 
   /**
    * Submit a form by formId
-   * Validates that submitted fields exist in the form schema
+   * Validates that submitted fields exist in the form_fields table
    */
   async submitForm(
     submitFormDto: SubmitFormDto,
@@ -42,8 +45,15 @@ export class FormSubmissionsService {
       );
     }
 
-    // Validate submitted fields against schema
-    this.validateSubmittedFields(form.schema, submitFormDto.values);
+    // Check if this is a registration form
+    if (form.slug.endsWith('-registration-form')) {
+      throw new BadRequestException(
+        'Registration forms should be submitted to /registration-applications endpoint',
+      );
+    }
+
+    // Validate submitted fields against form_fields table (schema is deprecated)
+    await this.validateSubmittedFields(form.id, submitFormDto.values);
 
     // Create submission
     const submission = this.submissionRepository.create({
@@ -63,6 +73,7 @@ export class FormSubmissionsService {
         submissionId: savedSubmission.id,
         fieldKey: fieldValue.fieldKey,
         value: this.serializeValue(fieldValue.value),
+        label: fieldValue.label || null,
       });
     });
 
@@ -129,38 +140,37 @@ export class FormSubmissionsService {
   }
 
   /**
-   * Validate that all submitted fields exist in the form schema
+   * Validate that all submitted fields exist in the form_fields table
    */
-  private validateSubmittedFields(
-    schema: Record<string, any>,
+  private async validateSubmittedFields(
+    formId: string,
     values: Array<{ fieldKey: string; value: any }>,
-  ): void {
-    // Extract all field IDs from schema
-    const validFieldIds = new Set<string>();
+  ): Promise<void> {
+    // Get all valid fieldKeys from form_fields table
+    const formFields = await this.formFieldRepository.find({
+      where: { formId },
+      select: ['fieldKey', 'type'],
+    });
 
-    if (schema.steps && Array.isArray(schema.steps)) {
-      schema.steps.forEach((step: any) => {
-        if (step.fields && Array.isArray(step.fields)) {
-          step.fields.forEach((field: any) => {
-            if (field.id && field.type !== 'heading') {
-              validFieldIds.add(field.id);
-            }
-          });
-        }
-      });
-    }
+    // Create a set of valid fieldKeys (exclude heading fields)
+    const validFieldKeys = new Set<string>();
+    formFields.forEach((field) => {
+      if (field.type !== 'heading') {
+        validFieldKeys.add(field.fieldKey);
+      }
+    });
 
     // Check each submitted field
     const invalidFields: string[] = [];
     values.forEach((fieldValue) => {
-      if (!validFieldIds.has(fieldValue.fieldKey)) {
+      if (!validFieldKeys.has(fieldValue.fieldKey)) {
         invalidFields.push(fieldValue.fieldKey);
       }
     });
 
     if (invalidFields.length > 0) {
       throw new BadRequestException(
-        `Invalid field(s) submitted: ${invalidFields.join(', ')}. These fields do not exist in the form schema.`,
+        `Field '${invalidFields[0]}' not found in form`,
       );
     }
   }
