@@ -145,5 +145,15 @@ export class CreateFieldDto {
   @IsString()
   @IsOptional()
   width?: 'full' | 'half';
+
+  @ApiProperty({
+    description: 'Whether this field should be included in KYC verification',
+    example: false,
+    default: false,
+    required: false,
+  })
+  @IsBoolean()
+  @IsOptional()
+  includeInKycVerification?: boolean;
 }
 

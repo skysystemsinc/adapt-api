@@ -57,5 +57,9 @@ export class FormFieldResponseDto {
   @ApiProperty({ required: false, enum: ['full', 'half'], default: 'full' })
   @Expose()
   width?: 'full' | 'half';
+
+  @ApiProperty()
+  @Expose()
+  includeInKycVerification: boolean;
 }
 

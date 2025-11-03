@@ -63,6 +63,9 @@ export class FormField {
   @Column({ type: 'varchar', default: 'full' })
   width: string; // 'full' or 'half' - controls field width in the form
 
+  @Column({ default: false })
+  includeInKycVerification: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 

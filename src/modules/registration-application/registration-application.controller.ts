@@ -10,8 +10,8 @@ import { Permissions } from '../rbac/constants/permissions.constants';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
 import { RegistrationResponseDto } from './dto/registration-response.dto';
 
-@Controller('users')
-@UseGuards(JwtAuthGuard)
+@Controller()
+// @UseGuards(JwtAuthGuard)
 export class RegistrationApplicationController {
   constructor(private readonly registrationApplicationService: RegistrationApplicationService) {}
 
