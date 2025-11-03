@@ -59,6 +59,46 @@ export class FormFieldsController {
     return this.formFieldsService.createField(formId, createFieldDto);
   }
 
+  @Put('admin/forms/:formId/fields/reorder')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reorder fields within a form' })
+  @ApiParam({ name: 'formId', description: 'Form ID (UUID)' })
+  @ApiBody({ 
+    type: ReorderFieldsDto,
+    description: 'Array of fields with their new order and step positions',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Fields reordered successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({ 
+    status: 400, 
+    description: 'Invalid request - field IDs do not belong to form or validation failed' 
+  })
+  async reorderFields(
+    @Param('formId', ParseUUIDPipe) formId: string,
+    @Body(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: false, // Override global pipe for this endpoint
+        transform: true,
+        transformOptions: { enableImplicitConversion: true },
+      }),
+    )
+    reorderFieldsDto: ReorderFieldsDto,
+  ): Promise<{ message: string }> {
+    return this.formFieldsService.reorderFields(
+      formId,
+      reorderFieldsDto.fields,
+    );
+  }
+
   @Put('admin/forms/:formId/fields/:fieldId')
   @ApiOperation({ summary: 'Update a field' })
   @ApiParam({ name: 'formId', description: 'Form ID (UUID)' })
@@ -99,45 +139,5 @@ export class FormFieldsController {
     @Param('fieldId', ParseUUIDPipe) fieldId: string,
   ): Promise<{ message: string }> {
     return this.formFieldsService.deleteField(fieldId);
-  }
-
-  @Put('admin/forms/:formId/fields/reorder')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Reorder fields within a form' })
-  @ApiParam({ name: 'formId', description: 'Form ID (UUID)' })
-  @ApiBody({ 
-    type: ReorderFieldsDto,
-    description: 'Array of fields with their new order and step positions',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Fields reordered successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        message: { type: 'string' },
-      },
-    },
-  })
-  @ApiResponse({ 
-    status: 400, 
-    description: 'Invalid request - field IDs do not belong to form or validation failed' 
-  })
-  async reorderFields(
-    @Param('formId', ParseUUIDPipe) formId: string,
-    @Body(
-      new ValidationPipe({
-        whitelist: true,
-        forbidNonWhitelisted: false, // Override global pipe for this endpoint
-        transform: true,
-        transformOptions: { enableImplicitConversion: true },
-      }),
-    )
-    reorderFieldsDto: ReorderFieldsDto,
-  ): Promise<{ message: string }> {
-    return this.formFieldsService.reorderFields(
-      formId,
-      reorderFieldsDto.fields,
-    );
   }
 }
