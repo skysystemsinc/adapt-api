@@ -11,17 +11,24 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { VerifyOTPDto } from './dto/verify-otp.dto';
+import { RecaptchaService } from './services/recaptcha.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     private jwtService: JwtService,
     private usersService: UsersService,
+    private recaptchaService: RecaptchaService,
     @InjectRepository(User)
     private userRepository: Repository<User>,
   ) {}
 
   async login(loginDto: LoginDto) {
+    // Verify reCAPTCHA token first (if provided)
+    if (loginDto.recaptchaToken) {
+      await this.recaptchaService.verifyToken(loginDto.recaptchaToken, 'signin');
+    }
+
     const user = await this.usersService.findByEmail(loginDto.email);
     
     if (!user) {
