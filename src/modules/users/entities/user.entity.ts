@@ -4,7 +4,9 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  OneToMany,
 } from 'typeorm';
+import { UserRole } from '../../rbac/entities/user-role.entity';
 
 @Entity('users')
 export class User {
@@ -40,6 +42,9 @@ export class User {
 
   @Column({ nullable: true })
   otpExpires: Date;
+
+  @OneToMany(() => UserRole, (userRole) => userRole.user)
+  userRoles: UserRole[];
 
   @CreateDateColumn()
   createdAt: Date;

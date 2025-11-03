@@ -2,6 +2,7 @@ import { DataSource } from 'typeorm';
 import { config } from 'dotenv';
 import { ApplicationTypeSeeder } from './application-type.seeder';
 import { UserSeeder } from './user.seeder';
+import { RBACSeeder } from './rbac.seeder';
 
 // Load environment variables
 config();
@@ -31,6 +32,9 @@ async function runSeeders() {
 
     const userSeeder = new UserSeeder();
     await userSeeder.run(AppDataSource);
+
+    const rbacSeeder = new RBACSeeder();
+    await rbacSeeder.run(AppDataSource);
 
     console.log('\n✅ Seeding completed successfully!');
     process.exit(0);
