@@ -1,16 +1,23 @@
-import { Controller, Get, Post, Body, Param, Put, Delete, Req, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Put, Delete, Req, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { RegistrationApplicationService } from './registration-application.service';
 import { RegistrationApplication } from './entities/registration-application.entity';
 import { CreateRegistrationApplicationDto } from './dto/create-registration-application.dto';
 import { SubmitRegistrationDto } from './dto/submit-registration.dto';
+import { PermissionsGuard } from 'src/common/guards/permissions.guard';
+import { RequirePermissions } from 'src/common/decorators/require-permissions.decorator';
+import { Permissions } from '../rbac/constants/permissions.constants';
+import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
 import { RegistrationResponseDto } from './dto/registration-response.dto';
 
-@Controller()
+@Controller('users')
+@UseGuards(JwtAuthGuard)
 export class RegistrationApplicationController {
   constructor(private readonly registrationApplicationService: RegistrationApplicationService) {}
 
   @Get('registration-application')
+  @UseGuards(PermissionsGuard)
+  @RequirePermissions(Permissions.VIEW_KYC)
   findAll() {
     return this.registrationApplicationService.findAll();
   }

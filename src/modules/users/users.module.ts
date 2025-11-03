@@ -5,18 +5,20 @@ import { UsersController } from './users.controller';
 import { User } from './entities/user.entity';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { RBACModule } from '../rbac/rbac.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([User]),
-    // JwtModule.registerAsync({
-    //   imports: [ConfigModule],
-    //   useFactory: async (configService: ConfigService) => ({
-    //     secret: configService.get<string>('JWT_SECRET') || 'your-secret-key',
-    //     signOptions: { expiresIn: '15m' },
-    //   }),
-    //   inject: [ConfigService],
-    // }),
+    RBACModule,
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      useFactory: async (configService: ConfigService) => ({
+        secret: configService.get<string>('JWT_SECRET') || 'your-secret-key',
+        signOptions: { expiresIn: '15m' },
+      }),
+      inject: [ConfigService],
+    }),
   ],
   controllers: [UsersController],
   providers: [UsersService],

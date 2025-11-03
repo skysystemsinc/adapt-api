@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsEmail, IsNotEmpty, IsString, MinLength, IsStrongPassword } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString, MinLength, IsStrongPassword, IsUUID } from 'class-validator';
 
 export class CreateUserDto {
   @IsEmail()
@@ -29,4 +29,8 @@ export class CreateUserDto {
   @IsNotEmpty()
   @Transform(({ value }: { value: string }) => value.toLowerCase())
   lastName: string;
+
+  @IsUUID()
+  @IsNotEmpty()
+  roleId: string;
 }
