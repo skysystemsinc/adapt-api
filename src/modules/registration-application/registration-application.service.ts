@@ -38,12 +38,19 @@ export class RegistrationApplicationService {
   ) {
     const plainApp = instanceToPlain(application);
     
+    let isViewable = false;
+    if (application.status !== ApplicationStatus.PENDING) {
+      isViewable = true;
+    } else {
+      isViewable = application.id === firstPendingId;
+    }
+    
     return {
       ...plainApp,
       daysCount: calculateDaysCount(application.createdAt),
       businessDays: calculateBusinessDays(application.createdAt),
       isOverdue: isApplicationOverdue(application.createdAt),
-      isViewable: application.id === firstPendingId,
+      isViewable,
     };
   }
 
