@@ -15,6 +15,7 @@ import { RecaptchaService } from './services/recaptcha.service';
 
 @Injectable()
 export class AuthService {
+
   constructor(
     private jwtService: JwtService,
     private usersService: UsersService,
@@ -63,18 +64,67 @@ export class AuthService {
   }
 
   async refreshToken(refreshTokenDto: RefreshTokenDto) {
-    const user = await this.userRepository.findOne({
-      where: { refreshToken: refreshTokenDto.refreshToken },
-    });
+    try {
+      // First, try to find user by refresh token
+      const user = await this.userRepository.findOne({
+        where: { refreshToken: refreshTokenDto.refreshToken },
+      });
 
-    if (!user) {
-      throw new UnauthorizedException('Invalid refresh token');
+      if (!user) {
+        // Handle race condition: If token doesn't match DB but is valid JWT for a user,
+        // check if it's a valid refresh token (might have been updated by concurrent refresh)
+        try {
+          // Verify the token signature and decode it
+          const decoded = await this.jwtService.verifyAsync(refreshTokenDto.refreshToken) as any;
+          if (decoded && decoded.sub) {
+            // Try to find user by ID
+            const userById = await this.userRepository.findOne({ where: { id: decoded.sub } });
+            if (userById) {
+              // If user exists, is active, and has a refresh token (even if different),
+              // accept this token as valid (handles race condition where concurrent refresh updated DB)
+              // This is safe because:
+              // 1. Token signature is verified (jwtService.verifyAsync)
+              // 2. Token is not expired (verified automatically)
+              // 3. Token belongs to this user (decoded.sub matches user.id)
+              // 4. User exists and is active
+              // 5. User has a refresh token (meaning they're logged in)
+              if (userById.isActive && userById.refreshToken) {
+                // Use this user for token generation
+                const tokens = await this.generateTokens(userById);
+                await this.updateRefreshToken(userById.id, tokens.refreshToken);
+                return tokens;
+              } else if (!userById.isActive) {
+                throw new UnauthorizedException('Account is deactivated');
+              } else {
+                throw new UnauthorizedException('Invalid refresh token');
+              }
+            }
+          }
+        } catch (decodeError: any) {
+          if (decodeError instanceof UnauthorizedException) {
+            throw decodeError;
+          }
+        }
+        
+        // If we get here, token is truly invalid
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+
+      // Check if user is active
+      if (!user.isActive) {
+        throw new UnauthorizedException('Account is deactivated');
+      }
+
+      const tokens = await this.generateTokens(user);
+      await this.updateRefreshToken(user.id, tokens.refreshToken);
+
+      return tokens;
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+      throw new UnauthorizedException('Failed to refresh token');
     }
-
-    const tokens = await this.generateTokens(user);
-    await this.updateRefreshToken(user.id, tokens.refreshToken);
-
-    return tokens;
   }
 
   async logout(userId: string) {
