@@ -51,5 +51,17 @@ export class RegistrationResponseDto {
 
   @Expose()
   updatedAt: Date;
+
+  @Expose()
+  daysCount?: number;
+
+  @Expose()
+  businessDays?: number;
+
+  @Expose()
+  isOverdue?: boolean;
+
+  @Expose()
+  isViewable?: boolean;
 }
 
