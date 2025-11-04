@@ -7,11 +7,13 @@ import { AuthController } from './auth.controller';
 import { UsersModule } from '../users/users.module';
 import { User } from '../users/entities/user.entity';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RecaptchaService } from './services/recaptcha.service';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([User]),
     UsersModule,
+    ConfigModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
@@ -22,7 +24,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtAuthGuard],
+  providers: [AuthService, RecaptchaService, JwtAuthGuard],
   exports: [AuthService, JwtAuthGuard],
 })
 export class AuthModule {}
