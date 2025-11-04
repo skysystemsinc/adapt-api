@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like } from 'typeorm';
 import { plainToInstance, instanceToPlain } from 'class-transformer';
@@ -177,6 +177,14 @@ export class RegistrationApplicationService {
 
     if (!application) {
       return null;
+    }
+
+    // Security: Block direct URL access to non-viewable pending applications
+    if (application.status === ApplicationStatus.PENDING) {
+      const firstPendingId = await this.getFirstPendingApplicationId();
+      if (application.id !== firstPendingId) {
+        throw new ForbiddenException('This application is not available for review yet. Please review applications in order.');
+      }
     }
 
     // Sort details by createdAt to maintain consistent order
