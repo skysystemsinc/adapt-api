@@ -49,7 +49,7 @@ export class RegistrationApplicationService {
       ...plainApp,
       daysCount: calculateDaysCount(application.createdAt),
       businessDays: calculateBusinessDays(application.createdAt),
-      isOverdue: isApplicationOverdue(application.createdAt),
+      isOverdue: isApplicationOverdue(application.createdAt, application.status),
       isViewable,
     };
   }
