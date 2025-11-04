@@ -292,7 +292,26 @@ export class RegistrationApplicationService {
     detail.status = dto.status;
     await this.registrationApplicationDetailsRepository.save(detail);
 
-    return this.findOne(applicationId);
+    // Auto-update application status based on field action
+    if (dto.status === DetailStatus.APPROVED) {
+      // Any field verified → Application becomes IN_PROCESS
+      application.status = ApplicationStatus.IN_PROCESS;
+      await this.registrationApplicationRepository.save(application);
+    } else if (dto.status === DetailStatus.REJECTED) {
+      // Any field rejected → Application becomes REJECTED
+      application.status = ApplicationStatus.SENT_TO_HOD;
+      await this.registrationApplicationRepository.save(application);
+    }
+
+    const updatedApplication = await this.findOne(applicationId);
+
+    // Check if all fields are approved
+    const isApproved = updatedApplication?.details.every((detail) => detail.status === DetailStatus.APPROVED);
+    if (isApproved) {
+      application.status = ApplicationStatus.SENT_TO_HOD;
+    }
+    return updatedApplication;
+    
   }
 }
 

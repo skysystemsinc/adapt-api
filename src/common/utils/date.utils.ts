@@ -32,6 +32,6 @@ export function calculateBusinessDays(startDate: Date): number {
 
 
 export function isApplicationOverdue(startDate: Date): boolean {
-  return calculateBusinessDays(startDate) > 1;
+  return calculateBusinessDays(startDate) > 0;
 }
 

@@ -6,7 +6,8 @@ export enum ApplicationStatus {
     PENDING = 'PENDING',
     IN_PROCESS = 'IN_PROCESS',
     APPROVED = 'APPROVED',
-    REJECTED = 'REJECTED'
+    REJECTED = 'REJECTED',
+    SENT_TO_HOD = 'SENT_TO_HOD'
 }
 
 @Entity('registration_application')
