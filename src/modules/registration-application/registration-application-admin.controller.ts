@@ -1,8 +1,12 @@
-import { Controller, Get, Patch, Param, Body, Query } from '@nestjs/common';
+import { Controller, Get, Patch, Param, Body, Query, UseGuards } from '@nestjs/common';
 import { RegistrationApplicationService } from './registration-application.service';
 import { UpdateApplicationStatusDto } from './dto/update-application-status.dto';
 import { UpdateDetailStatusDto } from './dto/update-detail-status.dto';
 import { QueryRegistrationApplicationDto } from './dto/query-registration-application.dto';
+import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
+import { PermissionsGuard } from 'src/common/guards/permissions.guard';
+import { Permissions } from '../rbac/constants/permissions.constants';
+import { RequirePermissions } from 'src/common/decorators/require-permissions.decorator';
 
 @Controller('admin/registration-application')
 export class RegistrationApplicationAdminController {
@@ -23,6 +27,8 @@ export class RegistrationApplicationAdminController {
     return this.registrationApplicationService.findOne(id);
   }
 
+  @UseGuards(PermissionsGuard, JwtAuthGuard)
+  @RequirePermissions(Permissions.REVIEW_KYC_APPROVAL)
   @Patch(':id/status')
   updateApplicationStatus(
     @Param('id') id: string,

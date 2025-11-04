@@ -31,6 +31,7 @@ export enum Permissions {
   VERIFY_KYC = 'verify_kyc',
   REVIEW_KYC = 'review_kyc',
   VIEW_KYC = 'view_kyc',
+  REVIEW_KYC_APPROVAL = 'review_kyc_approval',
   
   // Finance
   VIEW_FINANCE_REPORTS = 'view_finance_reports',
