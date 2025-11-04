@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like } from 'typeorm';
-import { plainToInstance } from 'class-transformer';
+import { plainToInstance, instanceToPlain } from 'class-transformer';
 import { RegistrationApplication, ApplicationStatus } from './entities/registration-application.entity';
 import { RegistrationApplicationDetails, DetailStatus } from './entities/registration-application-details.entity';
 import { CreateRegistrationApplicationDto } from './dto/create-registration-application.dto';
@@ -11,6 +11,7 @@ import { QueryRegistrationApplicationDto } from './dto/query-registration-applic
 import { SubmitRegistrationDto } from './dto/submit-registration.dto';
 import { RegistrationResponseDto } from './dto/registration-response.dto';
 import { ApplicationType } from '../application-type/entities/application-type.entity';
+import { calculateDaysCount, calculateBusinessDays, isApplicationOverdue } from '../../common/utils/date.utils';
 
 @Injectable()
 export class RegistrationApplicationService {
@@ -22,6 +23,29 @@ export class RegistrationApplicationService {
     @InjectRepository(ApplicationType)
     private applicationTypeRepository: Repository<ApplicationType>,
   ) {}
+
+  private async getFirstPendingApplicationId(): Promise<string | null> {
+    const firstPending = await this.registrationApplicationRepository.findOne({
+      where: { status: ApplicationStatus.PENDING },
+      order: { createdAt: 'ASC' },
+    });
+    return firstPending?.id || null;
+  }
+
+  private enrichApplicationWithCalculatedFields(
+    application: RegistrationApplication,
+    firstPendingId: string | null,
+  ) {
+    const plainApp = instanceToPlain(application);
+    
+    return {
+      ...plainApp,
+      daysCount: calculateDaysCount(application.createdAt),
+      businessDays: calculateBusinessDays(application.createdAt),
+      isOverdue: isApplicationOverdue(application.createdAt),
+      isViewable: application.id === firstPendingId,
+    };
+  }
 
   async submitRegistration(
     dto: SubmitRegistrationDto,
@@ -93,7 +117,7 @@ export class RegistrationApplicationService {
   }
 
   async findAllPaginated(query: QueryRegistrationApplicationDto) {
-    const { page = 1, limit = 10, status, applicationTypeId, search, sortBy = 'createdAt', sortOrder = 'DESC' } = query;
+    const { page = 1, limit = 10, status, applicationTypeId, search, sortBy = 'createdAt', sortOrder = 'ASC' } = query;
 
     const queryBuilder = this.registrationApplicationRepository
       .createQueryBuilder('application')
@@ -129,8 +153,13 @@ export class RegistrationApplicationService {
 
     const [data, total] = await queryBuilder.getManyAndCount();
 
+    const firstPendingId = await this.getFirstPendingApplicationId();
+    const enrichedData = data.map((app) => 
+      this.enrichApplicationWithCalculatedFields(app, firstPendingId)
+    );
+
     return {
-      data,
+      data: enrichedData,
       meta: {
         total,
         page,
