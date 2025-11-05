@@ -20,6 +20,9 @@ export class RegistrationDetailResponseDto {
   remarks: string | null;
 
   @Expose()
+  documentTypeId: string | null;
+
+  @Expose()
   createdAt: Date;
 }
 
