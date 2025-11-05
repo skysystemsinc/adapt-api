@@ -121,5 +121,25 @@ export class FormsController {
   async findBySlug(@Param('slug') slug: string): Promise<FormResponseDto> {
     return this.formsService.findBySlug(slug);
   }
+
+  @Post('admin/forms/:id/ensure-versioning')
+  @ApiOperation({ summary: 'Ensure registration form versioning before field operations' })
+  @ApiParam({ name: 'id', description: 'Form ID (UUID)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns the form ID to use (may be new if versioning occurred)',
+    schema: {
+      type: 'object',
+      properties: {
+        formId: { type: 'string' },
+      },
+    },
+  })
+  async ensureVersioning(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<{ formId: string }> {
+    const formId = await this.formsService.ensureRegistrationFormVersioning(id);
+    return { formId };
+  }
 }
 
