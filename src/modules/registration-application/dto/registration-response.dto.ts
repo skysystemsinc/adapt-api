@@ -17,6 +17,9 @@ export class RegistrationDetailResponseDto {
   status: string;
 
   @Expose()
+  remarks: string | null;
+
+  @Expose()
   createdAt: Date;
 }
 
