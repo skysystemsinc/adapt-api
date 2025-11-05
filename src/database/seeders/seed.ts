@@ -3,6 +3,7 @@ import { config } from 'dotenv';
 import { ApplicationTypeSeeder } from './application-type.seeder';
 import { UserSeeder } from './user.seeder';
 import { RBACSeeder } from './rbac.seeder';
+import { DocumentTypeSeeder } from './document-type.seeder';
 
 // Load environment variables
 config();
@@ -27,14 +28,17 @@ async function runSeeders() {
     console.log('✓ Database connection established\n');
 
     // Run seeders
-    const applicationTypeSeeder = new ApplicationTypeSeeder();
-    await applicationTypeSeeder.run(AppDataSource);
+    // const applicationTypeSeeder = new ApplicationTypeSeeder();
+    // await applicationTypeSeeder.run(AppDataSource);
 
-    const userSeeder = new UserSeeder();
-    await userSeeder.run(AppDataSource);
+    // const userSeeder = new UserSeeder();
+    // await userSeeder.run(AppDataSource);
 
-    const rbacSeeder = new RBACSeeder();
-    await rbacSeeder.run(AppDataSource);
+    // const rbacSeeder = new RBACSeeder();
+    // await rbacSeeder.run(AppDataSource);
+
+    const documentTypeSeeder = new DocumentTypeSeeder();
+    await documentTypeSeeder.run(AppDataSource);
 
     console.log('\n✅ Seeding completed successfully!');
     process.exit(0);
