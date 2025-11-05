@@ -11,6 +11,7 @@ import { FormSubmissionsModule } from './modules/form-submissions/form-submissio
 import { UploadsModule } from './modules/uploads/uploads.module';
 import { RegistrationApplicationModule } from './modules/registration-application/registration-application.module';
 import { RBACModule } from './modules/rbac/rbac.module';
+import { DocumentTypeModule } from './modules/document-type/document-type.module';
 import databaseConfig from './config/database.config';
 
 @Module({
@@ -38,6 +39,7 @@ import databaseConfig from './config/database.config';
     UploadsModule,
     RegistrationApplicationModule,
     RBACModule,
+    DocumentTypeModule,
   ],
   controllers: [AppController],
   providers: [AppService],
