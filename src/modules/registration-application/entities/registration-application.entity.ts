@@ -45,6 +45,9 @@ export class RegistrationApplication {
     @Column({ type: 'jsonb', nullable: true })
     metadata: any; // Changed from text to jsonb for better querying
 
+    @Column({ type: 'text', nullable: true })
+    remarks: string | null;
+
     @CreateDateColumn()
     createdAt: Date;
 

@@ -267,9 +267,7 @@ export class RegistrationApplicationService {
     }
 
     application.status = dto.status;
-    if (dto.remarks) {
-      application.metadata = dto.remarks;
-    }
+    application.remarks = dto.remarks || null;
 
     await this.registrationApplicationRepository.save(application);
     return this.findOne(id);
