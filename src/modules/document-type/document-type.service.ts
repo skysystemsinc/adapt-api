@@ -52,7 +52,7 @@ export class DocumentTypeService {
   }
 
   async remove(id: string): Promise<void> {
-    const documentType = await this.findOne(id);
+    // Just soft delete - TypeORM handles non-existent IDs gracefully
     await this.documentTypeRepository.softDelete(id);
   }
 
