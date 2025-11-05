@@ -8,13 +8,13 @@ export class DocumentTypeSeeder {
     console.log('🌱 Seeding document types...\n');
 
     const documentTypes = [
+      { name: 'eCIB', isActive: true },
       { name: 'CNIC', isActive: true },
       { name: 'Passport', isActive: true },
-      { name: 'Bank Statement', isActive: true },
-      { name: 'Tax Certificate', isActive: true },
-      { name: 'Financial Authorization', isActive: true },
       { name: 'Power of Attorney', isActive: true },
-      { name: 'eCIB Report', isActive: true },
+      { name: 'Board Resolution', isActive: true },
+      { name: 'Bank Slip', isActive: true },
+      { name: 'Financial Authorization', isActive: true },
       { name: 'Utility Bill', isActive: true },
       { name: 'Business License', isActive: true },
     ];
