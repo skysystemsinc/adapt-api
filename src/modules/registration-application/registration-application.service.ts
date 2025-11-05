@@ -407,6 +407,7 @@ export class RegistrationApplicationService {
     const isApproved = updatedApplication?.details.every((detail) => detail.status === DetailStatus.APPROVED);
     if (isApproved) {
       application.status = ApplicationStatus.SENT_TO_HOD;
+      await this.registrationApplicationRepository.save(application);
     }
     return updatedApplication;
     
