@@ -27,7 +27,7 @@ export class RegistrationApplicationAdminController {
     return this.registrationApplicationService.findOne(id);
   }
 
-  @UseGuards(PermissionsGuard, JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
   @RequirePermissions(Permissions.REVIEW_KYC_APPROVAL)
   @Patch(':id/status')
   updateApplicationStatus(
