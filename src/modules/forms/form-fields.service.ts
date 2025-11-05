@@ -3,6 +3,8 @@ import {
   Logger,
   NotFoundException,
   BadRequestException,
+  forwardRef,
+  Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, DataSource } from 'typeorm';
@@ -10,6 +12,7 @@ import { FormField } from './entities/form-field.entity';
 import { CreateFieldDto } from './dto/create-field.dto';
 import { UpdateFieldDto } from './dto/update-field.dto';
 import { FieldOrderDto } from './dto/reorder-fields.dto';
+import { FormsService } from './forms.service';
 
 interface ParsedField {
   fieldKey: string;
@@ -31,6 +34,8 @@ export class FormFieldsService {
     @InjectRepository(FormField)
     private readonly formFieldRepository: Repository<FormField>,
     private readonly dataSource: DataSource,
+    @Inject(forwardRef(() => FormsService))
+    private readonly formsService: FormsService,
   ) { }
 
   /**
@@ -238,14 +243,20 @@ export class FormFieldsService {
 
   /**
    * Create a new field
+   * For registration forms, triggers versioning before creating the field
    */
   async createField(
     formId: string,
     createFieldDto: CreateFieldDto,
   ): Promise<FormField> {
+    // Ensure versioning for registration forms before creating field
+    const actualFormId = await this.formsService.ensureRegistrationFormVersioning(
+      formId,
+    );
+
     // Check for duplicate fieldKey
     const existing = await this.formFieldRepository.findOne({
-      where: { formId, fieldKey: createFieldDto.fieldKey },
+      where: { formId: actualFormId, fieldKey: createFieldDto.fieldKey },
     });
 
     if (existing) {
@@ -255,7 +266,7 @@ export class FormFieldsService {
     }
 
     const field = this.formFieldRepository.create({
-      formId,
+      formId: actualFormId,
       ...createFieldDto,
     });
 
@@ -267,6 +278,7 @@ export class FormFieldsService {
 
   /**
    * Update a field
+   * For registration forms, triggers versioning before updating the field
    */
   async updateField(
     fieldId: string,
@@ -278,6 +290,50 @@ export class FormFieldsService {
 
     if (!field) {
       throw new NotFoundException(`Field with ID '${fieldId}' not found`);
+    }
+
+    // Ensure versioning for registration forms before updating field
+    const actualFormId = await this.formsService.ensureRegistrationFormVersioning(
+      field.formId,
+    );
+
+    // If form ID changed due to versioning, update the field's formId
+    if (actualFormId !== field.formId) {
+      // Find the corresponding field in the new form version
+      const newFormField = await this.formFieldRepository.findOne({
+        where: {
+          formId: actualFormId,
+          fieldKey: field.fieldKey,
+        },
+      });
+
+      if (!newFormField) {
+        throw new NotFoundException(
+          `Field not found in new form version. Please try again.`,
+        );
+      }
+
+      // Update the field in the new form version
+      if (updateFieldDto.fieldKey && updateFieldDto.fieldKey !== newFormField.fieldKey) {
+        const existing = await this.formFieldRepository.findOne({
+          where: {
+            formId: actualFormId,
+            fieldKey: updateFieldDto.fieldKey,
+          },
+        });
+
+        if (existing) {
+          throw new BadRequestException(
+            `Field with key '${updateFieldDto.fieldKey}' already exists in this form`,
+          );
+        }
+      }
+
+      Object.assign(newFormField, updateFieldDto);
+      const updatedField = await this.formFieldRepository.save(newFormField);
+      this.logger.log(`Updated field ${fieldId} (${newFormField.fieldKey}) in new form version`);
+
+      return updatedField;
     }
 
     // If updating fieldKey, check for duplicates
@@ -307,6 +363,7 @@ export class FormFieldsService {
 
   /**
    * Delete a field
+   * For registration forms, triggers versioning before deleting the field
    */
   async deleteField(fieldId: string): Promise<{ message: string }> {
     const field = await this.formFieldRepository.findOne({
@@ -317,8 +374,28 @@ export class FormFieldsService {
       throw new NotFoundException(`Field with ID '${fieldId}' not found`);
     }
 
-    await this.formFieldRepository.remove(field);
-    this.logger.log(`Deleted field ${fieldId} (${field.fieldKey})`);
+    // Ensure versioning for registration forms before deleting field
+    const actualFormId = await this.formsService.ensureRegistrationFormVersioning(
+      field.formId,
+    );
+
+    // If form ID changed due to versioning, find the field in the new form
+    if (actualFormId !== field.formId) {
+      const newFormField = await this.formFieldRepository.findOne({
+        where: {
+          formId: actualFormId,
+          fieldKey: field.fieldKey,
+        },
+      });
+
+      if (newFormField) {
+        await this.formFieldRepository.remove(newFormField);
+        this.logger.log(`Deleted field ${fieldId} (${field.fieldKey}) from new form version`);
+      }
+    } else {
+      await this.formFieldRepository.remove(field);
+      this.logger.log(`Deleted field ${fieldId} (${field.fieldKey})`);
+    }
 
     return {
       message: `Field with ID '${fieldId}' has been deleted successfully`,
@@ -328,6 +405,7 @@ export class FormFieldsService {
   /**
    * Reorder fields (TRANSACTIONAL - all or nothing)
    * Updates order and step for multiple fields atomically using bulk updates
+   * For registration forms, triggers versioning before reordering
    */
   async reorderFields(
     formId: string,
@@ -337,6 +415,41 @@ export class FormFieldsService {
       throw new BadRequestException('fieldOrders array cannot be empty');
     }
 
+    // Ensure versioning for registration forms before reordering
+    const actualFormId = await this.formsService.ensureRegistrationFormVersioning(
+      formId,
+    );
+
+    // If form ID changed, we need to map old field IDs to new field IDs
+    let mappedFieldOrders = fieldOrders;
+    if (actualFormId !== formId) {
+      // Get old fields to map by fieldKey
+      const oldFields = await this.formFieldRepository.find({
+        where: { formId },
+        select: ['id', 'fieldKey'],
+      });
+
+      // Get new fields
+      const newFields = await this.formFieldRepository.find({
+        where: { formId: actualFormId },
+        select: ['id', 'fieldKey'],
+      });
+
+      // Create mapping from old field ID to new field ID via fieldKey
+      const oldFieldMap = new Map(oldFields.map(f => [f.id, f.fieldKey]));
+      const newFieldMap = new Map(newFields.map(f => [f.fieldKey, f.id]));
+
+      mappedFieldOrders = fieldOrders.map(order => {
+        const fieldKey = oldFieldMap.get(order.id);
+        const newFieldId = fieldKey ? newFieldMap.get(fieldKey) : null;
+        return {
+          id: newFieldId || order.id,
+          order: order.order,
+          step: order.step,
+        };
+      }).filter(order => order.id !== null) as FieldOrderDto[];
+    }
+
     // Use a transaction to ensure atomicity
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -344,7 +457,7 @@ export class FormFieldsService {
 
     try {
       // Get all field IDs from the request
-      const fieldIds = fieldOrders.map((f) => f.id);
+      const fieldIds = mappedFieldOrders.map((f) => f.id);
       const uniqueFieldIds = [...new Set(fieldIds)];
 
       // Check for duplicate IDs in the request
@@ -356,21 +469,21 @@ export class FormFieldsService {
 
       // Fetch all fields to verify they belong to this form
       const fields = await queryRunner.manager.find(FormField, {
-        where: { formId, id: In(uniqueFieldIds) },
+        where: { formId: actualFormId, id: In(uniqueFieldIds) },
       });
 
       if (fields.length !== uniqueFieldIds.length) {
         throw new BadRequestException(
-          `Some field IDs do not belong to form ${formId}`,
+          `Some field IDs do not belong to form ${actualFormId}`,
         );
       }
 
       // Use Promise.all for parallel updates (more efficient than sequential loop)
       await Promise.all(
-        fieldOrders.map((fieldOrder) =>
+        mappedFieldOrders.map((fieldOrder) =>
           queryRunner.manager.update(
             FormField,
-            { id: fieldOrder.id, formId },
+            { id: fieldOrder.id, formId: actualFormId },
             {
               order: fieldOrder.order,
               step: fieldOrder.step,
@@ -381,7 +494,7 @@ export class FormFieldsService {
 
       await queryRunner.commitTransaction();
       this.logger.log(
-        `Reordered ${fieldOrders.length} fields for form ${formId}`,
+        `Reordered ${mappedFieldOrders.length} fields for form ${actualFormId}`,
       );
 
       return { message: 'Fields reordered successfully' };
