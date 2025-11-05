@@ -92,7 +92,18 @@ export class RegistrationApplicationService {
 
         const savedApplication = await transactionalEntityManager.save(application);
 
-        // 3. Create details records
+        // 3. Fetch form fields to get documentTypeId
+        const formFields = await transactionalEntityManager.find(FormField, {
+          where: { formId: dto.formId },
+        });
+
+        // Create a map of fieldKey to documentTypeId
+        const fieldKeyToDocTypeId = new Map<string, string | null>();
+        formFields.forEach((field) => {
+          fieldKeyToDocTypeId.set(field.fieldKey, field.documentTypeId);
+        });
+
+        // 4. Create details records with documentTypeId copied from form fields
         const details = dto.values.map((fieldValue) =>
           transactionalEntityManager.create(RegistrationApplicationDetails, {
             application: savedApplication,
@@ -101,6 +112,7 @@ export class RegistrationApplicationService {
               ? JSON.stringify(fieldValue.value) 
               : String(fieldValue.value),
             label: fieldValue.label || null,
+            documentTypeId: fieldKeyToDocTypeId.get(fieldValue.fieldKey) || null,
             status: DetailStatus.PENDING,
           }),
         );

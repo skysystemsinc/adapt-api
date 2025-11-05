@@ -1,5 +1,6 @@
 import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { RegistrationApplication } from "./registration-application.entity";
+import { DocumentType } from "../../document-type/entities/document-type.entity";
 
 export enum DetailStatus {
     PENDING = 'PENDING',
@@ -34,6 +35,13 @@ export class RegistrationApplicationDetails {
 
   @Column({ type: 'text', nullable: true })
   remarks: string | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  documentTypeId: string | null;
+
+  @ManyToOne(() => DocumentType, { nullable: true })
+  @JoinColumn({ name: 'documentTypeId' })
+  documentType: DocumentType | null;
 
   @CreateDateColumn()
   createdAt: Date;

@@ -8,6 +8,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { Form } from '../../forms/entities/form.entity';
+import { DocumentType } from '../../document-type/entities/document-type.entity';
 
 @Entity('form_fields')
 export class FormField {
@@ -65,6 +66,13 @@ export class FormField {
 
   @Column({ default: false })
   includeInKycVerification: boolean;
+
+  @Column({ type: 'uuid', nullable: true })
+  documentTypeId: string | null;
+
+  @ManyToOne(() => DocumentType, { nullable: true })
+  @JoinColumn({ name: 'documentTypeId' })
+  documentType: DocumentType | null;
 
   @CreateDateColumn()
   createdAt: Date;
