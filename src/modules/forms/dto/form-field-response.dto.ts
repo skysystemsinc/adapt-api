@@ -61,5 +61,9 @@ export class FormFieldResponseDto {
   @ApiProperty()
   @Expose()
   includeInKycVerification: boolean;
+
+  @ApiProperty({ required: false })
+  @Expose()
+  documentTypeId?: string | null;
 }
 
