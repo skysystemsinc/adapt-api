@@ -297,6 +297,7 @@ export class RegistrationApplicationService {
     }
 
     detail.status = dto.status;
+    detail.remarks = dto.remarks || null;
     await this.registrationApplicationDetailsRepository.save(detail);
 
     // Auto-update application status based on field action
