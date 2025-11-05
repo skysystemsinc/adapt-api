@@ -12,6 +12,9 @@ import { SubmitRegistrationDto } from './dto/submit-registration.dto';
 import { RegistrationResponseDto } from './dto/registration-response.dto';
 import { ApplicationType } from '../application-type/entities/application-type.entity';
 import { calculateDaysCount, calculateBusinessDays, isApplicationOverdue } from '../../common/utils/date.utils';
+import { UsersService } from '../users/users.service';
+import { Role } from '../rbac/entities/role.entity';
+import { FormField } from '../forms/entities/form-field.entity';
 
 @Injectable()
 export class RegistrationApplicationService {
@@ -22,6 +25,11 @@ export class RegistrationApplicationService {
     private registrationApplicationDetailsRepository: Repository<RegistrationApplicationDetails>,
     @InjectRepository(ApplicationType)
     private applicationTypeRepository: Repository<ApplicationType>,
+    @InjectRepository(Role)
+    private roleRepository: Repository<Role>,
+    @InjectRepository(FormField)
+    private formFieldRepository: Repository<FormField>,
+    private usersService: UsersService,
   ) {}
 
   private async getFirstPendingApplicationId(): Promise<string | null> {
@@ -260,7 +268,10 @@ export class RegistrationApplicationService {
   }
 
   async updateApplicationStatus(id: string, dto: UpdateApplicationStatusDto) {
-    const application = await this.registrationApplicationRepository.findOne({ where: { id } });
+    const application = await this.registrationApplicationRepository.findOne({ 
+      where: { id },
+      relations: ['details'] 
+    });
     
     if (!application) {
       throw new NotFoundException(`Application with ID ${id} not found`);
@@ -270,7 +281,88 @@ export class RegistrationApplicationService {
     application.remarks = dto.remarks || null;
 
     await this.registrationApplicationRepository.save(application);
+
+    // If approved, create user account
+    if (dto.status === ApplicationStatus.APPROVED) {
+      await this.createUserFromApplication(application);
+    }
+
     return this.findOne(id);
+  }
+
+  private async createUserFromApplication(application: RegistrationApplication): Promise<void> {
+    try {
+      // Get form fields to find email field by type
+      const formFields = await this.formFieldRepository.find({
+        where: { formId: application.formId },
+      });
+
+      // Find the email field by type
+      const emailField = formFields.find(f => f.type === 'email');
+      
+      if (!emailField) {
+        throw new Error('Email field not found in form definition');
+      }
+
+      // Extract user data from application details using field keys
+      const emailDetail = application.details?.find(d => d.key === emailField.fieldKey);
+      const firstNameDetail = application.details?.find(d => d.key.toLowerCase().includes('firstname') || d.key.toLowerCase().includes('first_name'));
+      const lastNameDetail = application.details?.find(d => d.key.toLowerCase().includes('lastname') || d.key.toLowerCase().includes('last_name'));
+
+      if (!emailDetail?.value) {
+        throw new Error('Email value not found in application details');
+      }
+
+      // Find the Applicant role
+      const applicantRole = await this.roleRepository.findOne({ 
+        where: { name: 'Applicant' } 
+      });
+
+      if (!applicantRole) {
+        throw new Error('Applicant role not found');
+      }
+
+      // Generate a random strong password
+      // const randomPassword = this.generateSecurePassword();
+
+      // Create user
+      await this.usersService.create({
+        email: emailDetail.value,
+        password: "Password@123",
+        firstName: firstNameDetail?.value || 'First Name',
+        lastName: lastNameDetail?.value || 'Last Name',
+        roleId: applicantRole.id,
+      });
+
+    } catch (error) {
+      // Log error but don't fail the approval process
+      console.error('Failed to create user from application:', error.message);
+      // You might want to set a flag on the application indicating user creation failed
+    }
+  }
+
+  private generateSecurePassword(): string {
+    const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const lowercase = 'abcdefghijklmnopqrstuvwxyz';
+    const numbers = '0123456789';
+    const symbols = '!@#$%^&*()_+-=[]{}|;:,.<>?';
+    
+    // Ensure at least one of each required character type
+    const password = [
+      uppercase[Math.floor(Math.random() * uppercase.length)],
+      lowercase[Math.floor(Math.random() * lowercase.length)],
+      numbers[Math.floor(Math.random() * numbers.length)],
+      symbols[Math.floor(Math.random() * symbols.length)],
+    ];
+
+    // Fill remaining characters randomly
+    const allChars = uppercase + lowercase + numbers + symbols;
+    for (let i = password.length; i < 12; i++) {
+      password.push(allChars[Math.floor(Math.random() * allChars.length)]);
+    }
+
+    // Shuffle the password array
+    return password.sort(() => Math.random() - 0.5).join('');
   }
 
   async updateDetailStatus(applicationId: string, detailId: string, dto: UpdateDetailStatusDto) {
