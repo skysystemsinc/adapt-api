@@ -9,10 +9,13 @@ import { RegistrationApplication } from './entities/registration-application.ent
 import { RegistrationApplicationDetails } from './entities/registration-application-details.entity';
 import { ApplicationType } from '../application-type/entities/application-type.entity';
 import { RBACModule } from '../rbac/rbac.module';
+import { UsersModule } from '../users/users.module';
+import { Role } from '../rbac/entities/role.entity';
+import { FormField } from '../forms/entities/form-field.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([RegistrationApplication, RegistrationApplicationDetails, ApplicationType]),
+    TypeOrmModule.forFeature([RegistrationApplication, RegistrationApplicationDetails, ApplicationType, Role, FormField]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
@@ -22,6 +25,7 @@ import { RBACModule } from '../rbac/rbac.module';
       inject: [ConfigService],
     }),
     RBACModule,
+    UsersModule,
   ],
   controllers: [
     RegistrationApplicationController,
