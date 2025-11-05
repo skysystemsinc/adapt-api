@@ -41,6 +41,12 @@ export class Form {
   @Column({ type: 'uuid', nullable: true })
   createdBy: string;
 
+  @Column({ nullable: true })
+  version: string; // Version string like "v1", "v2", etc.
+
+  @Column({ default: true })
+  isActive: boolean; // Whether this is the active version (for registration forms)
+
   @CreateDateColumn()
   createdAt: Date;
 
