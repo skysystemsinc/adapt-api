@@ -7,10 +7,11 @@ import { User } from './entities/user.entity';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { RBACModule } from '../rbac/rbac.module';
+import { RegistrationApplicationDetails } from '../registration-application/entities/registration-application-details.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User]),
+    TypeOrmModule.forFeature([User, RegistrationApplicationDetails]),
     RBACModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
