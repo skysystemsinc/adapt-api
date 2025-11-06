@@ -7,13 +7,15 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { RBACService } from '../rbac/services/rbac.service';
 import { QueryUsersDto, UserTypeFilter } from './dto/query-users.dto';
 import { ApplicantUserResponseDto, InternalUserResponseDto } from './dto/user-response.dto';
-import { instanceToPlain } from 'class-transformer';
+import { RegistrationApplicationDetails } from '../registration-application/entities/registration-application-details.entity';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    @InjectRepository(RegistrationApplicationDetails)
+    private registrationApplicationDetailsRepository: Repository<RegistrationApplicationDetails>,
     private rbacService: RBACService,
   ) {}
 
@@ -133,11 +135,60 @@ export class UsersService {
     let data: ApplicantUserResponseDto[] | InternalUserResponseDto[];
 
     if (type === UserTypeFilter.APPLICANT) {
-      data = users.map((user) => ({
-        id: user.id,
-        email: user.email,
-        name: 'test',
-      }));
+      // Fetch business/company names for applicants
+      const businessNameLabels = [
+        'Business / Company Name',
+        'Name of Applicant as per CNIC',
+        'Business / Applicant Name (as per CNIC)',
+        'Business Name of Partnership (as per registration)',
+        'Company Name (as per SECP Registration)',
+      ];
+
+      const usersWithNames = await Promise.all(
+        users.map(async (user) => {
+          try {
+            // Find the approved application for this user by email
+            const emailDetail = await this.registrationApplicationDetailsRepository
+              .createQueryBuilder('detail')
+              .innerJoinAndSelect('detail.application', 'application')
+              .where('detail.value = :email', { email: user.email })
+              .andWhere('application.status = :status', { status: 'APPROVED' })
+              .getOne();
+
+            let businessName = 'N/A';
+
+            if (emailDetail?.application?.id) {
+              // Find the business/company name from the same application
+              const nameDetail = await this.registrationApplicationDetailsRepository
+                .createQueryBuilder('detail')
+                .where('detail.application.id = :applicationId', { 
+                  applicationId: emailDetail.application.id 
+                })
+                .andWhere('detail.label IN (:...labels)', { labels: businessNameLabels })
+                .getOne();
+
+              if (nameDetail?.value) {
+                businessName = nameDetail.value;
+              }
+            }
+
+            return {
+              id: user.id,
+              email: user.email,
+              name: businessName,
+            };
+          } catch (error) {
+            console.error(`Error fetching name for user ${user.email}:`, error.message);
+            return {
+              id: user.id,
+              email: user.email,
+              name: 'N/A',
+            };
+          }
+        }),
+      );
+
+      data = usersWithNames;
     } else {
       data = users.map((user) => ({
         id: user.id,
