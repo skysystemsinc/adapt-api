@@ -13,6 +13,7 @@ import { RegistrationApplicationModule } from './modules/registration-applicatio
 import { RBACModule } from './modules/rbac/rbac.module';
 import { DocumentTypeModule } from './modules/document-type/document-type.module';
 import { FormRequestsModule } from './modules/form-requests/form-requests.module';
+import { AdminDashboardModule } from './modules/admin-dashboard/admin-dashboard.module';
 import databaseConfig from './config/database.config';
 
 @Module({
@@ -42,6 +43,7 @@ import databaseConfig from './config/database.config';
     RBACModule,
     DocumentTypeModule,
     FormRequestsModule,
+    AdminDashboardModule,
   ],
   controllers: [AppController],
   providers: [AppService],
