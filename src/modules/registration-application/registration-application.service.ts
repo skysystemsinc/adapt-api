@@ -514,6 +514,69 @@ export class RegistrationApplicationService {
   }
 
   /**
+   * Get admin documents by registration application ID
+   */
+  async getAdminDocumentsByApplicationId(applicationId: string): Promise<UploadAdminDocumentResponseDto[]> {
+    const documents = await this.adminRegistrationDocumentRepository.find({
+      where: { applicationId },
+      order: { createdAt: 'DESC' },
+    });
+
+    return documents.map((doc) => ({
+      id: doc.id,
+      applicationId: doc.applicationId,
+      detailId: doc.detailId,
+      document: doc.document,
+      createdAt: doc.createdAt,
+      updatedAt: doc.updatedAt,
+    }));
+  }
+
+  /**
+   * Get admin documents by detail ID
+   */
+  async getAdminDocumentsByDetailId(detailId: string): Promise<UploadAdminDocumentResponseDto[]> {
+    const documents = await this.adminRegistrationDocumentRepository.find({
+      where: { detailId },
+      order: { createdAt: 'DESC' },
+    });
+
+    return documents.map((doc) => ({
+      id: doc.id,
+      applicationId: doc.applicationId,
+      detailId: doc.detailId,
+      document: doc.document,
+      createdAt: doc.createdAt,
+      updatedAt: doc.updatedAt,
+    }));
+  }
+
+  /**
+   * Get admin documents by registration ID and detail ID
+   */
+  async getAdminDocumentsByRegistrationAndDetail(
+    registrationId: string,
+    detailId: string,
+  ): Promise<UploadAdminDocumentResponseDto[]> {
+    const documents = await this.adminRegistrationDocumentRepository.find({
+      where: {
+        applicationId: registrationId,
+        detailId: detailId,
+      },
+      order: { createdAt: 'DESC' },
+    });
+
+    return documents.map((doc) => ({
+      id: doc.id,
+      applicationId: doc.applicationId,
+      detailId: doc.detailId,
+      document: doc.document,
+      createdAt: doc.createdAt,
+      updatedAt: doc.updatedAt,
+    }));
+  }
+
+  /**
    * Ensure upload directory exists
    */
   private async ensureUploadDirectory(): Promise<void> {

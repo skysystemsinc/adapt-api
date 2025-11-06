@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-export class UploadAdminDocumentResponseDto {
+export class AdminDocumentResponseDto {
   @ApiProperty({ description: 'Document ID' })
   id: string;
 
@@ -19,4 +19,6 @@ export class UploadAdminDocumentResponseDto {
   @ApiProperty({ description: 'Updated at timestamp' })
   updatedAt: Date;
 }
+
+export class UploadAdminDocumentResponseDto extends AdminDocumentResponseDto {}
 
