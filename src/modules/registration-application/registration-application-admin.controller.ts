@@ -45,5 +45,6 @@ export class RegistrationApplicationAdminController {
   ) {
     return this.registrationApplicationService.updateDetailStatus(applicationId, detailId, updateDetailStatusDto);
   }
+
 }
 
