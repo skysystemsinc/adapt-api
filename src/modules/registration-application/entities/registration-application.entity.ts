@@ -15,6 +15,9 @@ export class RegistrationApplication {
     @PrimaryGeneratedColumn('uuid')
     id: string;
 
+    @Column({ type: 'varchar', length: 20, unique: true })
+    applicationId: string;
+
     @OneToOne(() => ApplicationType, { nullable: true })
     @JoinColumn({ name: 'applicationTypeId' })
     applicationTypeId: ApplicationType | null;
