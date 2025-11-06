@@ -1,15 +1,20 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like } from 'typeorm';
 import { plainToInstance, instanceToPlain } from 'class-transformer';
+import * as fs from 'fs/promises';
+import * as path from 'path';
+import { v4 as uuidv4 } from 'uuid';
 import { RegistrationApplication, ApplicationStatus } from './entities/registration-application.entity';
 import { RegistrationApplicationDetails, DetailStatus } from './entities/registration-application-details.entity';
+import { AdminRegistrationDocument } from './entities/admin-registration-document.entity';
 import { CreateRegistrationApplicationDto } from './dto/create-registration-application.dto';
 import { UpdateApplicationStatusDto } from './dto/update-application-status.dto';
 import { UpdateDetailStatusDto } from './dto/update-detail-status.dto';
 import { QueryRegistrationApplicationDto } from './dto/query-registration-application.dto';
 import { SubmitRegistrationDto } from './dto/submit-registration.dto';
 import { RegistrationResponseDto } from './dto/registration-response.dto';
+import { UploadAdminDocumentResponseDto } from './dto/upload-admin-document.dto';
 import { ApplicationType } from '../application-type/entities/application-type.entity';
 import { calculateDaysCount, calculateBusinessDays, isApplicationOverdue } from '../../common/utils/date.utils';
 import { UsersService } from '../users/users.service';
@@ -18,11 +23,15 @@ import { FormField } from '../forms/entities/form-field.entity';
 
 @Injectable()
 export class RegistrationApplicationService {
+  private readonly uploadDir = 'uploads';
+
   constructor(
     @InjectRepository(RegistrationApplication)
     private registrationApplicationRepository: Repository<RegistrationApplication>,
     @InjectRepository(RegistrationApplicationDetails)
     private registrationApplicationDetailsRepository: Repository<RegistrationApplicationDetails>,
+    @InjectRepository(AdminRegistrationDocument)
+    private adminRegistrationDocumentRepository: Repository<AdminRegistrationDocument>,
     @InjectRepository(ApplicationType)
     private applicationTypeRepository: Repository<ApplicationType>,
     @InjectRepository(Role)
@@ -30,7 +39,9 @@ export class RegistrationApplicationService {
     @InjectRepository(FormField)
     private formFieldRepository: Repository<FormField>,
     private usersService: UsersService,
-  ) {}
+  ) {
+    this.ensureUploadDirectory();
+  }
 
   private async getFirstPendingApplicationId(): Promise<string | null> {
     const firstPending = await this.registrationApplicationRepository.findOne({
@@ -419,6 +430,98 @@ export class RegistrationApplicationService {
     }
     return updatedApplication;
     
+  }
+
+  /**
+   * Upload admin document for registration application detail
+   */
+  async uploadAdminDocument(
+    registrationId: string,
+    detailId: string,
+    file: any,
+  ): Promise<UploadAdminDocumentResponseDto> {
+    // Validate application exists
+    const application = await this.registrationApplicationRepository.findOne({
+      where: { id: registrationId },
+    });
+
+    if (!application) {
+      throw new NotFoundException(`Registration application with ID '${registrationId}' not found`);
+    }
+
+    // Validate detail exists and belongs to application
+    const detail = await this.registrationApplicationDetailsRepository.findOne({
+      where: {
+        id: detailId,
+        application: { id: registrationId },
+      },
+      relations: ['application'],
+    });
+
+    if (!detail) {
+      throw new NotFoundException(
+        `Detail with ID '${detailId}' not found for application '${registrationId}'`,
+      );
+    }
+
+    if (!file) {
+      throw new BadRequestException('No file provided');
+    }
+
+    // Validate file type
+    const allowedExtensions = ['.pdf', '.png', '.jpg', '.jpeg', '.docx'];
+    const fileExtension = path.extname(file.originalname).toLowerCase();
+    
+    if (!allowedExtensions.includes(fileExtension)) {
+      throw new BadRequestException(
+        `File type '${fileExtension}' is not allowed. Allowed types: ${allowedExtensions.join(', ')}`,
+      );
+    }
+
+    // Validate file size (max 100MB)
+    const maxSizeBytes = 100 * 1024 * 1024;
+    if (file.size > maxSizeBytes) {
+      throw new BadRequestException(
+        `File size ${(file.size / 1024 / 1024).toFixed(2)}MB exceeds maximum allowed size of 100MB`,
+      );
+    }
+
+    // Generate unique filename
+    const sanitizedFilename = `${uuidv4()}${fileExtension}`;
+    const filePath = path.join(this.uploadDir, sanitizedFilename);
+    const documentPath = `/uploads/${sanitizedFilename}`;
+
+    // Save file to disk
+    await fs.writeFile(filePath, file.buffer);
+
+    // Create document record
+    const document = this.adminRegistrationDocumentRepository.create({
+      applicationId: registrationId,
+      detailId: detailId,
+      document: documentPath,
+    });
+
+    const savedDocument = await this.adminRegistrationDocumentRepository.save(document);
+
+    return {
+      id: savedDocument.id,
+      applicationId: savedDocument.applicationId,
+      detailId: savedDocument.detailId,
+      document: savedDocument.document,
+      createdAt: savedDocument.createdAt,
+      updatedAt: savedDocument.updatedAt,
+    };
+  }
+
+  /**
+   * Ensure upload directory exists
+   */
+  private async ensureUploadDirectory(): Promise<void> {
+    try {
+      await fs.access(this.uploadDir);
+    } catch {
+      await fs.mkdir(this.uploadDir, { recursive: true });
+    }
   }
 }
 
