@@ -329,8 +329,21 @@ export class RegistrationApplicationService {
 
       // Extract user data from application details using field keys
       const emailDetail = application.details?.find(d => d.key === emailField.fieldKey);
-      const firstNameDetail = application.details?.find(d => d.key.toLowerCase().includes('firstname') || d.key.toLowerCase().includes('first_name'));
-      const lastNameDetail = application.details?.find(d => d.key.toLowerCase().includes('lastname') || d.key.toLowerCase().includes('last_name'));
+      
+      // Business/Company name labels (same as users.service.ts)
+      const businessNameLabels = [
+        'Business / Applicant Name (as per CNIC)',
+        'Business Name of Partnership (as per registration)',
+        'Company Name (as per SECP Registration)',
+        'Company Name (as per SECP Registration)',
+        'testign123',
+        'Business / Company Name',
+      ];
+
+      // Find business/company name from details by label
+      const businessNameDetail = application.details?.find(d => 
+        d.label && businessNameLabels.includes(d.label)
+      );
 
       if (!emailDetail?.value) {
         throw new Error('Email value not found in application details');
@@ -348,12 +361,12 @@ export class RegistrationApplicationService {
       // Generate a random strong password
       // const randomPassword = this.generateSecurePassword();
 
-      // Create user
+      // Create user with business name as firstName, lastName always N/A
       await this.usersService.create({
         email: emailDetail.value,
         password: "Password@123",
-        firstName: firstNameDetail?.value || 'First Name',
-        lastName: lastNameDetail?.value || 'Last Name',
+        firstName: businessNameDetail?.value || 'N/A',
+        lastName: 'N/A',
         roleId: applicantRole.id,
       });
 

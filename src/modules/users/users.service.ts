@@ -135,21 +135,23 @@ export class UsersService {
     let data: ApplicantUserResponseDto[] | InternalUserResponseDto[];
 
     if (type === UserTypeFilter.APPLICANT) {
-      // Fetch business/company names for applicants
+      // Fetch business/company names for applicants (same as frontend)
       const businessNameLabels = [
-        'Business / Company Name',
-        'Name of Applicant as per CNIC',
         'Business / Applicant Name (as per CNIC)',
         'Business Name of Partnership (as per registration)',
         'Company Name (as per SECP Registration)',
+        'Company Name (as per SECP Registration)',
+        'testign123',
+        'Business / Company Name',
       ];
 
       const usersWithNames = await Promise.all(
         users.map(async (user) => {
-          // Find the approved application for this user by email
+          // Step 1: Find the applicationId by email
           const emailDetail = await this.registrationApplicationDetailsRepository
             .createQueryBuilder('detail')
-            .innerJoinAndSelect('detail.application', 'application')
+            .select(['detail.id', 'application.id'])
+            .innerJoin('detail.application', 'application')
             .where('detail.value = :email', { email: user.email })
             .andWhere('application.status = :status', { status: 'APPROVED' })
             .getOne();
@@ -157,14 +159,18 @@ export class UsersService {
           let businessName = 'N/A';
 
           if (emailDetail?.application?.id) {
-            // Find the business/company name from the same application
-            const nameDetail = await this.registrationApplicationDetailsRepository
+            // Step 2: Get ALL application details for this applicationId
+            const allDetails = await this.registrationApplicationDetailsRepository
               .createQueryBuilder('detail')
               .where('detail.application.id = :applicationId', { 
                 applicationId: emailDetail.application.id 
               })
-              .andWhere('detail.label IN (:...labels)', { labels: businessNameLabels })
-              .getOne();
+              .getMany();
+
+            // Step 3: Filter details in memory by label and get the name
+            const nameDetail = allDetails.find(detail => 
+              detail.label && businessNameLabels.includes(detail.label)
+            );
 
             if (nameDetail?.value) {
               businessName = nameDetail.value;
