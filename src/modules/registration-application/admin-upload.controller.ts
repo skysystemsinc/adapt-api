@@ -1,5 +1,6 @@
 import {
   Controller,
+  Get,
   Post,
   Param,
   UploadedFile,
@@ -18,12 +19,32 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 import { RegistrationApplicationService } from './registration-application.service';
-import { UploadAdminDocumentResponseDto } from './dto/upload-admin-document.dto';
+import { UploadAdminDocumentResponseDto, AdminDocumentResponseDto } from './dto/upload-admin-document.dto';
 
 @ApiTags('Admin Upload')
 @Controller('admin/registration')
 export class AdminUploadController {
   constructor(private readonly registrationApplicationService: RegistrationApplicationService) {}
+
+  @Get(':registrationId/detail/:detailId/documents')
+  @ApiOperation({ summary: 'Get admin documents for a registration application detail' })
+  @ApiParam({ name: 'registrationId', description: 'Registration application ID' })
+  @ApiParam({ name: 'detailId', description: 'Registration application detail ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of admin documents',
+    type: [AdminDocumentResponseDto],
+  })
+  @ApiResponse({ status: 404, description: 'Registration application or detail not found' })
+  async getAdminDocuments(
+    @Param('registrationId') registrationId: string,
+    @Param('detailId') detailId: string,
+  ): Promise<AdminDocumentResponseDto[]> {
+    return this.registrationApplicationService.getAdminDocumentsByRegistrationAndDetail(
+      registrationId,
+      detailId,
+    );
+  }
 
   @Post(':registrationId/detail/:detailId/upload')
   @HttpCode(HttpStatus.CREATED)
