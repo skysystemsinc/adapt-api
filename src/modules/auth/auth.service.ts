@@ -30,7 +30,7 @@ export class AuthService {
       await this.recaptchaService.verifyToken(loginDto.recaptchaToken, 'signin');
     }
 
-    const user = await this.usersService.findByEmail(loginDto.email);
+    const user = await this.usersService.findByEmailWithRoles(loginDto.email);
     
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
@@ -52,12 +52,16 @@ export class AuthService {
     const tokens = await this.generateTokens(user);
     await this.updateRefreshToken(user.id, tokens.refreshToken);
 
+    // Get user's primary role
+    const userRole = user.userRoles?.[0]?.role?.name || null;
+
     return {
       user: {
         id: user.id,
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
+        role: userRole,
       },
       ...tokens,
     };
