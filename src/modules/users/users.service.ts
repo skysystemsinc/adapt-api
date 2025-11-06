@@ -146,45 +146,36 @@ export class UsersService {
 
       const usersWithNames = await Promise.all(
         users.map(async (user) => {
-          try {
-            // Find the approved application for this user by email
-            const emailDetail = await this.registrationApplicationDetailsRepository
+          // Find the approved application for this user by email
+          const emailDetail = await this.registrationApplicationDetailsRepository
+            .createQueryBuilder('detail')
+            .innerJoinAndSelect('detail.application', 'application')
+            .where('detail.value = :email', { email: user.email })
+            .andWhere('application.status = :status', { status: 'APPROVED' })
+            .getOne();
+
+          let businessName = 'N/A';
+
+          if (emailDetail?.application?.id) {
+            // Find the business/company name from the same application
+            const nameDetail = await this.registrationApplicationDetailsRepository
               .createQueryBuilder('detail')
-              .innerJoinAndSelect('detail.application', 'application')
-              .where('detail.value = :email', { email: user.email })
-              .andWhere('application.status = :status', { status: 'APPROVED' })
+              .where('detail.application.id = :applicationId', { 
+                applicationId: emailDetail.application.id 
+              })
+              .andWhere('detail.label IN (:...labels)', { labels: businessNameLabels })
               .getOne();
 
-            let businessName = 'N/A';
-
-            if (emailDetail?.application?.id) {
-              // Find the business/company name from the same application
-              const nameDetail = await this.registrationApplicationDetailsRepository
-                .createQueryBuilder('detail')
-                .where('detail.application.id = :applicationId', { 
-                  applicationId: emailDetail.application.id 
-                })
-                .andWhere('detail.label IN (:...labels)', { labels: businessNameLabels })
-                .getOne();
-
-              if (nameDetail?.value) {
-                businessName = nameDetail.value;
-              }
+            if (nameDetail?.value) {
+              businessName = nameDetail.value;
             }
-
-            return {
-              id: user.id,
-              email: user.email,
-              name: businessName,
-            };
-          } catch (error) {
-            console.error(`Error fetching name for user ${user.email}:`, error.message);
-            return {
-              id: user.id,
-              email: user.email,
-              name: 'N/A',
-            };
           }
+
+          return {
+            id: user.id,
+            email: user.email,
+            name: businessName,
+          };
         }),
       );
 
