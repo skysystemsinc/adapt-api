@@ -1,0 +1,124 @@
+import { MigrationInterface, QueryRunner } from "typeorm";
+
+export class CreateWarehouseOperatorApplicationRequest1762528572925 implements MigrationInterface {
+    name = 'CreateWarehouseOperatorApplicationRequest1762528572925'
+
+    public async up(queryRunner: QueryRunner): Promise<void> {
+        await queryRunner.query(`ALTER TABLE "role_permissions" DROP CONSTRAINT "FK_role_permissions_role"`);
+        await queryRunner.query(`ALTER TABLE "role_permissions" DROP CONSTRAINT "FK_role_permissions_permission"`);
+        await queryRunner.query(`ALTER TABLE "user_roles" DROP CONSTRAINT "FK_user_roles_user"`);
+        await queryRunner.query(`ALTER TABLE "user_roles" DROP CONSTRAINT "FK_user_roles_role"`);
+        await queryRunner.query(`ALTER TABLE "registration_application_details" DROP CONSTRAINT "FK_registration_application_details_document_type"`);
+        await queryRunner.query(`ALTER TABLE "admin_registration_documents" DROP CONSTRAINT "FK_admin_registration_documents_applicationId"`);
+        await queryRunner.query(`ALTER TABLE "admin_registration_documents" DROP CONSTRAINT "FK_admin_registration_documents_detailId"`);
+        await queryRunner.query(`ALTER TABLE "form_fields" DROP CONSTRAINT "FK_form_fields_document_type"`);
+        await queryRunner.query(`ALTER TABLE "form_requests" DROP CONSTRAINT "FK_form_requests_formId"`);
+        await queryRunner.query(`ALTER TABLE "form_fields_requests" DROP CONSTRAINT "FK_form_fields_requests_formRequestId"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_role_permissions_roleId"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_role_permissions_permissionId"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_user_roles_userId"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_user_roles_roleId"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_document_types_deletedAt"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_registration_application_details_documentTypeId"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_registration_application_applicationId"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_admin_registration_documents_applicationId"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_admin_registration_documents_detailId"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_settings_key"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_forms_isActive"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_forms_version"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_form_fields_documentTypeId"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_form_requests_formId"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_form_requests_status"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_form_requests_slug"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_form_requests_requestedBy"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_form_fields_requests_formRequestId"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_form_fields_requests_fieldKey"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_form_fields_requests_action"`);
+        await queryRunner.query(`ALTER TABLE "role_permissions" DROP CONSTRAINT "UQ_role_permissions"`);
+        await queryRunner.query(`ALTER TABLE "user_roles" DROP CONSTRAINT "UQ_user_roles"`);
+        await queryRunner.query(`CREATE TYPE "public"."warehouse_operator_application_request_status_enum" AS ENUM('PENDING', 'IN_PROCESS', 'APPROVED', 'REJECTED', 'DRAFT', 'SUBMITTED')`);
+        await queryRunner.query(`CREATE TABLE "warehouse_operator_application_request" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "applicationId" character varying(20), "userId" uuid, "status" "public"."warehouse_operator_application_request_status_enum" NOT NULL DEFAULT 'PENDING', "remarks" text, "metadata" jsonb, "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_b98b2292d2ddaa311612788ef7c" UNIQUE ("applicationId"), CONSTRAINT "PK_12250156440a8113125f71f5357" PRIMARY KEY ("id"))`);
+        await queryRunner.query(`ALTER TABLE "registration_application" DROP CONSTRAINT "FK_5ce51bfeedd4654c6cbd1b563a9"`);
+        await queryRunner.query(`ALTER TABLE "registration_application" ADD CONSTRAINT "UQ_5ce51bfeedd4654c6cbd1b563a9" UNIQUE ("applicationTypeId")`);
+        await queryRunner.query(`ALTER TYPE "public"."form_request_status_enum" RENAME TO "form_request_status_enum_old"`);
+        await queryRunner.query(`CREATE TYPE "public"."form_requests_status_enum" AS ENUM('pending', 'approved', 'rejected')`);
+        await queryRunner.query(`ALTER TABLE "form_requests" ALTER COLUMN "status" DROP DEFAULT`);
+        await queryRunner.query(`ALTER TABLE "form_requests" ALTER COLUMN "status" TYPE "public"."form_requests_status_enum" USING "status"::"text"::"public"."form_requests_status_enum"`);
+        await queryRunner.query(`ALTER TABLE "form_requests" ALTER COLUMN "status" SET DEFAULT 'pending'`);
+        await queryRunner.query(`DROP TYPE "public"."form_request_status_enum_old"`);
+        await queryRunner.query(`ALTER TABLE "form_fields_requests" ALTER COLUMN "width" SET NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "role_permissions" ADD CONSTRAINT "UQ_d430a02aad006d8a70f3acd7d03" UNIQUE ("roleId", "permissionId")`);
+        await queryRunner.query(`ALTER TABLE "user_roles" ADD CONSTRAINT "UQ_88481b0c4ed9ada47e9fdd67475" UNIQUE ("userId", "roleId")`);
+        await queryRunner.query(`ALTER TABLE "role_permissions" ADD CONSTRAINT "FK_b4599f8b8f548d35850afa2d12c" FOREIGN KEY ("roleId") REFERENCES "roles"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "role_permissions" ADD CONSTRAINT "FK_06792d0c62ce6b0203c03643cdd" FOREIGN KEY ("permissionId") REFERENCES "permissions"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "user_roles" ADD CONSTRAINT "FK_472b25323af01488f1f66a06b67" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "user_roles" ADD CONSTRAINT "FK_86033897c009fcca8b6505d6be2" FOREIGN KEY ("roleId") REFERENCES "roles"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "warehouse_operator_application_request" ADD CONSTRAINT "FK_7a7b84af1e84d056deeb9e3b33c" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "registration_application_details" ADD CONSTRAINT "FK_4860566b6279bc22f26a96f4ffc" FOREIGN KEY ("documentTypeId") REFERENCES "document_types"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "registration_application" ADD CONSTRAINT "FK_5ce51bfeedd4654c6cbd1b563a9" FOREIGN KEY ("applicationTypeId") REFERENCES "application_type"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "admin_registration_documents" ADD CONSTRAINT "FK_1ae12e3d6aa7da17033a35d14aa" FOREIGN KEY ("applicationId") REFERENCES "registration_application"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "admin_registration_documents" ADD CONSTRAINT "FK_ae1839f63b90a6c6829eed88874" FOREIGN KEY ("detailId") REFERENCES "registration_application_details"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "form_fields" ADD CONSTRAINT "FK_eb17866a7060fead1cdcd06c476" FOREIGN KEY ("documentTypeId") REFERENCES "document_types"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "form_fields_requests" ADD CONSTRAINT "FK_8f53f66f92db8c0349f583ce9db" FOREIGN KEY ("formRequestId") REFERENCES "form_requests"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+    }
+
+    public async down(queryRunner: QueryRunner): Promise<void> {
+        await queryRunner.query(`ALTER TABLE "form_fields_requests" DROP CONSTRAINT "FK_8f53f66f92db8c0349f583ce9db"`);
+        await queryRunner.query(`ALTER TABLE "form_fields" DROP CONSTRAINT "FK_eb17866a7060fead1cdcd06c476"`);
+        await queryRunner.query(`ALTER TABLE "admin_registration_documents" DROP CONSTRAINT "FK_ae1839f63b90a6c6829eed88874"`);
+        await queryRunner.query(`ALTER TABLE "admin_registration_documents" DROP CONSTRAINT "FK_1ae12e3d6aa7da17033a35d14aa"`);
+        await queryRunner.query(`ALTER TABLE "registration_application" DROP CONSTRAINT "FK_5ce51bfeedd4654c6cbd1b563a9"`);
+        await queryRunner.query(`ALTER TABLE "registration_application_details" DROP CONSTRAINT "FK_4860566b6279bc22f26a96f4ffc"`);
+        await queryRunner.query(`ALTER TABLE "warehouse_operator_application_request" DROP CONSTRAINT "FK_7a7b84af1e84d056deeb9e3b33c"`);
+        await queryRunner.query(`ALTER TABLE "user_roles" DROP CONSTRAINT "FK_86033897c009fcca8b6505d6be2"`);
+        await queryRunner.query(`ALTER TABLE "user_roles" DROP CONSTRAINT "FK_472b25323af01488f1f66a06b67"`);
+        await queryRunner.query(`ALTER TABLE "role_permissions" DROP CONSTRAINT "FK_06792d0c62ce6b0203c03643cdd"`);
+        await queryRunner.query(`ALTER TABLE "role_permissions" DROP CONSTRAINT "FK_b4599f8b8f548d35850afa2d12c"`);
+        await queryRunner.query(`ALTER TABLE "user_roles" DROP CONSTRAINT "UQ_88481b0c4ed9ada47e9fdd67475"`);
+        await queryRunner.query(`ALTER TABLE "role_permissions" DROP CONSTRAINT "UQ_d430a02aad006d8a70f3acd7d03"`);
+        await queryRunner.query(`ALTER TABLE "form_fields_requests" ALTER COLUMN "width" DROP NOT NULL`);
+        await queryRunner.query(`CREATE TYPE "public"."form_request_status_enum_old" AS ENUM('pending', 'approved', 'rejected')`);
+        await queryRunner.query(`ALTER TABLE "form_requests" ALTER COLUMN "status" DROP DEFAULT`);
+        await queryRunner.query(`ALTER TABLE "form_requests" ALTER COLUMN "status" TYPE "public"."form_request_status_enum_old" USING "status"::"text"::"public"."form_request_status_enum_old"`);
+        await queryRunner.query(`ALTER TABLE "form_requests" ALTER COLUMN "status" SET DEFAULT 'pending'`);
+        await queryRunner.query(`DROP TYPE "public"."form_requests_status_enum"`);
+        await queryRunner.query(`ALTER TYPE "public"."form_request_status_enum_old" RENAME TO "form_request_status_enum"`);
+        await queryRunner.query(`ALTER TABLE "registration_application" DROP CONSTRAINT "UQ_5ce51bfeedd4654c6cbd1b563a9"`);
+        await queryRunner.query(`ALTER TABLE "registration_application" ADD CONSTRAINT "FK_5ce51bfeedd4654c6cbd1b563a9" FOREIGN KEY ("applicationTypeId") REFERENCES "application_type"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`DROP TABLE "warehouse_operator_application_request"`);
+        await queryRunner.query(`DROP TYPE "public"."warehouse_operator_application_request_status_enum"`);
+        await queryRunner.query(`ALTER TABLE "user_roles" ADD CONSTRAINT "UQ_user_roles" UNIQUE ("roleId", "userId")`);
+        await queryRunner.query(`ALTER TABLE "role_permissions" ADD CONSTRAINT "UQ_role_permissions" UNIQUE ("permissionId", "roleId")`);
+        await queryRunner.query(`CREATE INDEX "IDX_form_fields_requests_action" ON "form_fields_requests" ("action") `);
+        await queryRunner.query(`CREATE INDEX "IDX_form_fields_requests_fieldKey" ON "form_fields_requests" ("fieldKey") `);
+        await queryRunner.query(`CREATE INDEX "IDX_form_fields_requests_formRequestId" ON "form_fields_requests" ("formRequestId") `);
+        await queryRunner.query(`CREATE INDEX "IDX_form_requests_requestedBy" ON "form_requests" ("requestedBy") `);
+        await queryRunner.query(`CREATE INDEX "IDX_form_requests_slug" ON "form_requests" ("slug") `);
+        await queryRunner.query(`CREATE INDEX "IDX_form_requests_status" ON "form_requests" ("status") `);
+        await queryRunner.query(`CREATE INDEX "IDX_form_requests_formId" ON "form_requests" ("formId") `);
+        await queryRunner.query(`CREATE INDEX "IDX_form_fields_documentTypeId" ON "form_fields" ("documentTypeId") `);
+        await queryRunner.query(`CREATE INDEX "IDX_forms_version" ON "forms" ("version") `);
+        await queryRunner.query(`CREATE INDEX "IDX_forms_isActive" ON "forms" ("isActive") `);
+        await queryRunner.query(`CREATE INDEX "IDX_settings_key" ON "settings" ("key") `);
+        await queryRunner.query(`CREATE INDEX "IDX_admin_registration_documents_detailId" ON "admin_registration_documents" ("detailId") `);
+        await queryRunner.query(`CREATE INDEX "IDX_admin_registration_documents_applicationId" ON "admin_registration_documents" ("applicationId") `);
+        await queryRunner.query(`CREATE INDEX "IDX_registration_application_applicationId" ON "registration_application" ("applicationId") `);
+        await queryRunner.query(`CREATE INDEX "IDX_registration_application_details_documentTypeId" ON "registration_application_details" ("documentTypeId") `);
+        await queryRunner.query(`CREATE INDEX "IDX_document_types_deletedAt" ON "document_types" ("deletedAt") `);
+        await queryRunner.query(`CREATE INDEX "IDX_user_roles_roleId" ON "user_roles" ("roleId") `);
+        await queryRunner.query(`CREATE INDEX "IDX_user_roles_userId" ON "user_roles" ("userId") `);
+        await queryRunner.query(`CREATE INDEX "IDX_role_permissions_permissionId" ON "role_permissions" ("permissionId") `);
+        await queryRunner.query(`CREATE INDEX "IDX_role_permissions_roleId" ON "role_permissions" ("roleId") `);
+        await queryRunner.query(`ALTER TABLE "form_fields_requests" ADD CONSTRAINT "FK_form_fields_requests_formRequestId" FOREIGN KEY ("formRequestId") REFERENCES "form_requests"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "form_requests" ADD CONSTRAINT "FK_form_requests_formId" FOREIGN KEY ("formId") REFERENCES "forms"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "form_fields" ADD CONSTRAINT "FK_form_fields_document_type" FOREIGN KEY ("documentTypeId") REFERENCES "document_types"("id") ON DELETE SET NULL ON UPDATE CASCADE`);
+        await queryRunner.query(`ALTER TABLE "admin_registration_documents" ADD CONSTRAINT "FK_admin_registration_documents_detailId" FOREIGN KEY ("detailId") REFERENCES "registration_application_details"("id") ON DELETE CASCADE ON UPDATE CASCADE`);
+        await queryRunner.query(`ALTER TABLE "admin_registration_documents" ADD CONSTRAINT "FK_admin_registration_documents_applicationId" FOREIGN KEY ("applicationId") REFERENCES "registration_application"("id") ON DELETE CASCADE ON UPDATE CASCADE`);
+        await queryRunner.query(`ALTER TABLE "registration_application_details" ADD CONSTRAINT "FK_registration_application_details_document_type" FOREIGN KEY ("documentTypeId") REFERENCES "document_types"("id") ON DELETE SET NULL ON UPDATE CASCADE`);
+        await queryRunner.query(`ALTER TABLE "user_roles" ADD CONSTRAINT "FK_user_roles_role" FOREIGN KEY ("roleId") REFERENCES "roles"("id") ON DELETE CASCADE ON UPDATE CASCADE`);
+        await queryRunner.query(`ALTER TABLE "user_roles" ADD CONSTRAINT "FK_user_roles_user" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE`);
+        await queryRunner.query(`ALTER TABLE "role_permissions" ADD CONSTRAINT "FK_role_permissions_permission" FOREIGN KEY ("permissionId") REFERENCES "permissions"("id") ON DELETE CASCADE ON UPDATE CASCADE`);
+        await queryRunner.query(`ALTER TABLE "role_permissions" ADD CONSTRAINT "FK_role_permissions_role" FOREIGN KEY ("roleId") REFERENCES "roles"("id") ON DELETE CASCADE ON UPDATE CASCADE`);
+    }
+
+}
