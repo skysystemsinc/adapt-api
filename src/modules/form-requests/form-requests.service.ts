@@ -109,9 +109,9 @@ export class FormRequestsService {
       return val;
     };
 
-    // Helper function to compare fields (excluding id, formId, createdAt, updatedAt)
-    const areFieldsEqual = (field1: FormField, field2: Partial<CreateFormRequestDto['fields'][0]>): boolean => {
-      // Compare basic fields
+    // Helper function to compare fields excluding order/step (to detect order-only changes)
+    const areFieldsEqualExcludingOrder = (field1: FormField, field2: Partial<CreateFormRequestDto['fields'][0]>): boolean => {
+      // Compare basic fields (excluding order and step)
       if (field1.fieldKey !== field2.fieldKey) return false;
       if (field1.type !== field2.type) return false;
       if (normalize(field1.label) !== normalize(field2.label)) return false;
@@ -119,8 +119,6 @@ export class FormRequestsService {
       if (normalize(field1.placeholder) !== normalize(field2.placeholder)) return false;
       if ((field1.required ?? false) !== (field2.required ?? false)) return false;
       if ((field1.isSingle ?? false) !== (field2.isSingle ?? false)) return false;
-      if (field1.order !== field2.order) return false;
-      if (field1.step !== field2.step) return false;
       if ((field1.width || 'full') !== (field2.width || 'full')) return false;
       if ((field1.includeInKycVerification ?? false) !== (field2.includeInKycVerification ?? false)) return false;
 
@@ -129,6 +127,18 @@ export class FormRequestsService {
       if (!deepEqual(field1.validation, field2.validation)) return false;
       if (!deepEqual(field1.conditions, field2.conditions)) return false;
       if (!deepEqual(field1.metadata, field2.metadata)) return false;
+
+      return true;
+    };
+
+    // Helper function to compare fields (excluding id, formId, createdAt, updatedAt)
+    const areFieldsEqual = (field1: FormField, field2: Partial<CreateFormRequestDto['fields'][0]>): boolean => {
+      // First check if fields are equal excluding order
+      if (!areFieldsEqualExcludingOrder(field1, field2)) return false;
+      
+      // Then check order and step
+      if (field1.order !== field2.order) return false;
+      if (field1.step !== field2.step) return false;
 
       return true;
     };
@@ -180,6 +190,12 @@ export class FormRequestsService {
         }
         // Compare field properties to see if it's truly unchanged
         else if (areFieldsEqual(currentField, fieldDto)) {
+          actualAction = FieldAction.UNCHANGED;
+        } 
+        // Check if only order/step changed (all other properties are the same)
+        else if (areFieldsEqualExcludingOrder(currentField, fieldDto)) {
+          // Only order/step changed - mark as UNCHANGED so it's auto-approved
+          // We'll still save the new order/step values
           actualAction = FieldAction.UNCHANGED;
         } else {
           actualAction = FieldAction.UPDATE;
