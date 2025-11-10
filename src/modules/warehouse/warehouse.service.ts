@@ -7,6 +7,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { AuthorizedSignatory } from './entities/authorized-signatories.entity';
 import { StepStatus } from './entities/bank-details.entity';
 import { BankDetails } from './entities/bank-details.entity';
+import { AccountType, UpdateBankDetailsDto } from './dto/create-bank-details.dto';
 
 @Injectable()
 export class WarehouseService {
@@ -85,7 +86,7 @@ export class WarehouseService {
     }
 
     // only allow updating after application is either new or resubmitted or rejected
-    if(application.status === WarehouseOperatorApplicationStatus.DRAFT) {
+    if (application.status === WarehouseOperatorApplicationStatus.DRAFT) {
       throw new BadRequestException('Cannot Add new Bank Details. Bank Details can only be updated.');
     }
 
@@ -111,6 +112,40 @@ export class WarehouseService {
     return {
       message: 'Bank details saved successfully',
       bankDetailsId: bankDetails.id,
+    };
+  }
+
+  async updateBankDetails(
+    applicationId: string,
+    bankDetailsId: string,
+    updateBankDetailsDto: UpdateBankDetailsDto,
+    userId: string
+  ) {
+    const application = await this.warehouseOperatorRepository.findOne({ where: { id: applicationId, userId } });
+    if (!application) {
+      throw new NotFoundException('Application not found');
+    }
+
+    if(![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(application.status)) {
+      throw new BadRequestException('Cannot update bank details after application is approved or submitted');
+    }
+
+    const bankDetails = await this.bankDetailsRepository.findOne({ where: { id: bankDetailsId, applicationId } });
+    if (!bankDetails) {
+      throw new NotFoundException('Bank details not found');
+    }
+
+    bankDetails.name = updateBankDetailsDto.name;
+    bankDetails.accountTitle = updateBankDetailsDto.accountTitle;
+    bankDetails.iban = updateBankDetailsDto.iban;
+    bankDetails.accountType = updateBankDetailsDto.accountType as AccountType;
+    bankDetails.branchAddress = updateBankDetailsDto.branchAddress || '';
+
+    const updatedBankDetails = await this.bankDetailsRepository.save(bankDetails);
+
+    return {
+      message: 'Bank details updated successfully',
+      bankDetails: updatedBankDetails,
     };
   }
 

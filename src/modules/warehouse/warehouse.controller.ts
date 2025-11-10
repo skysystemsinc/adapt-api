@@ -6,6 +6,7 @@ import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthService } from '../auth/auth.service';
 import { User } from '../users/entities/user.entity';
+import { UpdateBankDetailsDto } from './dto/create-bank-details.dto';
 
 @ApiTags('Warehouse')
 @ApiBearerAuth('JWT-auth')
@@ -42,6 +43,20 @@ export class WarehouseController {
     return this.warehouseService.createBankDetails(applicationId, createBankDetailsDto, user.id);
   }
 
+  @ApiOperation({ summary: 'Update a bank details for a warehouse operator application' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiBody({ type: UpdateBankDetailsDto })
+  @Patch('/operator/application/:applicationId/bank-details/:bankDetailsId')
+  updateBankDetails(
+    @Param('applicationId') applicationId: string,
+    @Param('bankDetailsId') bankDetailsId: string,
+    @Body() updateBankDetailsDto: UpdateBankDetailsDto,
+    @Request() request: any
+  ) {
+    const user = request.user as User;
+    return this.warehouseService.updateBankDetails(applicationId, bankDetailsId, updateBankDetailsDto, user.id);
+  }
+
   @Get()
   findAll() {
     return this.warehouseService.findAll();
@@ -52,7 +67,7 @@ export class WarehouseController {
     const user = request.user as User;
     return this.warehouseService.findOneWarehouseOperator(user.id);
   }
-  
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.warehouseService.findOne(+id);

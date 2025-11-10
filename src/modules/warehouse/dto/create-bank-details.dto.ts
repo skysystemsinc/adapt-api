@@ -1,10 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsArray, IsEmail, IsEnum, IsISO8601, IsNotEmpty, IsOptional, IsString, IsUUID, ValidateNested } from "class-validator";
+import { IsArray, IsEmail, IsEnum, IsISO8601, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength, MinLength, ValidateIf, ValidateNested } from "class-validator";
 import { AuthorizedSignatory } from "../entities/authorized-signatories.entity";
 import { Type } from "class-transformer";
 
 
-enum AccountType {
+export enum AccountType {
     CURRENT = 'CURRENT',
     SAVINGS = 'SAVINGS',
     FIXED_DEPOSIT = 'FIXED_DEPOSIT',
@@ -13,6 +13,18 @@ enum AccountType {
 }
 
 export class CreateBankDetailsDto {
+
+    @ApiPropertyOptional({
+        type: String,
+        description: 'Bank Name',
+        example: 'Bank of America',
+    })
+    @IsString()
+    @IsNotEmpty()
+    @MinLength(3, { message: 'Bank name must be at least 3 characters long' })
+    @MaxLength(30, { message: 'Bank name must be less than 30 characters long' })
+    name!: string;
+
     @ApiProperty({
         type: String,
         description: 'The account title',
@@ -20,6 +32,8 @@ export class CreateBankDetailsDto {
     })
     @IsString()
     @IsNotEmpty()
+    @MinLength(3, { message: 'Account title must be at least 3 characters long' })
+    @MaxLength(30, { message: 'Account title must be less than 30 characters long' })
     accountTitle!: string;
 
     @ApiProperty({
@@ -36,7 +50,9 @@ export class CreateBankDetailsDto {
         description: 'The account type',
         example: AccountType.CURRENT,
     })
-    @IsEnum(AccountType)
+    // custom message on enum validation error
+    @ValidateIf((object: CreateBankDetailsDto, value: AccountType) => value !== undefined)
+    @IsEnum(AccountType, { message: 'Invalid account type' })
     @IsOptional()
     accountType?: AccountType;
 
@@ -49,3 +65,5 @@ export class CreateBankDetailsDto {
     @IsOptional()
     branchAddress?: string;
 }
+
+export class UpdateBankDetailsDto extends CreateBankDetailsDto{}
