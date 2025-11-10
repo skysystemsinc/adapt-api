@@ -6,8 +6,10 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  OneToMany,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
+import { AuthorizedSignatory } from './authorized-signatories.entity';
 
 export enum WarehouseOperatorApplicationStatus {
   PENDING = 'PENDING',
@@ -32,6 +34,12 @@ export class WarehouseOperatorApplicationRequest {
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'userId' })
   user: User;
+
+  @Column({ type: 'text', nullable: true })
+  applicationType: string;
+
+  @OneToMany(() => AuthorizedSignatory, (signatory) => signatory.warehouseOperatorApplicationRequest)
+  authorizedSignatories: AuthorizedSignatory[];
 
   @Column({
     type: 'enum',
