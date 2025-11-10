@@ -7,6 +7,7 @@ import {
   OneToMany,
 } from 'typeorm';
 import { UserRole } from '../../rbac/entities/user-role.entity';
+import { WarehouseOperatorApplicationRequest } from '../../warehouse/entities/warehouse-operator-application-request.entity';
 
 @Entity('users')
 export class User {
@@ -45,6 +46,9 @@ export class User {
 
   @OneToMany(() => UserRole, (userRole) => userRole.user)
   userRoles: UserRole[];
+
+  @OneToMany(() => WarehouseOperatorApplicationRequest, (request) => request.user)
+  operatorApplicationRequests: WarehouseOperatorApplicationRequest[];
 
   @CreateDateColumn()
   createdAt: Date;

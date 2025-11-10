@@ -30,6 +30,14 @@ async function bootstrap() {
     .setDescription('The NCMCL API')
     .setVersion('1.0')
     .addTag('NCMCL')
+    .addBearerAuth({
+      type: 'http',
+      scheme: 'bearer',
+      bearerFormat: 'JWT',
+      name: 'JWT-auth',
+      description: 'JWT Authorization header using the Bearer scheme',
+      in: 'header',
+    }, 'JWT-auth')
     .build();
   const documentFactory = () => SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api-doc', app, documentFactory);

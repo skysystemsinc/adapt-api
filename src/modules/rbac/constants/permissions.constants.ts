@@ -4,6 +4,9 @@ export enum Permissions {
   VIEW_APPLICATION = 'view_application',
   SUBMIT_REGISTRATION = 'submit_registration',
   UPDATE_APPLICATION = 'update_application',
+
+  // Warehouse operator application permissions
+  CREATE_OPERATOR_APPLICATION = 'create_operator_application',
   
   // Report permissions
   VIEW_REPORT = 'view_report',
