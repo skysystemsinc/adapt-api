@@ -8,6 +8,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { WarehouseOperatorApplicationRequest } from './entities/warehouse-operator-application-request.entity';
 import { AuthorizedSignatory } from './entities/authorized-signatories.entity';
+import { BankDetails } from './entities/bank-details.entity';
 
 @Module({
   controllers: [WarehouseController],
@@ -16,7 +17,8 @@ import { AuthorizedSignatory } from './entities/authorized-signatories.entity';
     TypeOrmModule.forFeature([
       Warehouse,
       WarehouseOperatorApplicationRequest,
-      AuthorizedSignatory
+      AuthorizedSignatory,
+      BankDetails
     ]),
     forwardRef(() => AuthModule),
     JwtModule.registerAsync({

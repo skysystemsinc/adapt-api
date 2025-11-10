@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request } from '@nestjs/common';
 import { WarehouseService } from './warehouse.service';
-import { CreateWarehouseOperatorApplicationRequestDto } from './dto/create-warehouse.dto';
+import { CreateBankDetailsDto, CreateWarehouseOperatorApplicationRequestDto } from './dto/create-warehouse.dto';
 import { UpdateWarehouseDto } from './dto/update-warehouse.dto';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -27,6 +27,19 @@ export class WarehouseController {
   ) {
     const user = request.user as User;
     return this.warehouseService.createOperatorApplication(createWarehouseDto, user.id);
+  }
+
+  @ApiOperation({ summary: 'Create a new bank details for a warehouse operator application' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiBody({ type: CreateBankDetailsDto })
+  @Post('/operator/application/:applicationId/bank-details')
+  createBankDetails(
+    @Param('applicationId') applicationId: string,
+    @Body() createBankDetailsDto: CreateBankDetailsDto,
+    @Request() request: any
+  ) {
+    const user = request.user as User;
+    return this.warehouseService.createBankDetails(applicationId, createBankDetailsDto, user.id);
   }
 
   @Get()
