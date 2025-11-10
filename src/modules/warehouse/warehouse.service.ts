@@ -1,10 +1,13 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { AuthorizedSignatoryDto, CreateWarehouseOperatorApplicationRequestDto } from './dto/create-warehouse.dto';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { AuthorizedSignatoryDto, CreateBankDetailsDto, CreateWarehouseOperatorApplicationRequestDto } from './dto/create-warehouse.dto';
 import { UpdateWarehouseDto } from './dto/update-warehouse.dto';
 import { Repository } from 'typeorm';
 import { WarehouseOperatorApplicationRequest, WarehouseOperatorApplicationStatus } from './entities/warehouse-operator-application-request.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { AuthorizedSignatory } from './entities/authorized-signatories.entity';
+import { StepStatus } from './entities/bank-details.entity';
+import { BankDetails } from './entities/bank-details.entity';
+import { AccountType, UpdateBankDetailsDto } from './dto/create-bank-details.dto';
 
 @Injectable()
 export class WarehouseService {
@@ -12,7 +15,9 @@ export class WarehouseService {
     @InjectRepository(WarehouseOperatorApplicationRequest)
     private readonly warehouseOperatorRepository: Repository<WarehouseOperatorApplicationRequest>,
     @InjectRepository(AuthorizedSignatory)
-    private readonly authorizedSignatoryRepository: Repository<AuthorizedSignatory>
+    private readonly authorizedSignatoryRepository: Repository<AuthorizedSignatory>,
+    @InjectRepository(BankDetails)
+    private readonly bankDetailsRepository: Repository<BankDetails>
   ) { }
 
   async createOperatorApplication(
@@ -74,6 +79,76 @@ export class WarehouseService {
     };
   }
 
+  async createBankDetails(applicationId: string, createBankDetailsDto: CreateBankDetailsDto, userId: string) {
+    const application = await this.warehouseOperatorRepository.findOne({ where: { id: applicationId, userId } });
+    if (!application) {
+      throw new NotFoundException('Application not found');
+    }
+
+    // only allow updating after application is either new or resubmitted or rejected
+    if (application.status === WarehouseOperatorApplicationStatus.DRAFT) {
+      throw new BadRequestException('Cannot Add new Bank Details. Bank Details can only be updated.');
+    }
+
+    if (
+      ![WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED]
+        .includes(application.status)
+    ) {
+      throw new BadRequestException('Cannot update bank details after application is submitted');
+    }
+
+    const bankDetails = this.bankDetailsRepository.create({
+      applicationId: application.id,
+      name: createBankDetailsDto.accountTitle,
+      accountTitle: createBankDetailsDto.accountTitle,
+      iban: createBankDetailsDto.iban,
+      accountType: createBankDetailsDto.accountType,
+      branchAddress: createBankDetailsDto.branchAddress,
+      status: StepStatus.DRAFT,
+    });
+
+    await this.bankDetailsRepository.save(bankDetails);
+
+    return {
+      message: 'Bank details saved successfully',
+      bankDetailsId: bankDetails.id,
+    };
+  }
+
+  async updateBankDetails(
+    applicationId: string,
+    bankDetailsId: string,
+    updateBankDetailsDto: UpdateBankDetailsDto,
+    userId: string
+  ) {
+    const application = await this.warehouseOperatorRepository.findOne({ where: { id: applicationId, userId } });
+    if (!application) {
+      throw new NotFoundException('Application not found');
+    }
+
+    if(![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(application.status)) {
+      throw new BadRequestException('Cannot update bank details after application is approved or submitted');
+    }
+
+    const bankDetails = await this.bankDetailsRepository.findOne({ where: { id: bankDetailsId, applicationId } });
+    if (!bankDetails) {
+      throw new NotFoundException('Bank details not found');
+    }
+
+    bankDetails.name = updateBankDetailsDto.name;
+    bankDetails.accountTitle = updateBankDetailsDto.accountTitle;
+    bankDetails.iban = updateBankDetailsDto.iban;
+    bankDetails.accountType = updateBankDetailsDto.accountType as AccountType;
+    bankDetails.branchAddress = updateBankDetailsDto.branchAddress || '';
+
+    const updatedBankDetails = await this.bankDetailsRepository.save(bankDetails);
+
+    return {
+      message: 'Bank details updated successfully',
+      bankDetails: updatedBankDetails,
+    };
+  }
+
   async findByUserId(userId: string) {
     return await this.warehouseOperatorRepository.find({ where: { userId } });
   }
@@ -91,7 +166,7 @@ export class WarehouseService {
       },
       relations: ['authorizedSignatories' as 'Authorized Signatory']
     });
-    
+
     if (!warehouseOperatorApplication) {
       throw new NotFoundException('Warehouse operator application not found');
     }

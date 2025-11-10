@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { IsArray, IsEmail, IsISO8601, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, ValidateNested } from "class-validator";
 import { AuthorizedSignatory } from "../entities/authorized-signatories.entity";
 import { Type } from "class-transformer";
+export { CreateBankDetailsDto } from "./create-bank-details.dto";
 
 export class AuthorizedSignatoryDto {
     @ApiProperty({
