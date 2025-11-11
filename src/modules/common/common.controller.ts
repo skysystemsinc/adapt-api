@@ -3,7 +3,7 @@ import { CommonService } from './common.service';
 import { CreateCommonDto } from './dto/create-common.dto';
 import { UpdateCommonDto } from './dto/update-common.dto';
 
-@Controller('common')
+@Controller()
 export class CommonController {
   constructor(private readonly commonService: CommonService) {}
 
@@ -12,9 +12,9 @@ export class CommonController {
     return this.commonService.create(createCommonDto);
   }
 
-  @Get()
+  @Get("designations")
   findAll() {
-    return this.commonService.findAll();
+    return this.commonService.findAllDesignations();
   }
 
   @Get(':id')
