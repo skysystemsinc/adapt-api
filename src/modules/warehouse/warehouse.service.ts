@@ -7,7 +7,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { AuthorizedSignatory } from './entities/authorized-signatories.entity';
 import { CompanyInformation } from './entities/company-information.entity';
 import { WarehouseDocument } from './entities/warehouse-document.entity';
-import { CreateWarehouseDocumentDto } from './dto/warehouse-document.dto';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
