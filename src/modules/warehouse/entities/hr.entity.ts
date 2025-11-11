@@ -22,7 +22,7 @@ export class HrEntity {
     @Column({ nullable: true })
     personalDetailsId: string;
 
-    @OneToOne(() => PersonalDetailsEntity, { onDelete: 'CASCADE' })
+    @OneToOne(() => PersonalDetailsEntity, { cascade: true, onDelete: 'CASCADE' })
     @JoinColumn({ name: 'personalDetailsId' })
     personalDetails: PersonalDetailsEntity;
 

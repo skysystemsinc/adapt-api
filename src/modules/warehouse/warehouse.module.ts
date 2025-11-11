@@ -11,6 +11,14 @@ import { AuthorizedSignatory } from './entities/authorized-signatories.entity';
 import { CompanyInformation } from './entities/company-information.entity';
 import { WarehouseDocument } from './entities/warehouse-document.entity';
 import { BankDetails } from './entities/bank-details.entity';
+import { HrEntity } from './entities/hr.entity';
+import { PersonalDetailsEntity } from './entities/hr/personal-details.entity/personal-details.entity';
+import { AcademicQualificationsEntity } from './entities/hr/academic-qualifications.entity/academic-qualifications.entity';
+import { ProfessionalQualificationsEntity } from './entities/hr/professional-qualifications.entity/professional-qualifications.entity';
+import { TrainingsEntity } from './entities/hr/trainings.entity/trainings.entity';
+import { ExperienceEntity } from './entities/hr/experience.entity/experience.entity';
+import { DeclarationEntity } from './entities/hr/declaration.entity/declaration.entity';
+import { Designation } from '../common/entities/designation.entity';
 
 @Module({
   controllers: [WarehouseController],
@@ -22,7 +30,15 @@ import { BankDetails } from './entities/bank-details.entity';
       AuthorizedSignatory,
       CompanyInformation,
       WarehouseDocument,
-      BankDetails
+      BankDetails,
+      HrEntity,
+      PersonalDetailsEntity,
+      AcademicQualificationsEntity,
+      ProfessionalQualificationsEntity,
+      TrainingsEntity,
+      ExperienceEntity,
+      DeclarationEntity,
+      Designation,
     ]),
     forwardRef(() => AuthModule),
     JwtModule.registerAsync({
