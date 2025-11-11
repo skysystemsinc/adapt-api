@@ -8,6 +8,7 @@ import { AuthService } from '../auth/auth.service';
 import { User } from '../users/entities/user.entity';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UpdateBankDetailsDto } from './dto/create-bank-details.dto';
+import { UpsertHrInformationDto } from './dto/create-hr-information.dto';
 
 @ApiTags('Warehouse')
 @ApiBearerAuth('JWT-auth')
@@ -116,6 +117,19 @@ export class WarehouseController {
   ) {
     const user = request.user as User;
     return this.warehouseService.createBankDetails(applicationId, createBankDetailsDto, user.id);
+  }
+
+  @ApiOperation({ summary: 'Create or update HR information profile' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiBody({ type: UpsertHrInformationDto })
+  @Post('/operator/application/:applicationId/hr-information')
+  upsertHrInformation(
+    @Param('applicationId') applicationId: string,
+    @Body() payload: UpsertHrInformationDto,
+    @Request() request: any,
+  ) {
+    const user = request.user as User;
+    return this.warehouseService.upsertHrInformation(applicationId, payload, user.id);
   }
 
   @ApiOperation({ summary: 'Update a bank details for a warehouse operator application' })
