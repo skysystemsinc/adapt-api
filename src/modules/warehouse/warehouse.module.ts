@@ -10,6 +10,7 @@ import { WarehouseOperatorApplicationRequest } from './entities/warehouse-operat
 import { AuthorizedSignatory } from './entities/authorized-signatories.entity';
 import { CompanyInformation } from './entities/company-information.entity';
 import { WarehouseDocument } from './entities/warehouse-document.entity';
+import { BankDetails } from './entities/bank-details.entity';
 
 @Module({
   controllers: [WarehouseController],
@@ -20,7 +21,8 @@ import { WarehouseDocument } from './entities/warehouse-document.entity';
       WarehouseOperatorApplicationRequest,
       AuthorizedSignatory,
       CompanyInformation,
-      WarehouseDocument
+      WarehouseDocument,
+      BankDetails
     ]),
     forwardRef(() => AuthModule),
     JwtModule.registerAsync({

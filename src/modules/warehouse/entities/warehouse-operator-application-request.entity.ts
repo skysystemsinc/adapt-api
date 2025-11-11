@@ -17,7 +17,8 @@ export enum WarehouseOperatorApplicationStatus {
   APPROVED = 'APPROVED',
   REJECTED = 'REJECTED',
   DRAFT = 'DRAFT',
-  SUBMITTED = 'SUBMITTED'
+  SUBMITTED = 'SUBMITTED',
+  RESUBMITTED = 'RESUBMITTED'
 }
 
 @Entity('warehouse_operator_application_request')
