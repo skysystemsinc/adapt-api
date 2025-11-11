@@ -153,6 +153,17 @@ export class WarehouseService {
         'ntcCertificate'
       );
       ntcCertificateDocumentId = documentResult.id;
+      
+      // Update company information with the ntcCertificate foreign key
+      // Load the document entity and assign it to the company information
+      const ntcCertificateDocument = await this.warehouseDocumentRepository.findOne({
+        where: { id: ntcCertificateDocumentId }
+      });
+      
+      if (ntcCertificateDocument) {
+        savedCompanyInformation.ntcCertificate = ntcCertificateDocument;
+        await this.companyInformationRepository.save(savedCompanyInformation);
+      }
     }
 
     return {
