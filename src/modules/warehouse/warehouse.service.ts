@@ -261,25 +261,28 @@ export class WarehouseService {
 
   async createBankDetails(applicationId: string, createBankDetailsDto: CreateBankDetailsDto, userId: string) {
     const application = await this.warehouseOperatorRepository.findOne({ where: { id: applicationId, userId } });
+
     if (!application) {
-      throw new NotFoundException('Application not found');
+      throw new NotFoundException('Warehouse operator application not found. Please create an application first.');
+    }
+
+    // Check if company information already exists for this application
+    const existingBankDetails = await this.bankDetailsRepository.findOne({
+      where: { applicationId: application.id }
+    });
+
+    if (existingBankDetails) {
+      throw new BadRequestException('Bank details already exists for this application. Please update instead of creating a new one.');
     }
 
     // only allow updating after application is either new or resubmitted or rejected
-    if (application.status === WarehouseOperatorApplicationStatus.DRAFT) {
+    if (application.status !== WarehouseOperatorApplicationStatus.DRAFT) {
       throw new BadRequestException('Cannot Add new Bank Details. Bank Details can only be updated.');
-    }
-
-    if (
-      ![WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED]
-        .includes(application.status)
-    ) {
-      throw new BadRequestException('Cannot update bank details after application is submitted');
     }
 
     const bankDetails = this.bankDetailsRepository.create({
       applicationId: application.id,
-      name: createBankDetailsDto.accountTitle,
+      name: createBankDetailsDto.name,
       accountTitle: createBankDetailsDto.accountTitle,
       iban: createBankDetailsDto.iban,
       accountType: createBankDetailsDto.accountType,
