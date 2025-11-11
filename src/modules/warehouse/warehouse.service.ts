@@ -522,16 +522,16 @@ export class WarehouseService {
     }
 
     // only allow updating after application is either new or resubmitted or rejected
-    if (application.status === WarehouseOperatorApplicationStatus.DRAFT) {
+    if (application.status != WarehouseOperatorApplicationStatus.DRAFT) {
       throw new BadRequestException('Cannot Add new Bank Details. Bank Details can only be updated.');
     }
 
-    if (
-      ![WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED]
-        .includes(application.status)
-    ) {
-      throw new BadRequestException('Cannot update bank details after application is submitted');
-    }
+    // if (
+    //   ![WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED]
+    //     .includes(application.status)
+    // ) {
+    //   throw new BadRequestException('Cannot update bank details after application is submitted');
+    // }
 
     const bankDetails = this.bankDetailsRepository.create({
       applicationId: application.id,
