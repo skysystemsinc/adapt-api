@@ -637,9 +637,7 @@ export class WarehouseService {
             fathersHusbandName: hr.personalDetails.fathersHusbandName,
             cnicPassport: hr.personalDetails.cnicPassport,
             nationality: hr.personalDetails.nationality,
-            dateOfBirth: hr.personalDetails.dateOfBirth
-              ? hr.personalDetails.dateOfBirth.toISOString().split('T')[0]
-              : null,
+            dateOfBirth: hr.personalDetails.dateOfBirth,
             residentialAddress: hr.personalDetails.residentialAddress,
             businessAddress: hr.personalDetails.businessAddress ?? null,
             telephone: hr.personalDetails.telephone ?? null,
