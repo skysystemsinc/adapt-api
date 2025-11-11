@@ -1,7 +1,7 @@
 import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { HrEntity } from "../../hr.entity";
 
-@Entity("experiences")
+@Entity("hr_experience")
 export class ExperienceEntity {
     @PrimaryGeneratedColumn("uuid")
     id: string;

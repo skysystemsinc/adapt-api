@@ -1,7 +1,7 @@
-import { Designation } from "src/modules/common/entities/designation.entity";
 import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { Designation } from "../../../../common/entities/designation.entity";
 
-@Entity('personal_details')
+@Entity('hr_personal_details')
 export class PersonalDetailsEntity {
     @PrimaryGeneratedColumn('uuid')
     id: string;
