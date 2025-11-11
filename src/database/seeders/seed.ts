@@ -5,6 +5,7 @@ import { UserSeeder } from './user.seeder';
 import { RBACSeeder } from './rbac.seeder';
 import { DocumentTypeSeeder } from './document-type.seeder';
 import { SettingsSeeder } from './settings.seeder';
+import { DesignationSeeder } from './designation.seeder';
 
 // Load environment variables
 config();
@@ -41,8 +42,11 @@ async function runSeeders() {
     // const documentTypeSeeder = new DocumentTypeSeeder();
     // await documentTypeSeeder.run(AppDataSource);
 
-    const settingsSeeder = new SettingsSeeder();
-    await settingsSeeder.run(AppDataSource);
+    // const settingsSeeder = new SettingsSeeder();
+    // await settingsSeeder.run(AppDataSource);
+
+    const designationSeeder = new DesignationSeeder();
+    await designationSeeder.run(AppDataSource);
 
     console.log('\n✅ Seeding completed successfully!');
     process.exit(0);

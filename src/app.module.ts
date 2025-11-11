@@ -16,6 +16,7 @@ import { FormRequestsModule } from './modules/form-requests/form-requests.module
 import { AdminDashboardModule } from './modules/admin-dashboard/admin-dashboard.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { WarehouseModule } from './modules/warehouse/warehouse.module';
+import { CommonModule } from './modules/common/common.module';
 import databaseConfig from './config/database.config';
 
 @Module({
@@ -48,6 +49,7 @@ import databaseConfig from './config/database.config';
     AdminDashboardModule,
     SettingsModule,
     WarehouseModule,
+    CommonModule,
   ],
   controllers: [AppController],
   providers: [AppService],
