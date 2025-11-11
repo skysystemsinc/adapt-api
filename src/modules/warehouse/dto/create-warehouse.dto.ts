@@ -1,8 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsArray, IsEmail, IsISO8601, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, ValidateNested } from "class-validator";
-import { AuthorizedSignatory } from "../entities/authorized-signatories.entity";
+import { IsArray, IsEmail, IsISO8601, IsNotEmpty, IsNumber, IsOptional, IsString, ValidateNested } from "class-validator";
 import { Type } from "class-transformer";
 export { CreateBankDetailsDto } from "./create-bank-details.dto";
+export { CreateCompanyInformationRequestDto, CompanyInformationResponseDto } from "./create-company-information.dto";
 
 export class AuthorizedSignatoryDto {
     @ApiProperty({
@@ -131,9 +131,7 @@ export class AuthorizedSignatoryDto {
     @IsOptional()
     landlineNumber!: string;
 }
-
 export class CreateWarehouseOperatorApplicationRequestDto {
-
     @ApiProperty({
         type: String,
         description: 'Authorized signatory Array of Objects',

@@ -1,24 +1,46 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { AuthorizedSignatoryDto, CreateBankDetailsDto, CreateWarehouseOperatorApplicationRequestDto } from './dto/create-warehouse.dto';
+import { AuthorizedSignatoryDto, CreateCompanyInformationRequestDto, CreateBankDetailsDto, CreateWarehouseOperatorApplicationRequestDto } from './dto/create-warehouse.dto';
 import { UpdateWarehouseDto } from './dto/update-warehouse.dto';
 import { Repository } from 'typeorm';
 import { WarehouseOperatorApplicationRequest, WarehouseOperatorApplicationStatus } from './entities/warehouse-operator-application-request.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { AuthorizedSignatory } from './entities/authorized-signatories.entity';
+import { CompanyInformation } from './entities/company-information.entity';
+import { WarehouseDocument } from './entities/warehouse-document.entity';
+import * as fs from 'fs/promises';
+import * as path from 'path';
+import { v4 as uuidv4 } from 'uuid';
 import { StepStatus } from './entities/bank-details.entity';
 import { BankDetails } from './entities/bank-details.entity';
 import { AccountType, UpdateBankDetailsDto } from './dto/create-bank-details.dto';
 
 @Injectable()
 export class WarehouseService {
+  private readonly uploadDir = 'uploads';
+
   constructor(
     @InjectRepository(WarehouseOperatorApplicationRequest)
     private readonly warehouseOperatorRepository: Repository<WarehouseOperatorApplicationRequest>,
     @InjectRepository(AuthorizedSignatory)
     private readonly authorizedSignatoryRepository: Repository<AuthorizedSignatory>,
+    @InjectRepository(CompanyInformation)
+    private readonly companyInformationRepository: Repository<CompanyInformation>,
+    @InjectRepository(WarehouseDocument)
+    private readonly warehouseDocumentRepository: Repository<WarehouseDocument>,
     @InjectRepository(BankDetails)
     private readonly bankDetailsRepository: Repository<BankDetails>
-  ) { }
+  ) {
+    // Ensure upload directory exists
+    this.ensureUploadDirectory();
+  }
+
+  private async ensureUploadDirectory() {
+    try {
+      await fs.mkdir(this.uploadDir, { recursive: true });
+    } catch (error) {
+      console.error('Error creating upload directory:', error);
+    }
+  }
 
   async createOperatorApplication(
     createWarehouseDto: CreateWarehouseOperatorApplicationRequestDto,
@@ -76,6 +98,164 @@ export class WarehouseService {
     return {
       message: 'Warehouse authorized signatories saved successfully',
       warehouseOperatorApplicationRequestId: warehouseOperatorApplication.applicationId,
+    };
+  }
+
+  async createCompanyInformation(
+    createCompanyInformationDto: CreateCompanyInformationRequestDto,
+    userId: string,
+    applicationId: string,
+    ntcCertificateFile?: any
+  ) {
+    // Find existing warehouse operator application for this user
+    const existingApplication = await this.warehouseOperatorRepository.findOne({
+      where: { userId, id: applicationId },
+      order: { createdAt: 'DESC' }
+    });
+
+    if (!existingApplication) {
+      throw new NotFoundException('Warehouse operator application not found. Please create an application first.');
+    }
+
+    // Check if company information already exists for this application
+    const existingCompanyInfo = await this.companyInformationRepository.findOne({
+      where: { applicationId: existingApplication.id }
+    });
+
+    if (existingCompanyInfo) {
+      throw new BadRequestException('Company information already exists for this application. Please update instead of creating a new one.');
+    }
+
+    // Create company information
+    const newCompanyInformation = this.companyInformationRepository.create({
+      applicationId: existingApplication.id, // Use the UUID id, not applicationId string
+      companyName: createCompanyInformationDto.companyName,
+      secpRegistrationNumber: createCompanyInformationDto.secpRegistrationNumber,
+      activeFilerStatus: createCompanyInformationDto.activeFilerStatus,
+      dateOfIncorporation: createCompanyInformationDto.dateOfIncorporation,
+      businessCommencementDate: createCompanyInformationDto.businessCommencementDate,
+      registeredOfficeAddress: createCompanyInformationDto.registeredOfficeAddress,
+      postalCode: createCompanyInformationDto.postalCode,
+      nationalTaxNumber: createCompanyInformationDto.nationalTaxNumber,
+      salesTaxRegistrationNumber: createCompanyInformationDto.salesTaxRegistrationNumber,
+    });
+
+    const savedCompanyInformation = await this.companyInformationRepository.save(newCompanyInformation);
+
+    // If ntcCertificate file is provided, upload it and link to company information
+    let ntcCertificateDocumentId: string | undefined;
+    if (ntcCertificateFile) {
+      const documentResult = await this.uploadWarehouseDocument(
+        ntcCertificateFile,
+        userId,
+        'CompanyInformation',
+        savedCompanyInformation.id,
+        'ntcCertificate'
+      );
+      ntcCertificateDocumentId = documentResult.id;
+    }
+
+    return {
+      message: 'Company information saved successfully',
+      companyInformationId: savedCompanyInformation.id,
+      applicationId: existingApplication.applicationId,
+      ntcCertificate: ntcCertificateDocumentId,
+    };
+  }
+
+  /**
+   * Get company information with related documents
+   */
+  async getCompanyInformationWithDocuments(companyInformationId: string) {
+    const companyInformation = await this.companyInformationRepository.findOne({
+      where: { id: companyInformationId }
+    });
+
+    if (!companyInformation) {
+      throw new NotFoundException('Company information not found');
+    }
+
+    // Get NTC certificate document ID specifically
+    const ntcCertificate = await this.warehouseDocumentRepository.findOne({
+      where: {
+        documentableType: 'CompanyInformation',
+        documentableId: companyInformationId,
+        documentType: 'ntcCertificate',
+        isActive: true
+      }
+    });
+
+    // Return with ntcCertificate ID only
+    return {
+      ...companyInformation,
+      ntcCertificate: ntcCertificate?.id || undefined,
+    } as CompanyInformation & { ntcCertificate?: string };
+  }
+
+
+  /**
+   * Upload and create a warehouse document
+   * Documents are linked to entities via polymorphic relationship (documentableType, documentableId)
+   */
+  async uploadWarehouseDocument(
+    file: any,
+    userId: string,
+    documentableType: string,
+    documentableId: string,
+    documentType: string
+  ) {
+    if (!file) {
+      throw new BadRequestException('No file provided');
+    }
+
+    // Validate file type
+    const allowedExtensions = ['.pdf', '.png', '.jpg', '.jpeg', '.doc', '.docx'];
+    const fileExtension = path.extname(file.originalname).toLowerCase();
+    
+    if (!allowedExtensions.includes(fileExtension)) {
+      throw new BadRequestException(
+        `File type '${fileExtension}' is not allowed. Allowed types: ${allowedExtensions.join(', ')}`,
+      );
+    }
+
+    // Validate file size (max 100MB)
+    const maxSizeBytes = 100 * 1024 * 1024;
+    if (file.size > maxSizeBytes) {
+      throw new BadRequestException(
+        `File size ${(file.size / 1024 / 1024).toFixed(2)}MB exceeds maximum allowed size of 100MB`,
+      );
+    }
+
+    // Generate unique filename
+    const sanitizedFilename = `${uuidv4()}${fileExtension}`;
+    const filePath = path.join(this.uploadDir, sanitizedFilename);
+    const documentPath = `/uploads/${sanitizedFilename}`;
+
+    // Save file to disk
+    await fs.writeFile(filePath, file.buffer);
+
+    // Detect MIME type
+    const mimeType = file.mimetype || 'application/octet-stream';
+
+    // Create document record
+    const document = this.warehouseDocumentRepository.create({
+      userId,
+      documentableType,
+      documentableId,
+      documentType,
+      originalFileName: file.originalname,
+      filePath: documentPath,
+      mimeType,
+      isActive: true,
+    });
+
+    const savedDocument = await this.warehouseDocumentRepository.save(document);
+
+    return {
+      id: savedDocument.id,
+      filePath: savedDocument.filePath,
+      originalFileName: savedDocument.originalFileName,
+      mimeType: savedDocument.mimeType,
     };
   }
 

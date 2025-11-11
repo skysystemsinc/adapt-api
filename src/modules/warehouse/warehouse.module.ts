@@ -8,6 +8,8 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { WarehouseOperatorApplicationRequest } from './entities/warehouse-operator-application-request.entity';
 import { AuthorizedSignatory } from './entities/authorized-signatories.entity';
+import { CompanyInformation } from './entities/company-information.entity';
+import { WarehouseDocument } from './entities/warehouse-document.entity';
 import { BankDetails } from './entities/bank-details.entity';
 
 @Module({
@@ -18,6 +20,8 @@ import { BankDetails } from './entities/bank-details.entity';
       Warehouse,
       WarehouseOperatorApplicationRequest,
       AuthorizedSignatory,
+      CompanyInformation,
+      WarehouseDocument,
       BankDetails
     ]),
     forwardRef(() => AuthModule),
