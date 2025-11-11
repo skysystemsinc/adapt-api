@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { AuthorizedSignatory } from './authorized-signatories.entity';
+import { HrEntity } from './hr.entity';
 
 export enum WarehouseOperatorApplicationStatus {
   PENDING = 'PENDING',
@@ -41,6 +42,9 @@ export class WarehouseOperatorApplicationRequest {
 
   @OneToMany(() => AuthorizedSignatory, (signatory) => signatory.warehouseOperatorApplicationRequest)
   authorizedSignatories: AuthorizedSignatory[];
+
+  @OneToMany(() => HrEntity, (hr) => hr.application)
+  hrs: HrEntity[];
 
   @Column({
     type: 'enum',
