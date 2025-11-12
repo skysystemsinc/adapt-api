@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, UseInterceptors, UploadedFile, BadRequestException, UploadedFiles } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, UseInterceptors, UploadedFile, BadRequestException, UploadedFiles, Query } from '@nestjs/common';
 import { WarehouseService } from './warehouse.service';
 import { CreateBankDetailsDto, CreateCompanyInformationRequestDto, CreateWarehouseOperatorApplicationRequestDto } from './dto/create-warehouse.dto';
 import { UpdateWarehouseDto } from './dto/update-warehouse.dto';
@@ -10,6 +10,7 @@ import { FileInterceptor, FileFieldsInterceptor } from '@nestjs/platform-express
 import { UpdateBankDetailsDto } from './dto/create-bank-details.dto';
 import { UpsertHrInformationDto } from './dto/create-hr-information.dto';
 import { CreateFinancialInformationDto } from './dto/create-financial-information.dto';
+import { ListWarehouseOperatorApplicationDto } from './dto/list-warehouse.dto';
 
 @ApiTags('Warehouse')
 @ApiBearerAuth('JWT-auth')
@@ -21,6 +22,17 @@ export class WarehouseController {
     private readonly authService: AuthService
   ) { }
 
+  @ApiOperation({ summary: 'List all warehouse operator applications' })
+  @ApiBearerAuth('JWT-auth')
+  @Get('/operator/applications')
+  listWarehouseOperatorApplication(
+    @Query() listWarehouseOperatorApplicationDto: ListWarehouseOperatorApplicationDto,
+    @Request() request: any
+  ) {
+    const user = request.user as User;
+    return this.warehouseService.listWarehouseOperatorApplication(user.id, listWarehouseOperatorApplicationDto);
+  }
+  
   @ApiOperation({ summary: 'Create a new warehouse operator application' })
   @ApiBearerAuth('JWT-auth')
   @ApiBody({ type: CreateWarehouseOperatorApplicationRequestDto })
@@ -195,7 +207,7 @@ export class WarehouseController {
     @Param('bankDetailsId') bankDetailsId: string,
     @Body() updateBankDetailsDto: UpdateBankDetailsDto,
     @Request() request: any
-  ) {
+  ) { 
     const user = request.user as User;
     return this.warehouseService.updateBankDetails(applicationId, bankDetailsId, updateBankDetailsDto, user.id);
   }
@@ -205,10 +217,13 @@ export class WarehouseController {
     return this.warehouseService.findAll();
   }
 
-  @Get('/operator')
-  findOneWarehouseOperator(@Request() request: any) {
+  @Get('/operator/:id')
+  findOneWarehouseOperator(
+    @Request() request: any,
+    @Param('id') id: string
+  ) {
     const user = request.user as User;
-    return this.warehouseService.findOneWarehouseOperator(user.id);
+    return this.warehouseService.findOneWarehouseOperator(id, user.id);
   }
 
   @Get(':id')
