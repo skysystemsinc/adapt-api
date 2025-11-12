@@ -3,6 +3,7 @@ import { IsArray, IsEmail, IsISO8601, IsNotEmpty, IsNumber, IsOptional, IsString
 import { Type } from "class-transformer";
 export { CreateBankDetailsDto } from "./create-bank-details.dto";
 export { CreateCompanyInformationRequestDto, CompanyInformationResponseDto } from "./create-company-information.dto";
+export { CreateApplicantChecklistDto } from "./create-applicant-checklist.dto";
 
 export class AuthorizedSignatoryDto {
     @ApiProperty({
