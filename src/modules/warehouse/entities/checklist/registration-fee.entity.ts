@@ -15,6 +15,7 @@ export class RegistrationFeeChecklistEntity {
     bankPaymentSlipDocument?: WarehouseDocument;
 
     @ManyToOne(() => ApplicantChecklistEntity, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'applicantChecklistId' })
     applicantChecklist: ApplicantChecklistEntity;
 
     @Column({ default: true })

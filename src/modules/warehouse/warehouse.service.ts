@@ -1368,6 +1368,19 @@ export class WarehouseService {
     });
     await repos.applicantChecklist.save(applicantChecklist);
 
+    // Update child entities with applicantChecklist reference
+    humanResources.applicantChecklist = applicantChecklist;
+    await repos.humanResources.save(humanResources);
+
+    financialSoundness.applicantChecklist = applicantChecklist;
+    await repos.financialSoundness.save(financialSoundness);
+
+    registrationFee.applicantChecklist = applicantChecklist;
+    await repos.registrationFee.save(registrationFee);
+
+    declaration.applicantChecklist = applicantChecklist;
+    await repos.declaration.save(declaration);
+
     // Assign documents
     await assignDocuments([
       { id: dto.humanResources.qcPersonnelFile ?? null, type: 'HumanResourcesChecklist', documentType: 'qcPersonnelFile', entityId: humanResources.id },
@@ -1570,6 +1583,15 @@ export class WarehouseService {
     // only allow updating after application is either new or resubmitted or rejected
     if (application.status != WarehouseOperatorApplicationStatus.DRAFT) {
       throw new BadRequestException('Cannot Add new Bank Details. Bank Details can only be updated.');
+    }
+
+    // Check if bank details already exists for this application
+    const existingBankDetails = await this.bankDetailsRepository.findOne({
+      where: { applicationId: application.id }
+    });
+
+    if (existingBankDetails) {
+      throw new BadRequestException('Bank details already exists for this application. Please update instead of creating a new one.');
     }
 
     // if (

@@ -13,6 +13,7 @@ export class DeclarationChecklistEntity {
     authorizeVerification: boolean;
 
     @ManyToOne(() => ApplicantChecklistEntity, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'applicantChecklistId' })
     applicantChecklist: ApplicantChecklistEntity;
 
     @Column({ default: true })
