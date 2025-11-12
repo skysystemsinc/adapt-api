@@ -28,6 +28,7 @@ import { TaxReturnEntity } from './entities/financial/tax-return.entity';
 import { BankStatementEntity } from './entities/financial/bank-statement.entity';
 import { OthersEntity } from './entities/financial/others.entity';
 import { CreateFinancialInformationDto } from './dto/create-financial-information.dto';
+import { ListWarehouseOperatorApplicationDto } from './dto/list-warehouse.dto';
 
 @Injectable()
 export class WarehouseService {
@@ -62,6 +63,27 @@ export class WarehouseService {
     } catch (error) {
       console.error('Error creating upload directory:', error);
     }
+  }
+
+  async listWarehouseOperatorApplication(userId: string, dto: ListWarehouseOperatorApplicationDto) {
+    const { search, page, limit, sortBy, sortOrder } = dto;
+    const query = this.warehouseOperatorRepository.createQueryBuilder('warehouseOperatorApplication');
+    query.where('warehouseOperatorApplication.userId = :userId', { userId });
+    if (search) {
+      query.andWhere('warehouseOperatorApplication.name LIKE :search', { search: `%${search}%` });
+    }
+    query.orderBy(`warehouseOperatorApplication.${sortBy}`, sortOrder);
+    query.skip(((page ?? 1) - 1) * (limit ?? 10));
+    query.take(limit ?? 10);
+    const [applications, total] = await query.getManyAndCount();
+    return {
+      applications,
+      total,
+      page: page ?? 1,
+      limit: limit ?? 10,
+      sortBy: sortBy ?? 'createdAt',
+      sortOrder: sortOrder ?? 'DESC',
+    };
   }
 
   async createOperatorApplication(
@@ -1050,9 +1072,10 @@ export class WarehouseService {
     return applicationId;
   }
 
-  async findOneWarehouseOperator(userId: string) {
+  async findOneWarehouseOperator(id: string, userId: string) {
     const warehouseOperatorApplication = await this.warehouseOperatorRepository.findOne({
       where: {
+        id,
         userId
       },
       relations: ['authorizedSignatories' as 'Authorized Signatory']
