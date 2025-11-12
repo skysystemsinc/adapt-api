@@ -1,5 +1,6 @@
 import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { Designation } from "../../../../common/entities/designation.entity";
+import { WarehouseDocument } from "../../warehouse-document.entity";
 
 @Entity('hr_personal_details')
 export class PersonalDetailsEntity {
@@ -7,11 +8,18 @@ export class PersonalDetailsEntity {
     id: string;
 
     @Column({ nullable: true })
-    designationId: string;
+    designationId?: string;
 
     @ManyToOne(() => Designation, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'designationId' })
     designation: Designation;
+
+    @Column({ nullable: true })
+    photograph?: string | null;
+
+    @ManyToOne(() => WarehouseDocument, { onDelete: 'SET NULL' })
+    @JoinColumn({ name: 'photograph' })
+    photographDocument?: WarehouseDocument;
 
     @Column({ type: 'varchar', length: 100, nullable: false })
     name: string;

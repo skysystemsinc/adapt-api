@@ -1,5 +1,6 @@
 import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { HrEntity } from "../../hr.entity";
+import { WarehouseDocument } from "../../warehouse-document.entity";
 
 @Entity('hr_academic_qualifications')
 export class AcademicQualificationsEntity {
@@ -23,6 +24,13 @@ export class AcademicQualificationsEntity {
 
     @Column({ type: 'varchar', length: 100, nullable: true })
     grade: string;
+
+    @Column({ nullable: true })
+    academicCertificate?: string | null;
+
+    @ManyToOne(() => WarehouseDocument, { onDelete: 'SET NULL' })
+    @JoinColumn({ name: 'academicCertificate' })
+    academicCertificateDocument?: WarehouseDocument;
 
     @Column({ nullable: true })
     hrId: string;

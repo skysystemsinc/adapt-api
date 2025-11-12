@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Exclude, Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
@@ -19,8 +19,11 @@ export class HrPersonalDetailsDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(200)
   designationName?: string;
+
+  @IsOptional()
+  @Exclude()
+  photograph?: string;
 
   @IsString()
   @IsNotEmpty()
@@ -93,6 +96,10 @@ export class HrAcademicQualificationDto {
   @IsOptional()
   @IsString()
   grade?: string;
+
+  @IsOptional()
+  @Exclude()
+  academicCertificate?: string;
 }
 
 export class HrProfessionalQualificationDto {
@@ -119,6 +126,10 @@ export class HrProfessionalQualificationDto {
   @IsOptional()
   @IsString()
   membershipNumber?: string;
+
+  @IsOptional()
+  @Exclude()
+  professionalCertificate?: string;
 }
 
 export class HrTrainingDto {
@@ -145,6 +156,10 @@ export class HrTrainingDto {
   @IsString()
   @IsNotEmpty()
   dateOfCompletion!: string;
+
+  @IsOptional()
+  @Exclude()
+  trainingCertificate?: string;
 }
 
 export class HrExperienceDto {
@@ -179,6 +194,10 @@ export class HrExperienceDto {
   @IsOptional()
   @IsString()
   responsibilities?: string;
+
+  @IsOptional()
+  @Exclude()
+  experienceLetter?: string;
 }
 
 export class HrDeclarationDto {
