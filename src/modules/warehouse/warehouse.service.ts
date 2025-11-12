@@ -192,6 +192,13 @@ export class WarehouseService {
     applicationId: string,
     dto: UpsertHrInformationDto,
     userId: string,
+    files?: {
+      photograph?: any[];
+      academicCertificates?: any[];
+      professionalCertificates?: any[];
+      trainingCertificates?: any[];
+      experienceLetters?: any[];
+    },
   ) {
     const application = await this.warehouseOperatorRepository.findOne({
       where: { id: applicationId, userId },
@@ -211,6 +218,144 @@ export class WarehouseService {
       }
       return parsed;
     };
+
+    // Upload files and get document IDs before processing
+    // Use application ID as temporary documentableId, will be updated after entity creation
+    const uploadedDocumentIds: {
+      photograph?: string;
+      academicCertificates: string[];
+      professionalCertificates: string[];
+      trainingCertificates: string[];
+      experienceLetters: string[];
+    } = {
+      academicCertificates: [],
+      professionalCertificates: [],
+      trainingCertificates: [],
+      experienceLetters: [],
+    };
+
+    if (files) {
+      // Upload photograph
+      if (files.photograph && files.photograph.length > 0) {
+        const photoDoc = await this.uploadWarehouseDocument(
+          files.photograph[0],
+          userId,
+          'HrPersonalDetails',
+          applicationId, // Temporary ID, will be updated
+          'photograph',
+        );
+        uploadedDocumentIds.photograph = photoDoc.id;
+      }
+
+      // Upload academic certificates
+      if (files.academicCertificates && files.academicCertificates.length > 0) {
+        if (files.academicCertificates.length !== dto.academicQualifications.length) {
+          throw new BadRequestException(
+            `Number of academic certificate files (${files.academicCertificates.length}) does not match number of academic qualifications (${dto.academicQualifications.length})`,
+          );
+        }
+        for (const file of files.academicCertificates) {
+          const doc = await this.uploadWarehouseDocument(
+            file,
+            userId,
+            'HrAcademicQualification',
+            applicationId, // Temporary ID, will be updated
+            'academicCertificate',
+          );
+          uploadedDocumentIds.academicCertificates.push(doc.id);
+        }
+      }
+
+      // Upload professional certificates
+      if (files.professionalCertificates && files.professionalCertificates.length > 0) {
+        if (files.professionalCertificates.length !== dto.professionalQualifications.length) {
+          throw new BadRequestException(
+            `Number of professional certificate files (${files.professionalCertificates.length}) does not match number of professional qualifications (${dto.professionalQualifications.length})`,
+          );
+        }
+        for (const file of files.professionalCertificates) {
+          const doc = await this.uploadWarehouseDocument(
+            file,
+            userId,
+            'HrProfessionalQualification',
+            applicationId, // Temporary ID, will be updated
+            'professionalCertificate',
+          );
+          uploadedDocumentIds.professionalCertificates.push(doc.id);
+        }
+      }
+
+      // Upload training certificates
+      if (files.trainingCertificates && files.trainingCertificates.length > 0) {
+        if (files.trainingCertificates.length !== dto.trainings.length) {
+          throw new BadRequestException(
+            `Number of training certificate files (${files.trainingCertificates.length}) does not match number of trainings (${dto.trainings.length})`,
+          );
+        }
+        for (const file of files.trainingCertificates) {
+          const doc = await this.uploadWarehouseDocument(
+            file,
+            userId,
+            'HrTraining',
+            applicationId, // Temporary ID, will be updated
+            'trainingCertificate',
+          );
+          uploadedDocumentIds.trainingCertificates.push(doc.id);
+        }
+      }
+
+      // Upload experience letters
+      if (files.experienceLetters && files.experienceLetters.length > 0) {
+        if (files.experienceLetters.length !== dto.experiences.length) {
+          throw new BadRequestException(
+            `Number of experience letter files (${files.experienceLetters.length}) does not match number of experiences (${dto.experiences.length})`,
+          );
+        }
+        for (const file of files.experienceLetters) {
+          const doc = await this.uploadWarehouseDocument(
+            file,
+            userId,
+            'HrExperience',
+            applicationId, // Temporary ID, will be updated
+            'experienceLetter',
+          );
+          uploadedDocumentIds.experienceLetters.push(doc.id);
+        }
+      }
+    }
+
+    // Map uploaded document IDs to DTO (override any existing document IDs from DTO if files were uploaded)
+    if (uploadedDocumentIds.photograph) {
+      dto.personalDetails.photograph = uploadedDocumentIds.photograph;
+    }
+    if (uploadedDocumentIds.academicCertificates.length > 0) {
+      dto.academicQualifications.forEach((item, idx) => {
+        if (uploadedDocumentIds.academicCertificates[idx]) {
+          item.academicCertificate = uploadedDocumentIds.academicCertificates[idx];
+        }
+      });
+    }
+    if (uploadedDocumentIds.professionalCertificates.length > 0) {
+      dto.professionalQualifications.forEach((item, idx) => {
+        if (uploadedDocumentIds.professionalCertificates[idx]) {
+          item.professionalCertificate = uploadedDocumentIds.professionalCertificates[idx];
+        }
+      });
+    }
+    if (uploadedDocumentIds.trainingCertificates.length > 0) {
+      dto.trainings.forEach((item, idx) => {
+        if (uploadedDocumentIds.trainingCertificates[idx]) {
+          item.trainingCertificate = uploadedDocumentIds.trainingCertificates[idx];
+        }
+      });
+    }
+    if (uploadedDocumentIds.experienceLetters.length > 0) {
+      dto.experiences.forEach((item, idx) => {
+        if (uploadedDocumentIds.experienceLetters[idx]) {
+          item.experienceLetter = uploadedDocumentIds.experienceLetters[idx];
+        }
+      });
+    }
 
     const savedHr = await this.dataSource.transaction(async (manager) => {
       const hrRepo = manager.getRepository(HrEntity);
@@ -617,11 +762,11 @@ export class WarehouseService {
       );
     }
 
-    // Validate file size (max 100MB)
-    const maxSizeBytes = 100 * 1024 * 1024;
+    // Validate file size (max 10MB)
+    const maxSizeBytes = 10 * 1024 * 1024;
     if (file.size > maxSizeBytes) {
       throw new BadRequestException(
-        `File size ${(file.size / 1024 / 1024).toFixed(2)}MB exceeds maximum allowed size of 100MB`,
+        `File size ${(file.size / 1024 / 1024).toFixed(2)}MB exceeds maximum allowed size of 10MB`,
       );
     }
 

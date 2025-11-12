@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, UseInterceptors, UploadedFile, BadRequestException, UploadedFiles } from '@nestjs/common';
 import { WarehouseService } from './warehouse.service';
 import { CreateBankDetailsDto, CreateCompanyInformationRequestDto, CreateWarehouseOperatorApplicationRequestDto } from './dto/create-warehouse.dto';
 import { UpdateWarehouseDto } from './dto/update-warehouse.dto';
@@ -6,7 +6,7 @@ import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiTags, ApiConsumes } from '@nestjs/swagger';
 import { AuthService } from '../auth/auth.service';
 import { User } from '../users/entities/user.entity';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FileFieldsInterceptor } from '@nestjs/platform-express';
 import { UpdateBankDetailsDto } from './dto/create-bank-details.dto';
 import { UpsertHrInformationDto } from './dto/create-hr-information.dto';
 
@@ -121,15 +121,55 @@ export class WarehouseController {
 
   @ApiOperation({ summary: 'Create or update HR information profile' })
   @ApiBearerAuth('JWT-auth')
-  @ApiBody({ type: UpsertHrInformationDto })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({ 
+    type: UpsertHrInformationDto,
+    description: 'HR information data with files (photograph, certificates, etc.)'
+  })
+  @UseInterceptors(
+    FileFieldsInterceptor([
+      { name: 'photograph', maxCount: 1 },
+      { name: 'academicCertificates', maxCount: 50 },
+      { name: 'professionalCertificates', maxCount: 50 },
+      { name: 'trainingCertificates', maxCount: 50 },
+      { name: 'experienceLetters', maxCount: 50 },
+    ], {
+      limits: {
+        fileSize: 100 * 1024 * 1024, // 100MB max per file
+      },
+    }),
+  )
   @Post('/operator/application/:applicationId/hr-information')
   upsertHrInformation(
     @Param('applicationId') applicationId: string,
-    @Body() payload: UpsertHrInformationDto,
+    @Body('data') dataString: string,
+    @UploadedFiles() files: {
+      photograph?: any[];
+      academicCertificates?: any[];
+      professionalCertificates?: any[];
+      trainingCertificates?: any[];
+      experienceLetters?: any[];
+    },
     @Request() request: any,
   ) {
+    if (!dataString) {
+      throw new BadRequestException('Data field is required');
+    }
+
+    let payload: UpsertHrInformationDto;
+    try {
+      payload = JSON.parse(dataString);
+    } catch (error) {
+      throw new BadRequestException('Invalid JSON in data field');
+    }
+
     const user = request.user as User;
-    return this.warehouseService.upsertHrInformation(applicationId, payload, user.id);
+    return this.warehouseService.upsertHrInformation(
+      applicationId, 
+      payload, 
+      user.id,
+      files
+    );
   }
 
   @ApiOperation({ summary: 'Update a bank details for a warehouse operator application' })
