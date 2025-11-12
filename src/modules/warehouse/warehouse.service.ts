@@ -22,6 +22,12 @@ import { BankDetails } from './entities/bank-details.entity';
 import { UpsertHrInformationDto } from './dto/create-hr-information.dto';
 import { Designation } from '../common/entities/designation.entity';
 import { AccountType, UpdateBankDetailsDto } from './dto/create-bank-details.dto';
+import { FinancialInformationEntity } from './entities/financial-information.entity';
+import { AuditReportEntity } from './entities/financial/audit-report.entity';
+import { TaxReturnEntity } from './entities/financial/tax-return.entity';
+import { BankStatementEntity } from './entities/financial/bank-statement.entity';
+import { OthersEntity } from './entities/financial/others.entity';
+import { CreateFinancialInformationDto } from './dto/create-financial-information.dto';
 
 @Injectable()
 export class WarehouseService {
@@ -42,6 +48,8 @@ export class WarehouseService {
     private readonly hrRepository: Repository<HrEntity>,
     @InjectRepository(Designation)
     private readonly designationRepository: Repository<Designation>,
+    @InjectRepository(FinancialInformationEntity)
+    private readonly financialInformationRepository: Repository<FinancialInformationEntity>,
     private readonly dataSource: DataSource,
   ) {
     // Ensure upload directory exists
@@ -419,6 +427,162 @@ export class WarehouseService {
     };
   }
 
+  async createFinancialInformation(
+    applicationId: string,
+    dto: CreateFinancialInformationDto,
+    userId: string,
+  ) {
+    const application = await this.warehouseOperatorRepository.findOne({
+      where: { id: applicationId, userId },
+    });
+    
+    if (!application) {
+      throw new NotFoundException('Warehouse operator application not found. Please create an application first.');
+    }
+
+    const savedFinancialInfo = await this.dataSource.transaction(async (manager) => {
+      const financialInfoRepo = manager.getRepository(FinancialInformationEntity);
+      const auditReportRepo = manager.getRepository(AuditReportEntity);
+      const taxReturnRepo = manager.getRepository(TaxReturnEntity);
+      const bankStatementRepo = manager.getRepository(BankStatementEntity);
+      const othersRepo = manager.getRepository(OthersEntity);
+
+      if (dto.id) {
+        const existingFinancialInfo = await financialInfoRepo.findOne({
+          where: { id: dto.id, applicationId: application.id },
+          relations: [
+            'auditReport',
+            'taxReturns',
+            'bankStatements',
+            'others',
+          ],
+        });
+
+        if (!existingFinancialInfo) {
+          throw new NotFoundException('Financial information not found for this application.');
+        }
+
+        // Update audit report
+        if (existingFinancialInfo.auditReport) {
+          Object.assign(existingFinancialInfo.auditReport, dto.auditReport);
+          await auditReportRepo.save(existingFinancialInfo.auditReport);
+        } else {
+          const newAuditReport = await auditReportRepo.save(
+            auditReportRepo.create({
+              ...dto.auditReport,
+              financialInformationId: existingFinancialInfo.id,
+            }),
+          );
+          existingFinancialInfo.auditReport = newAuditReport;
+          existingFinancialInfo.auditReportId = newAuditReport.id;
+        }
+
+        // Delete existing tax returns, bank statements, and others
+        await taxReturnRepo.delete({ financialInformationId: existingFinancialInfo.id });
+        await bankStatementRepo.delete({ financialInformationId: existingFinancialInfo.id });
+        await othersRepo.delete({ financialInformationId: existingFinancialInfo.id });
+
+        // Create new tax returns
+        const taxReturnEntities = await taxReturnRepo.save(
+          dto.taxReturns.map((item) =>
+            taxReturnRepo.create({
+              ...item,
+              financialInformationId: existingFinancialInfo.id,
+            }),
+          ),
+        );
+
+        // Create new bank statements
+        const bankStatementEntities = await bankStatementRepo.save(
+          dto.bankStatements.map((item) =>
+            bankStatementRepo.create({
+              ...item,
+              financialInformationId: existingFinancialInfo.id,
+            }),
+          ),
+        );
+
+        // Create new others
+        const othersEntities = await othersRepo.save(
+          dto.others.map((item) =>
+            othersRepo.create({
+              ...item,
+              financialInformationId: existingFinancialInfo.id,
+            }),
+          ),
+        );
+
+        existingFinancialInfo.taxReturns = taxReturnEntities;
+        existingFinancialInfo.bankStatements = bankStatementEntities;
+        existingFinancialInfo.others = othersEntities;
+
+        await financialInfoRepo.save(existingFinancialInfo);
+        return existingFinancialInfo;
+      }
+
+      // Create new financial information
+      const auditReport = await auditReportRepo.save(auditReportRepo.create(dto.auditReport));
+
+      const financialInfo = financialInfoRepo.create({
+        applicationId: application.id,
+        auditReportId: auditReport.id,
+        auditReport,
+      });
+      await financialInfoRepo.save(financialInfo);
+
+      // Create tax returns
+      const taxReturnEntities = await taxReturnRepo.save(
+        dto.taxReturns.map((item) =>
+          taxReturnRepo.create({
+            ...item,
+            financialInformationId: financialInfo.id,
+          }),
+        ),
+      );
+
+      // Create bank statements
+      const bankStatementEntities = await bankStatementRepo.save(
+        dto.bankStatements.map((item) =>
+          bankStatementRepo.create({
+            ...item,
+            financialInformationId: financialInfo.id,
+          }),
+        ),
+      );
+
+      // Create others
+      const othersEntities = await othersRepo.save(
+        dto.others.map((item) =>
+          othersRepo.create({
+            ...item,
+            financialInformationId: financialInfo.id,
+          }),
+        ),
+      );
+
+      financialInfo.taxReturns = taxReturnEntities;
+      financialInfo.bankStatements = bankStatementEntities;
+      financialInfo.others = othersEntities;
+
+      return financialInfo;
+    });
+
+    const hydratedFinancialInfo = await this.financialInformationRepository.findOne({
+      where: { id: savedFinancialInfo.id },
+      relations: [
+        'auditReport',
+        'taxReturns',
+        'bankStatements',
+        'others',
+      ],
+    });
+
+    return {
+      message: 'Financial information saved successfully',
+      data: this.mapFinancialInformationEntityToResponse(hydratedFinancialInfo!),
+    };
+  }
+
   /**
    * Get company information with related documents
    */
@@ -694,6 +858,51 @@ export class WarehouseService {
             convictionPleaBargain: hr.declaration.convictionPleaBargain,
           }
         : null,
+    };
+  }
+
+  private mapFinancialInformationEntityToResponse(financialInfo: FinancialInformationEntity) {
+    return {
+      id: financialInfo.id,
+      auditReport: financialInfo.auditReport
+        ? {
+            id: financialInfo.auditReport.id,
+            documentType: financialInfo.auditReport.documentType,
+            documentName: financialInfo.auditReport.documentName,
+            periodStart: financialInfo.auditReport.periodStart,
+            periodEnd: financialInfo.auditReport.periodEnd,
+            assets: financialInfo.auditReport.assets,
+            liabilities: financialInfo.auditReport.liabilities,
+            equity: financialInfo.auditReport.equity,
+            revenue: financialInfo.auditReport.revenue,
+            netProfitLoss: financialInfo.auditReport.netProfitLoss,
+            remarks: financialInfo.auditReport.remarks ?? null,
+          }
+        : null,
+      taxReturns: financialInfo.taxReturns?.map((item) => ({
+        id: item.id,
+        documentType: item.documentType,
+        documentName: item.documentName,
+        periodStart: item.periodStart,
+        periodEnd: item.periodEnd,
+        remarks: item.remarks ?? null,
+      })) ?? [],
+      bankStatements: financialInfo.bankStatements?.map((item) => ({
+        id: item.id,
+        documentType: item.documentType,
+        documentName: item.documentName,
+        periodStart: item.periodStart,
+        periodEnd: item.periodEnd,
+        remarks: item.remarks ?? null,
+      })) ?? [],
+      others: financialInfo.others?.map((item) => ({
+        id: item.id,
+        documentType: item.documentType,
+        documentName: item.documentName,
+        periodStart: item.periodStart,
+        periodEnd: item.periodEnd,
+        remarks: item.remarks ?? null,
+      })) ?? [],
     };
   }
 }
