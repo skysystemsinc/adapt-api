@@ -440,6 +440,21 @@ export class WarehouseService {
       throw new NotFoundException('Warehouse operator application not found. Please create an application first.');
     }
 
+    if (application.status !== WarehouseOperatorApplicationStatus.DRAFT) {
+      throw new BadRequestException('Financial information can only be added while application is in draft status.');
+    }
+
+    // Check if financial information already exists for this application (only when creating new, not updating)
+    if (!dto.id) {
+      const existingFinancialInfo = await this.financialInformationRepository.findOne({
+        where: { applicationId: application.id }
+      });
+
+      if (existingFinancialInfo) {
+        throw new BadRequestException('Financial information already exists for this application. Please update instead of creating a new one.');
+      }
+    }
+
     const savedFinancialInfo = await this.dataSource.transaction(async (manager) => {
       const financialInfoRepo = manager.getRepository(FinancialInformationEntity);
       const auditReportRepo = manager.getRepository(AuditReportEntity);
@@ -477,44 +492,38 @@ export class WarehouseService {
           existingFinancialInfo.auditReportId = newAuditReport.id;
         }
 
-        // Delete existing tax returns, bank statements, and others
+        // Delete existing children and create new ones
         await taxReturnRepo.delete({ financialInformationId: existingFinancialInfo.id });
         await bankStatementRepo.delete({ financialInformationId: existingFinancialInfo.id });
         await othersRepo.delete({ financialInformationId: existingFinancialInfo.id });
 
-        // Create new tax returns
-        const taxReturnEntities = await taxReturnRepo.save(
-          dto.taxReturns.map((item) =>
-            taxReturnRepo.create({
-              ...item,
-              financialInformationId: existingFinancialInfo.id,
-            }),
-          ),
+        // Create new tax return
+        const taxReturn = await taxReturnRepo.save(
+          taxReturnRepo.create({
+            ...dto.taxReturn,
+            financialInformationId: existingFinancialInfo.id,
+          }),
         );
 
-        // Create new bank statements
-        const bankStatementEntities = await bankStatementRepo.save(
-          dto.bankStatements.map((item) =>
-            bankStatementRepo.create({
-              ...item,
-              financialInformationId: existingFinancialInfo.id,
-            }),
-          ),
+        // Create new bank statement
+        const bankStatement = await bankStatementRepo.save(
+          bankStatementRepo.create({
+            ...dto.bankStatement,
+            financialInformationId: existingFinancialInfo.id,
+          }),
         );
 
         // Create new others
-        const othersEntities = await othersRepo.save(
-          dto.others.map((item) =>
-            othersRepo.create({
-              ...item,
-              financialInformationId: existingFinancialInfo.id,
-            }),
-          ),
+        const others = await othersRepo.save(
+          othersRepo.create({
+            ...dto.other,
+            financialInformationId: existingFinancialInfo.id,
+          }),
         );
 
-        existingFinancialInfo.taxReturns = taxReturnEntities;
-        existingFinancialInfo.bankStatements = bankStatementEntities;
-        existingFinancialInfo.others = othersEntities;
+        existingFinancialInfo.taxReturns = [taxReturn];
+        existingFinancialInfo.bankStatements = [bankStatement];
+        existingFinancialInfo.others = [others];
 
         await financialInfoRepo.save(existingFinancialInfo);
         return existingFinancialInfo;
@@ -530,39 +539,33 @@ export class WarehouseService {
       });
       await financialInfoRepo.save(financialInfo);
 
-      // Create tax returns
-      const taxReturnEntities = await taxReturnRepo.save(
-        dto.taxReturns.map((item) =>
-          taxReturnRepo.create({
-            ...item,
-            financialInformationId: financialInfo.id,
-          }),
-        ),
+      // Create tax return
+      const taxReturn = await taxReturnRepo.save(
+        taxReturnRepo.create({
+          ...dto.taxReturn,
+          financialInformationId: financialInfo.id,
+        }),
       );
 
-      // Create bank statements
-      const bankStatementEntities = await bankStatementRepo.save(
-        dto.bankStatements.map((item) =>
-          bankStatementRepo.create({
-            ...item,
-            financialInformationId: financialInfo.id,
-          }),
-        ),
+      // Create bank statement
+      const bankStatement = await bankStatementRepo.save(
+        bankStatementRepo.create({
+          ...dto.bankStatement,
+          financialInformationId: financialInfo.id,
+        }),
       );
 
       // Create others
-      const othersEntities = await othersRepo.save(
-        dto.others.map((item) =>
-          othersRepo.create({
-            ...item,
-            financialInformationId: financialInfo.id,
-          }),
-        ),
+      const others = await othersRepo.save(
+        othersRepo.create({
+          ...dto.other,
+          financialInformationId: financialInfo.id,
+        }),
       );
 
-      financialInfo.taxReturns = taxReturnEntities;
-      financialInfo.bankStatements = bankStatementEntities;
-      financialInfo.others = othersEntities;
+      financialInfo.taxReturns = [taxReturn];
+      financialInfo.bankStatements = [bankStatement];
+      financialInfo.others = [others];
 
       return financialInfo;
     });
@@ -879,30 +882,36 @@ export class WarehouseService {
             remarks: financialInfo.auditReport.remarks ?? null,
           }
         : null,
-      taxReturns: financialInfo.taxReturns?.map((item) => ({
-        id: item.id,
-        documentType: item.documentType,
-        documentName: item.documentName,
-        periodStart: item.periodStart,
-        periodEnd: item.periodEnd,
-        remarks: item.remarks ?? null,
-      })) ?? [],
-      bankStatements: financialInfo.bankStatements?.map((item) => ({
-        id: item.id,
-        documentType: item.documentType,
-        documentName: item.documentName,
-        periodStart: item.periodStart,
-        periodEnd: item.periodEnd,
-        remarks: item.remarks ?? null,
-      })) ?? [],
-      others: financialInfo.others?.map((item) => ({
-        id: item.id,
-        documentType: item.documentType,
-        documentName: item.documentName,
-        periodStart: item.periodStart,
-        periodEnd: item.periodEnd,
-        remarks: item.remarks ?? null,
-      })) ?? [],
+      taxReturn: financialInfo.taxReturns?.[0]
+        ? {
+            id: financialInfo.taxReturns[0].id,
+            documentType: financialInfo.taxReturns[0].documentType,
+            documentName: financialInfo.taxReturns[0].documentName,
+            periodStart: financialInfo.taxReturns[0].periodStart,
+            periodEnd: financialInfo.taxReturns[0].periodEnd,
+            remarks: financialInfo.taxReturns[0].remarks ?? null,
+          }
+        : null,
+      bankStatement: financialInfo.bankStatements?.[0]
+        ? {
+            id: financialInfo.bankStatements[0].id,
+            documentType: financialInfo.bankStatements[0].documentType,
+            documentName: financialInfo.bankStatements[0].documentName,
+            periodStart: financialInfo.bankStatements[0].periodStart,
+            periodEnd: financialInfo.bankStatements[0].periodEnd,
+            remarks: financialInfo.bankStatements[0].remarks ?? null,
+          }
+        : null,
+      other: financialInfo.others?.[0]
+        ? {
+            id: financialInfo.others[0].id,
+            documentType: financialInfo.others[0].documentType,
+            documentName: financialInfo.others[0].documentName,
+            periodStart: financialInfo.others[0].periodStart,
+            periodEnd: financialInfo.others[0].periodEnd,
+            remarks: financialInfo.others[0].remarks ?? null,
+          }
+        : null,
     };
   }
 }

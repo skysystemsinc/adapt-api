@@ -151,19 +151,16 @@ export class CreateFinancialInformationDto {
   @Type(() => AuditReportDto)
   auditReport!: AuditReportDto;
 
-  @IsArray()
-  @ValidateNested({ each: true })
+  @ValidateNested()
   @Type(() => TaxReturnDto)
-  taxReturns!: TaxReturnDto[];
+  taxReturn!: TaxReturnDto;
 
-  @IsArray()
-  @ValidateNested({ each: true })
+  @ValidateNested()
   @Type(() => BankStatementDto)
-  bankStatements!: BankStatementDto[];
+  bankStatement!: BankStatementDto;
 
-  @IsArray()
-  @ValidateNested({ each: true })
+  @ValidateNested()
   @Type(() => OthersDto)
-  others!: OthersDto[];
+  other!: OthersDto;
 }
 
