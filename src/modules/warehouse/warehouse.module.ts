@@ -19,6 +19,11 @@ import { TrainingsEntity } from './entities/hr/trainings.entity/trainings.entity
 import { ExperienceEntity } from './entities/hr/experience.entity/experience.entity';
 import { DeclarationEntity } from './entities/hr/declaration.entity/declaration.entity';
 import { Designation } from '../common/entities/designation.entity';
+import { FinancialInformationEntity } from './entities/financial-information.entity';
+import { AuditReportEntity } from './entities/financial/audit-report.entity';
+import { TaxReturnEntity } from './entities/financial/tax-return.entity';
+import { BankStatementEntity } from './entities/financial/bank-statement.entity';
+import { OthersEntity } from './entities/financial/others.entity';
 
 @Module({
   controllers: [WarehouseController],
@@ -39,6 +44,11 @@ import { Designation } from '../common/entities/designation.entity';
       ExperienceEntity,
       DeclarationEntity,
       Designation,
+      FinancialInformationEntity,
+      AuditReportEntity,
+      TaxReturnEntity,
+      BankStatementEntity,
+      OthersEntity,
     ]),
     forwardRef(() => AuthModule),
     JwtModule.registerAsync({

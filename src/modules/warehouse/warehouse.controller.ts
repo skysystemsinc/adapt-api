@@ -9,6 +9,7 @@ import { User } from '../users/entities/user.entity';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UpdateBankDetailsDto } from './dto/create-bank-details.dto';
 import { UpsertHrInformationDto } from './dto/create-hr-information.dto';
+import { CreateFinancialInformationDto } from './dto/create-financial-information.dto';
 
 @ApiTags('Warehouse')
 @ApiBearerAuth('JWT-auth')
@@ -35,7 +36,7 @@ export class WarehouseController {
   @ApiOperation({ summary: 'Create company information' })
   @ApiBearerAuth('JWT-auth')
   @ApiConsumes('multipart/form-data')
-  @ApiBody({ 
+  @ApiBody({
     type: CreateCompanyInformationRequestDto,
     description: 'Company information data with optional NTC certificate file'
   })
@@ -55,8 +56,8 @@ export class WarehouseController {
   ) {
     const user = request.user as User;
     return this.warehouseService.createCompanyInformation(
-      createCompanyInformationDto, 
-      user.id, 
+      createCompanyInformationDto,
+      user.id,
       id,
       ntcCertificateFile
     );
@@ -130,6 +131,19 @@ export class WarehouseController {
   ) {
     const user = request.user as User;
     return this.warehouseService.upsertHrInformation(applicationId, payload, user.id);
+  }
+
+  @ApiOperation({ summary: 'Create or update financial information' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiBody({ type: CreateFinancialInformationDto })
+  @Post('/operator/application/:applicationId/financial-information')
+  createFinancialInformation(
+    @Param('applicationId') applicationId: string,
+    @Body() payload: CreateFinancialInformationDto,
+    @Request() request: any,
+  ) {
+    const user = request.user as User;
+    return this.warehouseService.createFinancialInformation(applicationId, payload, user.id);
   }
 
   @ApiOperation({ summary: 'Update a bank details for a warehouse operator application' })
