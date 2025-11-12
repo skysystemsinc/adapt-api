@@ -28,6 +28,7 @@ import { TaxReturnEntity } from './entities/financial/tax-return.entity';
 import { BankStatementEntity } from './entities/financial/bank-statement.entity';
 import { OthersEntity } from './entities/financial/others.entity';
 import { CreateFinancialInformationDto } from './dto/create-financial-information.dto';
+import { CreateApplicantChecklistDto } from './dto/create-applicant-checklist.dto';
 
 @Injectable()
 export class WarehouseService {
@@ -50,6 +51,8 @@ export class WarehouseService {
     private readonly designationRepository: Repository<Designation>,
     @InjectRepository(FinancialInformationEntity)
     private readonly financialInformationRepository: Repository<FinancialInformationEntity>,
+    @InjectRepository(ApplicantChecklist)
+    private readonly applicantChecklistRepository: Repository<ApplicantChecklistEntity>,
     private readonly dataSource: DataSource,
   ) {
     // Ensure upload directory exists
@@ -872,6 +875,23 @@ export class WarehouseService {
       message: 'Financial information saved successfully',
       data: this.mapFinancialInformationEntityToResponse(hydratedFinancialInfo!),
     };
+  }
+
+  async createApplicantChecklist(applicationId: string, dto: CreateApplicantChecklistDto, userId: string) {
+    const application = await this.warehouseOperatorRepository.findOne({ where: { id: applicationId, userId } });
+    if (!application) {
+      throw new NotFoundException('Application not found');
+    }
+    
+    if (application.status !== WarehouseOperatorApplicationStatus.DRAFT) {
+      throw new BadRequestException('Applicant checklist can only be added while application is in draft status.');
+    }
+
+    const applicantChecklist = this.applicantChecklistRepository.create({
+      applicationId: application.id,
+      ...dto,
+    });
+    await this.applicantChecklistRepository.save(applicantChecklist);
   }
 
   /**
