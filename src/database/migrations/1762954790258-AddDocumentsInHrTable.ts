@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner } from "typeorm";
 
-export class AddedDocumentsInHrTable1762951655487 implements MigrationInterface {
-    name = 'AddedDocumentsInHrTable1762951655487'
+export class AddDocumentsInHrTable1762954790258 implements MigrationInterface {
+    name = 'AddDocumentsInHrTable1762954790258'
 
     public async up(queryRunner: QueryRunner): Promise<void> {
         await queryRunner.query(`ALTER TABLE "hr_personal_details" ADD "photographDocumentId" uuid`);

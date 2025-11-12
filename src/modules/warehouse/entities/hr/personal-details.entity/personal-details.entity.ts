@@ -15,7 +15,7 @@ export class PersonalDetailsEntity {
     designation: Designation;
 
     @Column({ nullable: true })
-    photographDocumentId?: string;
+    photographDocumentId?: string | null;
 
     @ManyToOne(() => WarehouseDocument, { onDelete: 'SET NULL' })
     @JoinColumn({ name: 'photographDocumentId' })
