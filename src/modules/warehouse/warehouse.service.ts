@@ -1058,6 +1058,17 @@ export class WarehouseService {
       throw new BadRequestException('Applicant checklist can only be added while application is in draft status.');
     }
 
+    // Check if applicant checklist already exists for this application (only when creating new, not updating)
+    if (!dto.id) {
+      const existingApplicantChecklist = await this.applicantChecklistRepository.findOne({
+        where: { applicationId: application.id }
+      });
+
+      if (existingApplicantChecklist) {
+        throw new BadRequestException('Applicant checklist already exists for this application. Please update instead of creating a new one.');
+      }
+    }
+
     // Upload files and map to DTO
     const uploadedDocumentIds = files ? await this.uploadApplicantChecklistFiles(files, userId, applicationId) : {};
     this.mapUploadedDocumentsToDto(dto, uploadedDocumentIds);
