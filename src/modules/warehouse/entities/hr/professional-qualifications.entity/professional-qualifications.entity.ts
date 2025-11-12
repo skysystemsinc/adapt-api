@@ -26,10 +26,10 @@ export class ProfessionalQualificationsEntity {
     membershipNumber: string | null;
 
     @Column({ nullable: true })
-    professionalCertificateDocumentId?: string | null;
+    professionalCertificate?: string | null;
 
     @ManyToOne(() => WarehouseDocument, { onDelete: "SET NULL" })
-    @JoinColumn({ name: "professionalCertificateDocumentId" })
+    @JoinColumn({ name: "professionalCertificate" })
     professionalCertificateDocument?: WarehouseDocument;
 
     @Column({ nullable: true })

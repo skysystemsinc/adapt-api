@@ -26,10 +26,10 @@ export class TrainingsEntity {
     dateOfCompletion: string;
 
     @Column({ nullable: true })
-    trainingCertificateDocumentId?: string | null;
+    trainingCertificate?: string | null;
 
     @ManyToOne(() => WarehouseDocument, { onDelete: "SET NULL" })
-    @JoinColumn({ name: "trainingCertificateDocumentId" })
+    @JoinColumn({ name: "trainingCertificate" })
     trainingCertificateDocument?: WarehouseDocument;
 
     @Column({ nullable: true })

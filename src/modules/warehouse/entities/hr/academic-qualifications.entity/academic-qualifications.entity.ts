@@ -26,10 +26,10 @@ export class AcademicQualificationsEntity {
     grade: string;
 
     @Column({ nullable: true })
-    academicCertificateDocumentId?: string | null;
+    academicCertificate?: string | null;
 
     @ManyToOne(() => WarehouseDocument, { onDelete: 'SET NULL' })
-    @JoinColumn({ name: 'academicCertificateDocumentId' })
+    @JoinColumn({ name: 'academicCertificate' })
     academicCertificateDocument?: WarehouseDocument;
 
     @Column({ nullable: true })

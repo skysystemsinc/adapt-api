@@ -15,10 +15,10 @@ export class PersonalDetailsEntity {
     designation: Designation;
 
     @Column({ nullable: true })
-    photographDocumentId?: string | null;
+    photograph?: string | null;
 
     @ManyToOne(() => WarehouseDocument, { onDelete: 'SET NULL' })
-    @JoinColumn({ name: 'photographDocumentId' })
+    @JoinColumn({ name: 'photograph' })
     photographDocument?: WarehouseDocument;
 
     @Column({ type: 'varchar', length: 100, nullable: false })

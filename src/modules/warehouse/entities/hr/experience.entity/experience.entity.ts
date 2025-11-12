@@ -32,10 +32,10 @@ export class ExperienceEntity {
     responsibilities: string | null;
 
     @Column({ nullable: true })
-    experienceLetterDocumentId?: string | null;
+    experienceLetter?: string | null;
 
     @ManyToOne(() => WarehouseDocument, { onDelete: "SET NULL" })
-    @JoinColumn({ name: "experienceLetterDocumentId" })
+    @JoinColumn({ name: "experienceLetter" })
     experienceLetterDocument?: WarehouseDocument;
 
     @Column({ nullable: true })
