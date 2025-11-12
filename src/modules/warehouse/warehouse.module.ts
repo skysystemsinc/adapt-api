@@ -24,6 +24,11 @@ import { AuditReportEntity } from './entities/financial/audit-report.entity';
 import { TaxReturnEntity } from './entities/financial/tax-return.entity';
 import { BankStatementEntity } from './entities/financial/bank-statement.entity';
 import { OthersEntity } from './entities/financial/others.entity';
+import { ApplicantChecklistEntity } from './entities/applicant-checklist.entity';
+import { HumanResourcesChecklistEntity } from './entities/checklist/human-resources.entity';
+import { FinancialSoundnessChecklistEntity } from './entities/checklist/financial-soundness.entity';
+import { RegistrationFeeChecklistEntity } from './entities/checklist/registration-fee.entity';
+import { DeclarationChecklistEntity } from './entities/checklist/declaration.entity';
 
 @Module({
   controllers: [WarehouseController],
@@ -49,6 +54,11 @@ import { OthersEntity } from './entities/financial/others.entity';
       TaxReturnEntity,
       BankStatementEntity,
       OthersEntity,
+      ApplicantChecklistEntity,
+      HumanResourcesChecklistEntity,
+      FinancialSoundnessChecklistEntity,
+      RegistrationFeeChecklistEntity,
+      DeclarationChecklistEntity,
     ]),
     forwardRef(() => AuthModule),
     JwtModule.registerAsync({

@@ -3,13 +3,22 @@ import { WarehouseService } from './warehouse.service';
 import { CreateBankDetailsDto, CreateCompanyInformationRequestDto, CreateWarehouseOperatorApplicationRequestDto } from './dto/create-warehouse.dto';
 import { UpdateWarehouseDto } from './dto/update-warehouse.dto';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
-import { ApiBearerAuth, ApiBody, ApiOperation, ApiTags, ApiConsumes } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiOperation, ApiTags, ApiConsumes, ApiParam, ApiResponse } from '@nestjs/swagger';
 import { AuthService } from '../auth/auth.service';
 import { User } from '../users/entities/user.entity';
 import { FileInterceptor, FileFieldsInterceptor } from '@nestjs/platform-express';
 import { UpdateBankDetailsDto } from './dto/create-bank-details.dto';
 import { UpsertHrInformationDto } from './dto/create-hr-information.dto';
 import { CreateFinancialInformationDto } from './dto/create-financial-information.dto';
+import { CreateApplicantChecklistDto } from './dto/create-applicant-checklist.dto';
+import {
+  ApplicantChecklistApiBodySchema,
+  ApplicantChecklistApiParam,
+  ApplicantChecklistApiResponseSchema,
+  ApplicantChecklistApiResponse400,
+  ApplicantChecklistApiResponse401,
+  ApplicantChecklistApiResponse404,
+} from './swagger/applicant-checklist.swagger';
 
 @ApiTags('Warehouse')
 @ApiBearerAuth('JWT-auth')
@@ -69,7 +78,7 @@ export class WarehouseController {
   @UseInterceptors(
     FileInterceptor('file', {
       limits: {
-        fileSize: 100 * 1024 * 1024, // 100MB max
+        fileSize: 10 * 1024 * 1024, // 10MB max
       },
     }),
   )
@@ -123,7 +132,7 @@ export class WarehouseController {
   @ApiOperation({ summary: 'Create or update HR information profile' })
   @ApiBearerAuth('JWT-auth')
   @ApiConsumes('multipart/form-data')
-  @ApiBody({ 
+  @ApiBody({
     type: UpsertHrInformationDto,
     description: 'HR information data with files (photograph, certificates, etc.)'
   })
@@ -136,7 +145,7 @@ export class WarehouseController {
       { name: 'experienceLetters', maxCount: 50 },
     ], {
       limits: {
-        fileSize: 100 * 1024 * 1024, // 100MB max per file
+        fileSize: 10 * 1024 * 1024, // 10MB max per file
       },
     }),
   )
@@ -166,8 +175,8 @@ export class WarehouseController {
 
     const user = request.user as User;
     return this.warehouseService.upsertHrInformation(
-      applicationId, 
-      payload, 
+      applicationId,
+      payload,
       user.id,
       files
     );
@@ -198,6 +207,71 @@ export class WarehouseController {
   ) {
     const user = request.user as User;
     return this.warehouseService.updateBankDetails(applicationId, bankDetailsId, updateBankDetailsDto, user.id);
+  }
+
+  @ApiOperation({ 
+    summary: 'Create or update applicant checklist for a warehouse operator application',
+    description: 'Submit applicant checklist with optional file uploads. Files are uploaded via multipart/form-data and linked to warehouse_documents table.'
+  })
+  @ApiBearerAuth('JWT-auth')
+  @ApiConsumes('multipart/form-data')
+  @ApiParam(ApplicantChecklistApiParam)
+  @ApiBody(ApplicantChecklistApiBodySchema)
+  @ApiResponse(ApplicantChecklistApiResponseSchema)
+  @ApiResponse(ApplicantChecklistApiResponse400)
+  @ApiResponse(ApplicantChecklistApiResponse401)
+  @ApiResponse(ApplicantChecklistApiResponse404)
+  @UseInterceptors(
+    FileFieldsInterceptor([
+      { name: 'qcPersonnelFile', maxCount: 1 },
+      { name: 'warehouseSupervisorFile', maxCount: 1 },
+      { name: 'dataEntryOperatorFile', maxCount: 1 },
+      { name: 'auditedFinancialStatementsFile', maxCount: 1 },
+      { name: 'positiveNetWorthFile', maxCount: 1 },
+      { name: 'noLoanDefaultsFile', maxCount: 1 },
+      { name: 'cleanCreditHistoryFile', maxCount: 1 },
+      { name: 'adequateWorkingCapitalFile', maxCount: 1 },
+      { name: 'validInsuranceCoverageFile', maxCount: 1 },
+      { name: 'noFinancialFraudFile', maxCount: 1 },
+      { name: 'bankPaymentSlip', maxCount: 1 },
+    ], {
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB max per file
+      },
+    }),
+  )
+  @Post('/operator/application/:applicationId/applicant-checklist')
+  createApplicantChecklist(
+    @Param('applicationId') applicationId: string,
+    @Body('data') dataString: string,
+    @UploadedFiles() files: {
+      qcPersonnelFile?: any[];
+      warehouseSupervisorFile?: any[];
+      dataEntryOperatorFile?: any[];
+      auditedFinancialStatementsFile?: any[];
+      positiveNetWorthFile?: any[];
+      noLoanDefaultsFile?: any[];
+      cleanCreditHistoryFile?: any[];
+      adequateWorkingCapitalFile?: any[];
+      validInsuranceCoverageFile?: any[];
+      noFinancialFraudFile?: any[];
+      bankPaymentSlip?: any[];
+    },
+    @Request() request: any,
+  ) {
+    if (!dataString) {
+      throw new BadRequestException('Data field is required');
+    }
+
+    let payload: CreateApplicantChecklistDto;
+    try {
+      payload = JSON.parse(dataString);
+    } catch (error) {
+      throw new BadRequestException('Invalid JSON in data field');
+    }
+
+    const user = request.user as User;
+    return this.warehouseService.createApplicantChecklist(applicationId, payload, user.id, files);
   }
 
   @Get()

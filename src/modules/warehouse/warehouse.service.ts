@@ -29,6 +29,11 @@ import { BankStatementEntity } from './entities/financial/bank-statement.entity'
 import { OthersEntity } from './entities/financial/others.entity';
 import { CreateFinancialInformationDto } from './dto/create-financial-information.dto';
 import { CreateApplicantChecklistDto } from './dto/create-applicant-checklist.dto';
+import { ApplicantChecklistEntity } from './entities/applicant-checklist.entity';
+import { FinancialSoundnessChecklistEntity } from './entities/checklist/financial-soundness.entity';
+import { DeclarationChecklistEntity } from './entities/checklist/declaration.entity';
+import { HumanResourcesChecklistEntity } from './entities/checklist/human-resources.entity';
+import { RegistrationFeeChecklistEntity } from './entities/checklist/registration-fee.entity';
 
 @Injectable()
 export class WarehouseService {
@@ -51,7 +56,7 @@ export class WarehouseService {
     private readonly designationRepository: Repository<Designation>,
     @InjectRepository(FinancialInformationEntity)
     private readonly financialInformationRepository: Repository<FinancialInformationEntity>,
-    @InjectRepository(ApplicantChecklist)
+    @InjectRepository(ApplicantChecklistEntity)
     private readonly applicantChecklistRepository: Repository<ApplicantChecklistEntity>,
     private readonly dataSource: DataSource,
   ) {
@@ -178,13 +183,13 @@ export class WarehouseService {
         'ntcCertificate'
       );
       ntcCertificateDocumentId = documentResult.id;
-      
+
       // Update company information with the ntcCertificate foreign key
       // Load the document entity and assign it to the company information
       const ntcCertificateDocument = await this.warehouseDocumentRepository.findOne({
         where: { id: ntcCertificateDocumentId }
       });
-      
+
       if (ntcCertificateDocument) {
         savedCompanyInformation.ntcCertificate = ntcCertificateDocument;
         await this.companyInformationRepository.save(savedCompanyInformation);
@@ -726,7 +731,7 @@ export class WarehouseService {
     const application = await this.warehouseOperatorRepository.findOne({
       where: { id: applicationId, userId },
     });
-    
+
     if (!application) {
       throw new NotFoundException('Warehouse operator application not found. Please create an application first.');
     }
@@ -877,21 +882,587 @@ export class WarehouseService {
     };
   }
 
-  async createApplicantChecklist(applicationId: string, dto: CreateApplicantChecklistDto, userId: string) {
-    const application = await this.warehouseOperatorRepository.findOne({ where: { id: applicationId, userId } });
-    if (!application) {
-      throw new NotFoundException('Application not found');
+  /**
+   * Upload applicant checklist files and return document IDs
+   */
+  private async uploadApplicantChecklistFiles(
+    files: any,
+    userId: string,
+    applicationId: string,
+  ): Promise<Record<string, string>> {
+    const uploadedDocumentIds: Record<string, string> = {};
+    const fileConfigs = [
+      { key: 'qcPersonnelFile', type: 'HumanResourcesChecklist' },
+      { key: 'warehouseSupervisorFile', type: 'HumanResourcesChecklist' },
+      { key: 'dataEntryOperatorFile', type: 'HumanResourcesChecklist' },
+      { key: 'auditedFinancialStatementsFile', type: 'FinancialSoundnessChecklist' },
+      { key: 'positiveNetWorthFile', type: 'FinancialSoundnessChecklist' },
+      { key: 'noLoanDefaultsFile', type: 'FinancialSoundnessChecklist' },
+      { key: 'cleanCreditHistoryFile', type: 'FinancialSoundnessChecklist' },
+      { key: 'adequateWorkingCapitalFile', type: 'FinancialSoundnessChecklist' },
+      { key: 'validInsuranceCoverageFile', type: 'FinancialSoundnessChecklist' },
+      { key: 'noFinancialFraudFile', type: 'FinancialSoundnessChecklist' },
+      { key: 'bankPaymentSlip', type: 'RegistrationFeeChecklist' },
+    ];
+
+    for (const config of fileConfigs) {
+      const fileArray = files?.[config.key];
+      if (fileArray && fileArray.length > 0) {
+        const doc = await this.uploadWarehouseDocument(
+          fileArray[0],
+          userId,
+          config.type,
+          applicationId,
+          config.key,
+        );
+        uploadedDocumentIds[config.key] = doc.id;
+      }
     }
-    
+
+    return uploadedDocumentIds;
+  }
+
+  /**
+   * Map uploaded document IDs to DTO
+   */
+  private mapUploadedDocumentsToDto(
+    dto: CreateApplicantChecklistDto,
+    uploadedDocumentIds: Record<string, string>,
+  ): void {
+    if (uploadedDocumentIds.qcPersonnelFile) {
+      dto.humanResources.qcPersonnelFile = uploadedDocumentIds.qcPersonnelFile;
+    }
+    if (uploadedDocumentIds.warehouseSupervisorFile) {
+      dto.humanResources.warehouseSupervisorFile = uploadedDocumentIds.warehouseSupervisorFile;
+    }
+    if (uploadedDocumentIds.dataEntryOperatorFile) {
+      dto.humanResources.dataEntryOperatorFile = uploadedDocumentIds.dataEntryOperatorFile;
+    }
+    if (uploadedDocumentIds.auditedFinancialStatementsFile) {
+      dto.financialSoundness.auditedFinancialStatementsFile = uploadedDocumentIds.auditedFinancialStatementsFile;
+    }
+    if (uploadedDocumentIds.positiveNetWorthFile) {
+      dto.financialSoundness.positiveNetWorthFile = uploadedDocumentIds.positiveNetWorthFile;
+    }
+    if (uploadedDocumentIds.noLoanDefaultsFile) {
+      dto.financialSoundness.noLoanDefaultsFile = uploadedDocumentIds.noLoanDefaultsFile;
+    }
+    if (uploadedDocumentIds.cleanCreditHistoryFile) {
+      dto.financialSoundness.cleanCreditHistoryFile = uploadedDocumentIds.cleanCreditHistoryFile;
+    }
+    if (uploadedDocumentIds.adequateWorkingCapitalFile) {
+      dto.financialSoundness.adequateWorkingCapitalFile = uploadedDocumentIds.adequateWorkingCapitalFile;
+    }
+    if (uploadedDocumentIds.validInsuranceCoverageFile) {
+      dto.financialSoundness.validInsuranceCoverageFile = uploadedDocumentIds.validInsuranceCoverageFile;
+    }
+    if (uploadedDocumentIds.noFinancialFraudFile) {
+      dto.financialSoundness.noFinancialFraudFile = uploadedDocumentIds.noFinancialFraudFile;
+    }
+    if (uploadedDocumentIds.bankPaymentSlip) {
+      dto.registrationFee.bankPaymentSlip = uploadedDocumentIds.bankPaymentSlip;
+    }
+  }
+
+  /**
+   * Validate that files are provided when corresponding booleans are true
+   */
+  private validateApplicantChecklistFiles(dto: CreateApplicantChecklistDto): void {
+    const validations = [
+      { condition: dto.humanResources.qcPersonnel, file: dto.humanResources.qcPersonnelFile, field: 'qcPersonnelFile' },
+      {
+        condition: dto.humanResources.warehouseSupervisor,
+        file: dto.humanResources.warehouseSupervisorFile,
+        field: 'warehouseSupervisorFile',
+      },
+      {
+        condition: dto.humanResources.dataEntryOperator,
+        file: dto.humanResources.dataEntryOperatorFile,
+        field: 'dataEntryOperatorFile',
+      },
+      {
+        condition: dto.financialSoundness.auditedFinancialStatements,
+        file: dto.financialSoundness.auditedFinancialStatementsFile,
+        field: 'auditedFinancialStatementsFile',
+      },
+      {
+        condition: dto.financialSoundness.positiveNetWorth,
+        file: dto.financialSoundness.positiveNetWorthFile,
+        field: 'positiveNetWorthFile',
+      },
+      {
+        condition: dto.financialSoundness.noLoanDefaults,
+        file: dto.financialSoundness.noLoanDefaultsFile,
+        field: 'noLoanDefaultsFile',
+      },
+      {
+        condition: dto.financialSoundness.cleanCreditHistory,
+        file: dto.financialSoundness.cleanCreditHistoryFile,
+        field: 'cleanCreditHistoryFile',
+      },
+      {
+        condition: dto.financialSoundness.adequateWorkingCapital,
+        file: dto.financialSoundness.adequateWorkingCapitalFile,
+        field: 'adequateWorkingCapitalFile',
+      },
+      {
+        condition: dto.financialSoundness.validInsuranceCoverage,
+        file: dto.financialSoundness.validInsuranceCoverageFile,
+        field: 'validInsuranceCoverageFile',
+      },
+      {
+        condition: dto.financialSoundness.noFinancialFraud,
+        file: dto.financialSoundness.noFinancialFraudFile,
+        field: 'noFinancialFraudFile',
+      },
+    ];
+
+    for (const validation of validations) {
+      if (validation.condition && !validation.file) {
+        throw new BadRequestException(`${validation.field} is required when the corresponding boolean is true`);
+      }
+    }
+
+    if (!dto.registrationFee.bankPaymentSlip) {
+      throw new BadRequestException('bankPaymentSlip is required');
+    }
+  }
+
+  async createApplicantChecklist(
+    applicationId: string,
+    dto: CreateApplicantChecklistDto,
+    userId: string,
+    files?: {
+      qcPersonnelFile?: any[];
+      warehouseSupervisorFile?: any[];
+      dataEntryOperatorFile?: any[];
+      auditedFinancialStatementsFile?: any[];
+      positiveNetWorthFile?: any[];
+      noLoanDefaultsFile?: any[];
+      cleanCreditHistoryFile?: any[];
+      adequateWorkingCapitalFile?: any[];
+      validInsuranceCoverageFile?: any[];
+      noFinancialFraudFile?: any[];
+      bankPaymentSlip?: any[];
+    },
+  ) {
+    const application = await this.warehouseOperatorRepository.findOne({
+      where: { id: applicationId, userId },
+    });
+
+    if (!application) {
+      throw new NotFoundException('Warehouse operator application not found. Please create an application first.');
+    }
+
     if (application.status !== WarehouseOperatorApplicationStatus.DRAFT) {
       throw new BadRequestException('Applicant checklist can only be added while application is in draft status.');
     }
 
-    const applicantChecklist = this.applicantChecklistRepository.create({
-      applicationId: application.id,
-      ...dto,
+    // Upload files and map to DTO
+    const uploadedDocumentIds = files ? await this.uploadApplicantChecklistFiles(files, userId, applicationId) : {};
+    this.mapUploadedDocumentsToDto(dto, uploadedDocumentIds);
+
+    // Validate required files
+    this.validateApplicantChecklistFiles(dto);
+
+    const savedApplicantChecklist = await this.dataSource.transaction(async (manager) => {
+      const repos = {
+        applicantChecklist: manager.getRepository(ApplicantChecklistEntity),
+        humanResources: manager.getRepository(HumanResourcesChecklistEntity),
+        financialSoundness: manager.getRepository(FinancialSoundnessChecklistEntity),
+        registrationFee: manager.getRepository(RegistrationFeeChecklistEntity),
+        declaration: manager.getRepository(DeclarationChecklistEntity),
+        document: manager.getRepository(WarehouseDocument),
+      };
+
+      const assignDocument = this.createAssignDocumentFunction(repos.document, userId);
+      const assignDocuments = this.createBatchAssignDocumentsFunction(assignDocument);
+
+      if (dto.id) {
+        return await this.updateApplicantChecklist(
+          dto,
+          application,
+          repos,
+          assignDocuments,
+        );
+      }
+
+      return await this.createNewApplicantChecklist(
+        dto,
+        application,
+        repos,
+        assignDocuments,
+      );
     });
-    await this.applicantChecklistRepository.save(applicantChecklist);
+
+    application.status = WarehouseOperatorApplicationStatus.PENDING;
+    await this.warehouseOperatorRepository.save(application);
+
+    const hydratedApplicantChecklist = await this.applicantChecklistRepository.findOne({
+      where: { id: savedApplicantChecklist.id },
+      relations: ['humanResources', 'financialSoundness', 'registrationFee', 'declaration'],
+    });
+
+    return {
+      message: 'Applicant checklist saved successfully',
+      data: this.mapApplicantChecklistEntityToResponse(hydratedApplicantChecklist!),
+    };
+  }
+
+  /**
+   * Create assign document function for transaction
+   */
+  private createAssignDocumentFunction(documentRepo: Repository<WarehouseDocument>, userId: string) {
+    return async (
+      documentId: string | undefined | null,
+      documentableType: string,
+      documentType: string,
+      documentableId: string,
+    ) => {
+      if (!documentId) return;
+
+      const document = await documentRepo.findOne({ where: { id: documentId } });
+      if (!document) {
+        throw new NotFoundException('Document not found');
+      }
+
+      if (document.userId !== userId) {
+        throw new BadRequestException('You are not allowed to use this document reference');
+      }
+
+      document.documentableType = documentableType;
+      document.documentableId = documentableId;
+      document.documentType = documentType;
+      await documentRepo.save(document);
+    };
+  }
+
+  /**
+   * Create batch assign documents function
+   */
+  private createBatchAssignDocumentsFunction(assignDocument: Function) {
+    return async (
+      documents: Array<{ id: string | undefined | null; type: string; documentType: string; entityId: string }>,
+    ) => {
+      await Promise.all(
+        documents.map((doc) => assignDocument(doc.id, doc.type, doc.documentType, doc.entityId)),
+      );
+    };
+  }
+
+  /**
+   * Update existing applicant checklist
+   */
+  private async updateApplicantChecklist(
+    dto: CreateApplicantChecklistDto,
+    application: WarehouseOperatorApplicationRequest,
+    repos: any,
+    assignDocuments: Function,
+  ) {
+    const existingApplicantChecklist = await repos.applicantChecklist.findOne({
+      where: { id: dto.id, applicationId: application.id },
+      relations: ['humanResources', 'financialSoundness', 'registrationFee', 'declaration'],
+    });
+
+    if (!existingApplicantChecklist) {
+      throw new NotFoundException('Applicant checklist not found for this application.');
+    }
+
+    // Update or create Human Resources
+    let hrEntity: HumanResourcesChecklistEntity;
+    if (existingApplicantChecklist.humanResources) {
+      hrEntity = await this.updateHumanResources(existingApplicantChecklist.humanResources, dto.humanResources, repos.humanResources);
+    } else {
+      hrEntity = await this.createHumanResources(dto.humanResources, existingApplicantChecklist, repos.humanResources);
+      existingApplicantChecklist.humanResources = hrEntity;
+      existingApplicantChecklist.humanResourcesId = hrEntity.id;
+    }
+
+    await assignDocuments([
+      {
+        id: hrEntity.qcPersonnelFile ?? dto.humanResources.qcPersonnelFile ?? null,
+        type: 'HumanResourcesChecklist',
+        documentType: 'qcPersonnelFile',
+        entityId: hrEntity.id,
+      },
+      {
+        id: hrEntity.warehouseSupervisorFile ?? dto.humanResources.warehouseSupervisorFile ?? null,
+        type: 'HumanResourcesChecklist',
+        documentType: 'warehouseSupervisorFile',
+        entityId: hrEntity.id,
+      },
+      {
+        id: hrEntity.dataEntryOperatorFile ?? dto.humanResources.dataEntryOperatorFile ?? null,
+        type: 'HumanResourcesChecklist',
+        documentType: 'dataEntryOperatorFile',
+        entityId: hrEntity.id,
+      },
+    ]);
+
+    // Update or create Financial Soundness
+    const fsEntity = existingApplicantChecklist.financialSoundness
+      ? await this.updateFinancialSoundness(
+          existingApplicantChecklist.financialSoundness,
+          dto.financialSoundness,
+          repos.financialSoundness,
+        )
+      : await this.createFinancialSoundness(dto.financialSoundness, existingApplicantChecklist, repos.financialSoundness);
+
+    if (!existingApplicantChecklist.financialSoundness) {
+      existingApplicantChecklist.financialSoundness = fsEntity;
+      existingApplicantChecklist.financialSoundnessId = fsEntity.id;
+    }
+
+    await assignDocuments([
+      {
+        id: fsEntity.auditedFinancialStatementsFile ?? dto.financialSoundness.auditedFinancialStatementsFile ?? null,
+        type: 'FinancialSoundnessChecklist',
+        documentType: 'auditedFinancialStatementsFile',
+        entityId: fsEntity.id,
+      },
+      {
+        id: fsEntity.positiveNetWorthFile ?? dto.financialSoundness.positiveNetWorthFile ?? null,
+        type: 'FinancialSoundnessChecklist',
+        documentType: 'positiveNetWorthFile',
+        entityId: fsEntity.id,
+      },
+      {
+        id: fsEntity.noLoanDefaultsFile ?? dto.financialSoundness.noLoanDefaultsFile ?? null,
+        type: 'FinancialSoundnessChecklist',
+        documentType: 'noLoanDefaultsFile',
+        entityId: fsEntity.id,
+      },
+      {
+        id: fsEntity.cleanCreditHistoryFile ?? dto.financialSoundness.cleanCreditHistoryFile ?? null,
+        type: 'FinancialSoundnessChecklist',
+        documentType: 'cleanCreditHistoryFile',
+        entityId: fsEntity.id,
+      },
+      {
+        id: fsEntity.adequateWorkingCapitalFile ?? dto.financialSoundness.adequateWorkingCapitalFile ?? null,
+        type: 'FinancialSoundnessChecklist',
+        documentType: 'adequateWorkingCapitalFile',
+        entityId: fsEntity.id,
+      },
+      {
+        id: fsEntity.validInsuranceCoverageFile ?? dto.financialSoundness.validInsuranceCoverageFile ?? null,
+        type: 'FinancialSoundnessChecklist',
+        documentType: 'validInsuranceCoverageFile',
+        entityId: fsEntity.id,
+      },
+      {
+        id: fsEntity.noFinancialFraudFile ?? dto.financialSoundness.noFinancialFraudFile ?? null,
+        type: 'FinancialSoundnessChecklist',
+        documentType: 'noFinancialFraudFile',
+        entityId: fsEntity.id,
+      },
+    ]);
+
+    // Update or create Registration Fee
+    const rfEntity = existingApplicantChecklist.registrationFee
+      ? await this.updateRegistrationFee(
+          existingApplicantChecklist.registrationFee,
+          dto.registrationFee,
+          repos.registrationFee,
+        )
+      : await this.createRegistrationFee(dto.registrationFee, existingApplicantChecklist, repos.registrationFee);
+
+    if (!existingApplicantChecklist.registrationFee) {
+      existingApplicantChecklist.registrationFee = rfEntity;
+      existingApplicantChecklist.registrationFeeId = rfEntity.id;
+    }
+
+    await assignDocuments([
+      {
+        id: rfEntity.bankPaymentSlip ?? dto.registrationFee.bankPaymentSlip ?? null,
+        type: 'RegistrationFeeChecklist',
+        documentType: 'bankPaymentSlip',
+        entityId: rfEntity.id,
+      },
+    ]);
+
+    // Update or create Declaration
+    if (existingApplicantChecklist.declaration) {
+      Object.assign(existingApplicantChecklist.declaration, {
+        informationTrueComplete: dto.declaration.informationTrueComplete,
+        authorizeVerification: dto.declaration.authorizeVerification,
+      });
+      await repos.declaration.save(existingApplicantChecklist.declaration);
+    } else {
+      const newDeclaration = await repos.declaration.save(
+        repos.declaration.create({
+          ...dto.declaration,
+          applicantChecklist: existingApplicantChecklist,
+        }),
+      );
+      existingApplicantChecklist.declaration = newDeclaration;
+      existingApplicantChecklist.declarationId = newDeclaration.id;
+    }
+
+    await repos.applicantChecklist.save(existingApplicantChecklist);
+    return existingApplicantChecklist;
+  }
+
+  /**
+   * Create new applicant checklist
+   */
+  private async createNewApplicantChecklist(
+    dto: CreateApplicantChecklistDto,
+    application: WarehouseOperatorApplicationRequest,
+    repos: any,
+    assignDocuments: Function,
+  ) {
+    const humanResources = await repos.humanResources.save(
+      repos.humanResources.create({
+        qcPersonnel: dto.humanResources.qcPersonnel,
+        warehouseSupervisor: dto.humanResources.warehouseSupervisor,
+        dataEntryOperator: dto.humanResources.dataEntryOperator,
+        qcPersonnelFile: dto.humanResources.qcPersonnelFile ?? null,
+        warehouseSupervisorFile: dto.humanResources.warehouseSupervisorFile ?? null,
+        dataEntryOperatorFile: dto.humanResources.dataEntryOperatorFile ?? null,
+      }),
+    );
+
+    const financialSoundness = await repos.financialSoundness.save(
+      repos.financialSoundness.create({
+        auditedFinancialStatements: dto.financialSoundness.auditedFinancialStatements,
+        positiveNetWorth: dto.financialSoundness.positiveNetWorth,
+        noLoanDefaults: dto.financialSoundness.noLoanDefaults,
+        cleanCreditHistory: dto.financialSoundness.cleanCreditHistory,
+        adequateWorkingCapital: dto.financialSoundness.adequateWorkingCapital,
+        validInsuranceCoverage: dto.financialSoundness.validInsuranceCoverage,
+        noFinancialFraud: dto.financialSoundness.noFinancialFraud,
+        auditedFinancialStatementsFile: dto.financialSoundness.auditedFinancialStatementsFile ?? null,
+        positiveNetWorthFile: dto.financialSoundness.positiveNetWorthFile ?? null,
+        noLoanDefaultsFile: dto.financialSoundness.noLoanDefaultsFile ?? null,
+        cleanCreditHistoryFile: dto.financialSoundness.cleanCreditHistoryFile ?? null,
+        adequateWorkingCapitalFile: dto.financialSoundness.adequateWorkingCapitalFile ?? null,
+        validInsuranceCoverageFile: dto.financialSoundness.validInsuranceCoverageFile ?? null,
+        noFinancialFraudFile: dto.financialSoundness.noFinancialFraudFile ?? null,
+      }),
+    );
+
+    const registrationFee = await repos.registrationFee.save(
+      repos.registrationFee.create({
+        bankPaymentSlip: dto.registrationFee.bankPaymentSlip ?? null,
+      }),
+    );
+
+    const declaration = await repos.declaration.save(
+      repos.declaration.create({
+        informationTrueComplete: dto.declaration.informationTrueComplete,
+        authorizeVerification: dto.declaration.authorizeVerification,
+      }),
+    );
+
+    const applicantChecklist = repos.applicantChecklist.create({
+      applicationId: application.id,
+      humanResourcesId: humanResources.id,
+      financialSoundnessId: financialSoundness.id,
+      registrationFeeId: registrationFee.id,
+      declarationId: declaration.id,
+      humanResources,
+      financialSoundness,
+      registrationFee,
+      declaration,
+    });
+    await repos.applicantChecklist.save(applicantChecklist);
+
+    // Assign documents
+    await assignDocuments([
+      { id: dto.humanResources.qcPersonnelFile ?? null, type: 'HumanResourcesChecklist', documentType: 'qcPersonnelFile', entityId: humanResources.id },
+      { id: dto.humanResources.warehouseSupervisorFile ?? null, type: 'HumanResourcesChecklist', documentType: 'warehouseSupervisorFile', entityId: humanResources.id },
+      { id: dto.humanResources.dataEntryOperatorFile ?? null, type: 'HumanResourcesChecklist', documentType: 'dataEntryOperatorFile', entityId: humanResources.id },
+      { id: dto.financialSoundness.auditedFinancialStatementsFile ?? null, type: 'FinancialSoundnessChecklist', documentType: 'auditedFinancialStatementsFile', entityId: financialSoundness.id },
+      { id: dto.financialSoundness.positiveNetWorthFile ?? null, type: 'FinancialSoundnessChecklist', documentType: 'positiveNetWorthFile', entityId: financialSoundness.id },
+      { id: dto.financialSoundness.noLoanDefaultsFile ?? null, type: 'FinancialSoundnessChecklist', documentType: 'noLoanDefaultsFile', entityId: financialSoundness.id },
+      { id: dto.financialSoundness.cleanCreditHistoryFile ?? null, type: 'FinancialSoundnessChecklist', documentType: 'cleanCreditHistoryFile', entityId: financialSoundness.id },
+      { id: dto.financialSoundness.adequateWorkingCapitalFile ?? null, type: 'FinancialSoundnessChecklist', documentType: 'adequateWorkingCapitalFile', entityId: financialSoundness.id },
+      { id: dto.financialSoundness.validInsuranceCoverageFile ?? null, type: 'FinancialSoundnessChecklist', documentType: 'validInsuranceCoverageFile', entityId: financialSoundness.id },
+      { id: dto.financialSoundness.noFinancialFraudFile ?? null, type: 'FinancialSoundnessChecklist', documentType: 'noFinancialFraudFile', entityId: financialSoundness.id },
+      { id: dto.registrationFee.bankPaymentSlip ?? null, type: 'RegistrationFeeChecklist', documentType: 'bankPaymentSlip', entityId: registrationFee.id },
+    ]);
+
+    return applicantChecklist;
+  }
+
+  /**
+   * Update Human Resources entity
+   */
+  private async updateHumanResources(
+    existing: HumanResourcesChecklistEntity,
+    dto: any,
+    repo: Repository<HumanResourcesChecklistEntity>,
+  ) {
+    Object.assign(existing, {
+      qcPersonnel: dto.qcPersonnel,
+      warehouseSupervisor: dto.warehouseSupervisor,
+      dataEntryOperator: dto.dataEntryOperator,
+      qcPersonnelFile: dto.qcPersonnelFile ?? existing.qcPersonnelFile,
+      warehouseSupervisorFile: dto.warehouseSupervisorFile ?? existing.warehouseSupervisorFile,
+      dataEntryOperatorFile: dto.dataEntryOperatorFile ?? existing.dataEntryOperatorFile,
+    });
+    return await repo.save(existing);
+  }
+
+  /**
+   * Create Human Resources entity
+   */
+  private async createHumanResources(
+    dto: any,
+    checklist: ApplicantChecklistEntity,
+    repo: Repository<HumanResourcesChecklistEntity>,
+  ): Promise<HumanResourcesChecklistEntity> {
+    const entity = repo.create({ ...dto, applicantChecklist: checklist });
+    const saved = await repo.save(entity);
+    return Array.isArray(saved) ? saved[0] : saved;
+  }
+
+  /**
+   * Update Financial Soundness entity
+   */
+  private async updateFinancialSoundness(existing: any, dto: any, repo: Repository<any>) {
+    Object.assign(existing, {
+      auditedFinancialStatements: dto.auditedFinancialStatements,
+      positiveNetWorth: dto.positiveNetWorth,
+      noLoanDefaults: dto.noLoanDefaults,
+      cleanCreditHistory: dto.cleanCreditHistory,
+      adequateWorkingCapital: dto.adequateWorkingCapital,
+      validInsuranceCoverage: dto.validInsuranceCoverage,
+      noFinancialFraud: dto.noFinancialFraud,
+      auditedFinancialStatementsFile: dto.auditedFinancialStatementsFile ?? existing.auditedFinancialStatementsFile,
+      positiveNetWorthFile: dto.positiveNetWorthFile ?? existing.positiveNetWorthFile,
+      noLoanDefaultsFile: dto.noLoanDefaultsFile ?? existing.noLoanDefaultsFile,
+      cleanCreditHistoryFile: dto.cleanCreditHistoryFile ?? existing.cleanCreditHistoryFile,
+      adequateWorkingCapitalFile: dto.adequateWorkingCapitalFile ?? existing.adequateWorkingCapitalFile,
+      validInsuranceCoverageFile: dto.validInsuranceCoverageFile ?? existing.validInsuranceCoverageFile,
+      noFinancialFraudFile: dto.noFinancialFraudFile ?? existing.noFinancialFraudFile,
+    });
+    return await repo.save(existing);
+  }
+
+  /**
+   * Create Financial Soundness entity
+   */
+  private async createFinancialSoundness(dto: any, checklist: ApplicantChecklistEntity, repo: Repository<any>) {
+    return await repo.save(repo.create({ ...dto, applicantChecklist: checklist }));
+  }
+
+  /**
+   * Update Registration Fee entity
+   */
+  private async updateRegistrationFee(existing: any, dto: any, repo: Repository<any>) {
+    Object.assign(existing, {
+      bankPaymentSlip: dto.bankPaymentSlip ?? existing.bankPaymentSlip,
+    });
+    return await repo.save(existing);
+  }
+
+  /**
+   * Create Registration Fee entity
+   */
+  private async createRegistrationFee(dto: any, checklist: ApplicantChecklistEntity, repo: Repository<any>) {
+    return await repo.save(repo.create({ ...dto, applicantChecklist: checklist }));
   }
 
   /**
@@ -942,7 +1513,7 @@ export class WarehouseService {
     // Validate file type
     const allowedExtensions = ['.pdf', '.png', '.jpg', '.jpeg', '.doc', '.docx'];
     const fileExtension = path.extname(file.originalname).toLowerCase();
-    
+
     if (!allowedExtensions.includes(fileExtension)) {
       throw new BadRequestException(
         `File type '${fileExtension}' is not allowed. Allowed types: ${allowedExtensions.join(', ')}`,
@@ -1037,7 +1608,7 @@ export class WarehouseService {
       throw new NotFoundException('Application not found');
     }
 
-    if(![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(application.status)) {
+    if (![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(application.status)) {
       throw new BadRequestException('Cannot update bank details after application is approved or submitted');
     }
 
@@ -1106,22 +1677,22 @@ export class WarehouseService {
       id: hr.id,
       personalDetails: hr.personalDetails
         ? {
-            designationId: hr.personalDetails.designationId,
-            designationName: hr.personalDetails.designation?.name ?? null,
-            name: hr.personalDetails.name,
-            fathersHusbandName: hr.personalDetails.fathersHusbandName,
-            cnicPassport: hr.personalDetails.cnicPassport,
-            nationality: hr.personalDetails.nationality,
-            dateOfBirth: hr.personalDetails.dateOfBirth,
-            residentialAddress: hr.personalDetails.residentialAddress,
-            businessAddress: hr.personalDetails.businessAddress ?? null,
-            telephone: hr.personalDetails.telephone ?? null,
-            mobileNumber: hr.personalDetails.mobileNumber,
-            email: hr.personalDetails.email,
-            nationalTaxNumber: hr.personalDetails.nationalTaxNumber ?? null,
-            photograph: hr.personalDetails.photograph ?? null,
-            photographDocumentName: hr.personalDetails.photographDocument?.originalFileName ?? null,
-          }
+          designationId: hr.personalDetails.designationId,
+          designationName: hr.personalDetails.designation?.name ?? null,
+          name: hr.personalDetails.name,
+          fathersHusbandName: hr.personalDetails.fathersHusbandName,
+          cnicPassport: hr.personalDetails.cnicPassport,
+          nationality: hr.personalDetails.nationality,
+          dateOfBirth: hr.personalDetails.dateOfBirth,
+          residentialAddress: hr.personalDetails.residentialAddress,
+          businessAddress: hr.personalDetails.businessAddress ?? null,
+          telephone: hr.personalDetails.telephone ?? null,
+          mobileNumber: hr.personalDetails.mobileNumber,
+          email: hr.personalDetails.email,
+          nationalTaxNumber: hr.personalDetails.nationalTaxNumber ?? null,
+          photograph: hr.personalDetails.photograph ?? null,
+          photographDocumentName: hr.personalDetails.photographDocument?.originalFileName ?? null,
+        }
         : null,
       academicQualifications: hr.academicQualifications?.map((item) => ({
         id: item.id,
@@ -1171,11 +1742,11 @@ export class WarehouseService {
       })) ?? [],
       declaration: hr.declaration
         ? {
-            writeOffAvailed: hr.declaration.writeOffAvailed,
-            defaultOfFinance: hr.declaration.defaultOfFinance,
-            placementOnECL: hr.declaration.placementOnECL,
-            convictionPleaBargain: hr.declaration.convictionPleaBargain,
-          }
+          writeOffAvailed: hr.declaration.writeOffAvailed,
+          defaultOfFinance: hr.declaration.defaultOfFinance,
+          placementOnECL: hr.declaration.placementOnECL,
+          convictionPleaBargain: hr.declaration.convictionPleaBargain,
+        }
         : null,
     };
   }
@@ -1185,47 +1756,96 @@ export class WarehouseService {
       id: financialInfo.id,
       auditReport: financialInfo.auditReport
         ? {
-            id: financialInfo.auditReport.id,
-            documentType: financialInfo.auditReport.documentType,
-            documentName: financialInfo.auditReport.documentName,
-            periodStart: financialInfo.auditReport.periodStart,
-            periodEnd: financialInfo.auditReport.periodEnd,
-            assets: financialInfo.auditReport.assets,
-            liabilities: financialInfo.auditReport.liabilities,
-            equity: financialInfo.auditReport.equity,
-            revenue: financialInfo.auditReport.revenue,
-            netProfitLoss: financialInfo.auditReport.netProfitLoss,
-            remarks: financialInfo.auditReport.remarks ?? null,
-          }
+          id: financialInfo.auditReport.id,
+          documentType: financialInfo.auditReport.documentType,
+          documentName: financialInfo.auditReport.documentName,
+          periodStart: financialInfo.auditReport.periodStart,
+          periodEnd: financialInfo.auditReport.periodEnd,
+          assets: financialInfo.auditReport.assets,
+          liabilities: financialInfo.auditReport.liabilities,
+          equity: financialInfo.auditReport.equity,
+          revenue: financialInfo.auditReport.revenue,
+          netProfitLoss: financialInfo.auditReport.netProfitLoss,
+          remarks: financialInfo.auditReport.remarks ?? null,
+        }
         : null,
       taxReturn: financialInfo.taxReturns?.[0]
         ? {
-            id: financialInfo.taxReturns[0].id,
-            documentType: financialInfo.taxReturns[0].documentType,
-            documentName: financialInfo.taxReturns[0].documentName,
-            periodStart: financialInfo.taxReturns[0].periodStart,
-            periodEnd: financialInfo.taxReturns[0].periodEnd,
-            remarks: financialInfo.taxReturns[0].remarks ?? null,
-          }
+          id: financialInfo.taxReturns[0].id,
+          documentType: financialInfo.taxReturns[0].documentType,
+          documentName: financialInfo.taxReturns[0].documentName,
+          periodStart: financialInfo.taxReturns[0].periodStart,
+          periodEnd: financialInfo.taxReturns[0].periodEnd,
+          remarks: financialInfo.taxReturns[0].remarks ?? null,
+        }
         : null,
       bankStatement: financialInfo.bankStatements?.[0]
         ? {
-            id: financialInfo.bankStatements[0].id,
-            documentType: financialInfo.bankStatements[0].documentType,
-            documentName: financialInfo.bankStatements[0].documentName,
-            periodStart: financialInfo.bankStatements[0].periodStart,
-            periodEnd: financialInfo.bankStatements[0].periodEnd,
-            remarks: financialInfo.bankStatements[0].remarks ?? null,
-          }
+          id: financialInfo.bankStatements[0].id,
+          documentType: financialInfo.bankStatements[0].documentType,
+          documentName: financialInfo.bankStatements[0].documentName,
+          periodStart: financialInfo.bankStatements[0].periodStart,
+          periodEnd: financialInfo.bankStatements[0].periodEnd,
+          remarks: financialInfo.bankStatements[0].remarks ?? null,
+        }
         : null,
       other: financialInfo.others?.[0]
         ? {
-            id: financialInfo.others[0].id,
-            documentType: financialInfo.others[0].documentType,
-            documentName: financialInfo.others[0].documentName,
-            periodStart: financialInfo.others[0].periodStart,
-            periodEnd: financialInfo.others[0].periodEnd,
-            remarks: financialInfo.others[0].remarks ?? null,
+           id: financialInfo.others[0].id,
+           documentType: financialInfo.others[0].documentType,
+           documentName: financialInfo.others[0].documentName,
+           periodStart: financialInfo.others[0].periodStart,
+           periodEnd: financialInfo.others[0].periodEnd,
+           remarks: financialInfo.others[0].remarks ?? null,
+         }
+        : null,
+    };
+  }
+
+  private mapApplicantChecklistEntityToResponse(checklist: ApplicantChecklistEntity) {
+    return {
+      id: checklist.id,
+      humanResources: checklist.humanResources
+        ? {
+            id: checklist.humanResources.id,
+            qcPersonnel: checklist.humanResources.qcPersonnel,
+            qcPersonnelFile: checklist.humanResources.qcPersonnelFile ?? null,
+            warehouseSupervisor: checklist.humanResources.warehouseSupervisor,
+            warehouseSupervisorFile: checklist.humanResources.warehouseSupervisorFile ?? null,
+            dataEntryOperator: checklist.humanResources.dataEntryOperator,
+            dataEntryOperatorFile: checklist.humanResources.dataEntryOperatorFile ?? null,
+          }
+        : null,
+      financialSoundness: checklist.financialSoundness
+        ? {
+            id: checklist.financialSoundness.id,
+            auditedFinancialStatements: checklist.financialSoundness.auditedFinancialStatements,
+            auditedFinancialStatementsFile: checklist.financialSoundness.auditedFinancialStatementsFile ?? null,
+            positiveNetWorth: checklist.financialSoundness.positiveNetWorth,
+            positiveNetWorthFile: checklist.financialSoundness.positiveNetWorthFile ?? null,
+            noLoanDefaults: checklist.financialSoundness.noLoanDefaults,
+            noLoanDefaultsFile: checklist.financialSoundness.noLoanDefaultsFile ?? null,
+            cleanCreditHistory: checklist.financialSoundness.cleanCreditHistory,
+            cleanCreditHistoryFile: checklist.financialSoundness.cleanCreditHistoryFile ?? null,
+            adequateWorkingCapital: checklist.financialSoundness.adequateWorkingCapital,
+            adequateWorkingCapitalFile: checklist.financialSoundness.adequateWorkingCapitalFile ?? null,
+            validInsuranceCoverage: checklist.financialSoundness.validInsuranceCoverage,
+            validInsuranceCoverageFile: checklist.financialSoundness.validInsuranceCoverageFile ?? null,
+            noFinancialFraud: checklist.financialSoundness.noFinancialFraud,
+            noFinancialFraudFile: checklist.financialSoundness.noFinancialFraudFile ?? null,
+          }
+        : null,
+      registrationFee: checklist.registrationFee
+        ? {
+            id: checklist.registrationFee.id,
+            bankPaymentSlip: checklist.registrationFee.bankPaymentSlip ?? null,
+          }
+        : null,
+      declaration: checklist.declaration
+        ? {
+            id: checklist.declaration.id,
+            informationTrueComplete: checklist.declaration.informationTrueComplete,
+            authorizeVerification: checklist.declaration.authorizeVerification,
           }
         : null,
     };
