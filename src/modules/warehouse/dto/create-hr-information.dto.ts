@@ -19,8 +19,11 @@ export class HrPersonalDetailsDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(200)
   designationName?: string;
+
+  @IsOptional()
+  @IsString()
+  photographDocumentId?: string;
 
   @IsString()
   @IsNotEmpty()
@@ -93,6 +96,10 @@ export class HrAcademicQualificationDto {
   @IsOptional()
   @IsString()
   grade?: string;
+
+  @IsOptional()
+  @IsString()
+  academicCertificateDocumentId?: string;
 }
 
 export class HrProfessionalQualificationDto {
@@ -119,6 +126,10 @@ export class HrProfessionalQualificationDto {
   @IsOptional()
   @IsString()
   membershipNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  professionalCertificateDocumentId?: string;
 }
 
 export class HrTrainingDto {
@@ -145,6 +156,10 @@ export class HrTrainingDto {
   @IsString()
   @IsNotEmpty()
   dateOfCompletion!: string;
+
+  @IsOptional()
+  @IsString()
+  trainingCertificateDocumentId?: string;
 }
 
 export class HrExperienceDto {
@@ -179,6 +194,10 @@ export class HrExperienceDto {
   @IsOptional()
   @IsString()
   responsibilities?: string;
+
+  @IsOptional()
+  @IsString()
+  experienceLetterDocumentId?: string;
 }
 
 export class HrDeclarationDto {

@@ -221,6 +221,32 @@ export class WarehouseService {
       const experienceRepo = manager.getRepository(ExperienceEntity);
       const declarationRepo = manager.getRepository(DeclarationEntity);
       const designationRepo = manager.getRepository(Designation);
+      const documentRepo = manager.getRepository(WarehouseDocument);
+
+      const assignDocument = async (
+        documentId: string | undefined | null,
+        documentableType: string,
+        documentType: string,
+        documentableId: string,
+      ) => {
+        if (!documentId) {
+          return;
+        }
+
+        const document = await documentRepo.findOne({ where: { id: documentId } });
+        if (!document) {
+          throw new NotFoundException('Document not found');
+        }
+
+        if (document.userId !== userId) {
+          throw new BadRequestException('You are not allowed to use this document reference');
+        }
+
+        document.documentableType = documentableType;
+        document.documentableId = documentableId;
+        document.documentType = documentType;
+        await documentRepo.save(document);
+      };
 
       const resolveDesignationId = async (input?: string | null): Promise<string | null> => {
         if (!input) {
@@ -275,8 +301,16 @@ export class WarehouseService {
           ...dto.personalDetails,
           designationId: resolvedDesignationId ?? existingHr.personalDetails.designationId ?? undefined,
           dateOfBirth: normalizeDate(dto.personalDetails.dateOfBirth),
+          photographDocumentId: dto.personalDetails.photographDocumentId ?? existingHr.personalDetails.photographDocumentId ?? undefined,
         });
         await personalRepo.save(existingHr.personalDetails);
+
+        await assignDocument(
+          existingHr.personalDetails.photographDocumentId ?? dto.personalDetails.photographDocumentId ?? null,
+          'HrPersonalDetails',
+          'photograph',
+          existingHr.personalDetails.id,
+        );
 
         await academicRepo.delete({ hrId: existingHr.id });
         await professionalRepo.delete({ hrId: existingHr.id });
@@ -287,8 +321,20 @@ export class WarehouseService {
           dto.academicQualifications.map((item) =>
             academicRepo.create({
               ...item,
+              academicCertificateDocumentId: item.academicCertificateDocumentId ?? null,
               hrId: existingHr.id,
             }),
+          ),
+        );
+
+        await Promise.all(
+          academicEntities.map((entity, idx) =>
+            assignDocument(
+              dto.academicQualifications[idx]?.academicCertificateDocumentId ?? null,
+              'HrAcademicQualification',
+              'academicCertificate',
+              entity.id,
+            ),
           ),
         );
 
@@ -296,8 +342,20 @@ export class WarehouseService {
           dto.professionalQualifications.map((item) =>
             professionalRepo.create({
               ...item,
+              professionalCertificateDocumentId: item.professionalCertificateDocumentId ?? null,
               hrId: existingHr.id,
             }),
+          ),
+        );
+
+        await Promise.all(
+          professionalEntities.map((entity, idx) =>
+            assignDocument(
+              dto.professionalQualifications[idx]?.professionalCertificateDocumentId ?? null,
+              'HrProfessionalQualification',
+              'professionalCertificate',
+              entity.id,
+            ),
           ),
         );
 
@@ -305,8 +363,20 @@ export class WarehouseService {
           dto.trainings.map((item) =>
             trainingsRepo.create({
               ...item,
+              trainingCertificateDocumentId: item.trainingCertificateDocumentId ?? null,
               hrId: existingHr.id,
             }),
+          ),
+        );
+
+        await Promise.all(
+          trainingEntities.map((entity, idx) =>
+            assignDocument(
+              dto.trainings[idx]?.trainingCertificateDocumentId ?? null,
+              'HrTraining',
+              'trainingCertificate',
+              entity.id,
+            ),
           ),
         );
 
@@ -314,8 +384,20 @@ export class WarehouseService {
           dto.experiences.map((item) =>
             experienceRepo.create({
               ...item,
+              experienceLetterDocumentId: item.experienceLetterDocumentId ?? null,
               hrId: existingHr.id,
             }),
+          ),
+        );
+
+        await Promise.all(
+          experienceEntities.map((entity, idx) =>
+            assignDocument(
+              dto.experiences[idx]?.experienceLetterDocumentId ?? null,
+              'HrExperience',
+              'experienceLetter',
+              entity.id,
+            ),
           ),
         );
 
@@ -341,8 +423,16 @@ export class WarehouseService {
         ...dto.personalDetails,
         designationId: resolvedDesignationId ?? undefined,
         dateOfBirth: normalizeDate(dto.personalDetails.dateOfBirth),
+        photographDocumentId: dto.personalDetails.photographDocumentId ?? undefined,
       });
       await personalRepo.save(personalDetails);
+
+      await assignDocument(
+        dto.personalDetails.photographDocumentId ?? null,
+        'HrPersonalDetails',
+        'photograph',
+        personalDetails.id,
+      );
 
       const declaration = declarationRepo.create(dto.declaration);
       await declarationRepo.save(declaration);
@@ -360,8 +450,20 @@ export class WarehouseService {
         dto.academicQualifications.map((item) =>
           academicRepo.create({
             ...item,
+            academicCertificateDocumentId: item.academicCertificateDocumentId ?? null,
             hrId: hr.id,
           }),
+        ),
+      );
+
+      await Promise.all(
+        academicEntities.map((entity, idx) =>
+          assignDocument(
+            dto.academicQualifications[idx]?.academicCertificateDocumentId ?? null,
+            'HrAcademicQualification',
+            'academicCertificate',
+            entity.id,
+          ),
         ),
       );
 
@@ -369,8 +471,20 @@ export class WarehouseService {
         dto.professionalQualifications.map((item) =>
           professionalRepo.create({
             ...item,
+            professionalCertificateDocumentId: item.professionalCertificateDocumentId ?? null,
             hrId: hr.id,
           }),
+        ),
+      );
+
+      await Promise.all(
+        professionalEntities.map((entity, idx) =>
+          assignDocument(
+            dto.professionalQualifications[idx]?.professionalCertificateDocumentId ?? null,
+            'HrProfessionalQualification',
+            'professionalCertificate',
+            entity.id,
+          ),
         ),
       );
 
@@ -378,8 +492,20 @@ export class WarehouseService {
         dto.trainings.map((item) =>
           trainingsRepo.create({
             ...item,
+            trainingCertificateDocumentId: item.trainingCertificateDocumentId ?? null,
             hrId: hr.id,
           }),
+        ),
+      );
+
+      await Promise.all(
+        trainingEntities.map((entity, idx) =>
+          assignDocument(
+            dto.trainings[idx]?.trainingCertificateDocumentId ?? null,
+            'HrTraining',
+            'trainingCertificate',
+            entity.id,
+          ),
         ),
       );
 
@@ -387,8 +513,20 @@ export class WarehouseService {
         dto.experiences.map((item) =>
           experienceRepo.create({
             ...item,
+            experienceLetterDocumentId: item.experienceLetterDocumentId ?? null,
             hrId: hr.id,
           }),
+        ),
+      );
+
+      await Promise.all(
+        experienceEntities.map((entity, idx) =>
+          assignDocument(
+            dto.experiences[idx]?.experienceLetterDocumentId ?? null,
+            'HrExperience',
+            'experienceLetter',
+            entity.id,
+          ),
         ),
       );
 
@@ -405,10 +543,15 @@ export class WarehouseService {
       relations: [
         'personalDetails',
         'personalDetails.designation',
+        'personalDetails.photographDocument',
         'academicQualifications',
+        'academicQualifications.academicCertificateDocument',
         'professionalQualifications',
+        'professionalQualifications.professionalCertificateDocument',
         'trainings',
+        'trainings.trainingCertificateDocument',
         'experiences',
+        'experiences.experienceLetterDocument',
         'declaration',
       ],
     });
@@ -637,13 +780,17 @@ export class WarehouseService {
             fathersHusbandName: hr.personalDetails.fathersHusbandName,
             cnicPassport: hr.personalDetails.cnicPassport,
             nationality: hr.personalDetails.nationality,
-            dateOfBirth: hr.personalDetails.dateOfBirth,
+            dateOfBirth: hr.personalDetails.dateOfBirth
+              ? hr.personalDetails.dateOfBirth.toISOString().split('T')[0]
+              : null,
             residentialAddress: hr.personalDetails.residentialAddress,
             businessAddress: hr.personalDetails.businessAddress ?? null,
             telephone: hr.personalDetails.telephone ?? null,
             mobileNumber: hr.personalDetails.mobileNumber,
             email: hr.personalDetails.email,
             nationalTaxNumber: hr.personalDetails.nationalTaxNumber ?? null,
+            photographDocumentId: hr.personalDetails.photographDocumentId ?? null,
+            photographDocumentName: hr.personalDetails.photographDocument?.originalFileName ?? null,
           }
         : null,
       academicQualifications: hr.academicQualifications?.map((item) => ({
@@ -654,6 +801,8 @@ export class WarehouseService {
         country: item.country,
         yearOfPassing: item.yearOfPassing,
         grade: item.grade ?? null,
+        academicCertificateDocumentId: item.academicCertificateDocumentId ?? null,
+        academicCertificateDocumentName: item.academicCertificateDocument?.originalFileName ?? null,
       })) ?? [],
       professionalQualifications: hr.professionalQualifications?.map((item) => ({
         id: item.id,
@@ -663,6 +812,8 @@ export class WarehouseService {
         dateOfAward: item.dateOfAward,
         validity: item.validity ?? null,
         membershipNumber: item.membershipNumber ?? null,
+        professionalCertificateDocumentId: item.professionalCertificateDocumentId ?? null,
+        professionalCertificateDocumentName: item.professionalCertificateDocument?.originalFileName ?? null,
       })) ?? [],
       trainings: hr.trainings?.map((item) => ({
         id: item.id,
@@ -672,6 +823,8 @@ export class WarehouseService {
         durationStart: item.durationStart,
         durationEnd: item.durationEnd,
         dateOfCompletion: item.dateOfCompletion,
+        trainingCertificateDocumentId: item.trainingCertificateDocumentId ?? null,
+        trainingCertificateDocumentName: item.trainingCertificateDocument?.originalFileName ?? null,
       })) ?? [],
       experiences: hr.experiences?.map((item) => ({
         id: item.id,
@@ -683,6 +836,8 @@ export class WarehouseService {
         dateOfLeaving: item.dateOfLeaving ?? null,
         duration: item.duration ?? null,
         responsibilities: item.responsibilities ?? null,
+        experienceLetterDocumentId: item.experienceLetterDocumentId ?? null,
+        experienceLetterDocumentName: item.experienceLetterDocument?.originalFileName ?? null,
       })) ?? [],
       declaration: hr.declaration
         ? {
