@@ -35,6 +35,7 @@ import { DeclarationChecklistEntity } from './entities/checklist/declaration.ent
 import { HumanResourcesChecklistEntity } from './entities/checklist/human-resources.entity';
 import { RegistrationFeeChecklistEntity } from './entities/checklist/registration-fee.entity';
 import { ListWarehouseOperatorApplicationDto } from './dto/list-warehouse.dto';
+import { CreateAuthorizedSignatoryDto } from './dto/create-authorized-signatory.dto';
 
 @Injectable()
 export class WarehouseService {
@@ -150,6 +151,36 @@ export class WarehouseService {
     return {
       message: 'Warehouse authorized signatories saved successfully',
       warehouseOperatorApplicationRequestId: warehouseOperatorApplication.applicationId,
+    };
+  }
+
+  async createAuthorizedSignatory(id: string, createAuthorizedSignatoryDto: CreateAuthorizedSignatoryDto, userId: string) {
+    const application = await this.warehouseOperatorRepository.findOne({ where: { id, userId } });
+    if (!application) {
+      throw new NotFoundException('Warehouse operator application not found. Please create an application first.');
+    }
+    const authorizedSignatory = this.authorizedSignatoryRepository.create({
+      warehouseOperatorApplicationRequestId: application.id,
+      authorizedSignatoryName: createAuthorizedSignatoryDto.authorizedSignatoryName,
+      name: createAuthorizedSignatoryDto.name,
+      cnic: createAuthorizedSignatoryDto.cnic.toString(),
+      passport: createAuthorizedSignatoryDto.passport,
+      issuanceDateOfCnic: createAuthorizedSignatoryDto.issuanceDateOfCnic,
+      expiryDateOfCnic: createAuthorizedSignatoryDto.expiryDateOfCnic,
+      mailingAddress: createAuthorizedSignatoryDto.mailingAddress,
+      city: createAuthorizedSignatoryDto.city,
+      country: createAuthorizedSignatoryDto.country,
+      postalCode: createAuthorizedSignatoryDto.postalCode,
+      designation: createAuthorizedSignatoryDto.designation,
+      mobileNumber: createAuthorizedSignatoryDto.mobileNumber,
+      email: createAuthorizedSignatoryDto.email,
+      landlineNumber: createAuthorizedSignatoryDto.landlineNumber || '',
+    });
+    const saved = await this.authorizedSignatoryRepository.save(authorizedSignatory);
+    return {
+      message: 'Authorized signatory saved successfully',
+      authorizedSignatoryId: saved.id,
+      applicationId: application.applicationId,
     };
   }
 

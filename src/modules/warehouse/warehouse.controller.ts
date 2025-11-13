@@ -19,7 +19,16 @@ import {
   ApplicantChecklistApiResponse401,
   ApplicantChecklistApiResponse404,
 } from './swagger/applicant-checklist.swagger';
+import {
+  AuthorizedSignatoryApiBodySchema,
+  AuthorizedSignatoryApiParam,
+  AuthorizedSignatoryApiResponseSchema,
+  AuthorizedSignatoryApiResponse400,
+  AuthorizedSignatoryApiResponse401,
+  AuthorizedSignatoryApiResponse404,
+} from './swagger/authorized-signatory.swagger';
 import { ListWarehouseOperatorApplicationDto } from './dto/list-warehouse.dto';
+import { CreateAuthorizedSignatoryDto } from './dto/create-authorized-signatory.dto';
 
 @ApiTags('Warehouse')
 @ApiBearerAuth('JWT-auth')
@@ -52,6 +61,77 @@ export class WarehouseController {
   ) {
     const user = request.user as User;
     return this.warehouseService.createOperatorApplication(createWarehouseDto, user.id);
+  }
+
+  @ApiOperation({ summary: 'Create a new authorized signatory for a warehouse operator application' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiBody(AuthorizedSignatoryApiBodySchema)
+  @ApiParam(AuthorizedSignatoryApiParam)
+  @ApiResponse(AuthorizedSignatoryApiResponseSchema)
+  @ApiResponse(AuthorizedSignatoryApiResponse400)
+  @ApiResponse(AuthorizedSignatoryApiResponse401)
+  @ApiResponse(AuthorizedSignatoryApiResponse404)
+  @Post('/operator/application/:id/authorized-signatory')
+  createAuthorizedSignatory(
+    @Param('id') id: string,
+    @Body() createAuthorizedSignatoryDto: CreateAuthorizedSignatoryDto,
+    @Request() request: any
+  ) {
+    const user = request.user as User;
+    return this.warehouseService.createAuthorizedSignatory(id, createAuthorizedSignatoryDto, user.id);
+  }
+
+  @ApiOperation({ summary: 'Update authorized signatory' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiBody(AuthorizedSignatoryApiBodySchema)
+  @ApiParam({
+    name: 'authorizedSignatoryId',
+    type: String,
+    description: 'The ID of the authorized signatory to update',
+  })
+  @ApiResponse(AuthorizedSignatoryApiResponseSchema)
+  @ApiResponse(AuthorizedSignatoryApiResponse400)
+  @ApiResponse(AuthorizedSignatoryApiResponse401)
+  @ApiResponse(AuthorizedSignatoryApiResponse404)
+  @Patch('/operator/application/authorized-signatory/:authorizedSignatoryId')
+  updateAuthorizedSignatory(
+    @Param('authorizedSignatoryId') authorizedSignatoryId: string,
+    @Body() createAuthorizedSignatoryDto: CreateAuthorizedSignatoryDto,
+    @Request() request: any
+  ) {
+    const user = request.user as User;
+    return this.warehouseService.updateAuthorizedSignatory(authorizedSignatoryId, createAuthorizedSignatoryDto, user.id);
+  }
+
+  @ApiOperation({ summary: 'Delete authorized signatory' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiParam({
+    name: 'authorizedSignatoryId',
+    type: String,
+    description: 'The ID of the authorized signatory to delete',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Authorized signatory deleted successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: {
+          type: 'string',
+          example: 'Authorized signatory deleted successfully',
+        },
+      },
+    },
+  })
+  @ApiResponse(AuthorizedSignatoryApiResponse401)
+  @ApiResponse(AuthorizedSignatoryApiResponse404)
+  @Delete('/operator/application/authorized-signatory/:authorizedSignatoryId')
+  deleteAuthorizedSignatory(
+    @Param('authorizedSignatoryId') authorizedSignatoryId: string,
+    @Request() request: any
+  ) {
+    const user = request.user as User;
+    return this.warehouseService.deleteAuthorizedSignatory(authorizedSignatoryId, user.id);
   }
 
   @ApiOperation({ summary: 'Create company information' })
