@@ -89,12 +89,71 @@ export class WarehouseAdminService {
       where: { id },
       select: {
         id: true,
+        user: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true
+        },
+        companyInformation: {
+          id: true,
+          companyName: true,
+        },
+        financialInformation: {
+          id: true,
+          auditReport: {
+            id: true,
+            documentType: true,
+            documentName: true,
+            periodStart: true,
+            periodEnd: true,
+          },
+          taxReturns: {
+            id: true,
+            documentType: true,
+            documentName: true,
+            periodStart: true,
+            periodEnd: true,
+          },
+          bankStatements: {
+            id: true,
+            documentType: true,
+            documentName: true,
+            periodStart: true,
+            periodEnd: true,
+          },
+        },
+        bankDetails: {
+          id: true,
+          name: true,
+        },
         authorizedSignatories: {
-          id: true
-        }
+          id: true,
+          name: true,
+        },
+        hrs: {
+          id: true,
+          personalDetails: {
+            id: true,
+            name: true,
+            email: true
+          }
+        },
       },
       relations: {
-        authorizedSignatories: true
+        user: true,
+        authorizedSignatories: true,
+        hrs: {
+          personalDetails: true
+        },
+        companyInformation: true,
+        financialInformation: {
+          auditReport: true,
+          taxReturns: true,
+          bankStatements: true,
+        },
+        bankDetails: true,
+
       }
     });
     if (!warehouseOperatorApplication) {
