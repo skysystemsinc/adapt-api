@@ -95,6 +95,38 @@ export class WarehouseAdminService {
           lastName: true,
           email: true
         },
+        companyInformation: {
+          id: true,
+          companyName: true,
+        },
+        financialInformation: {
+          id: true,
+          auditReport: {
+            id: true,
+            documentType: true,
+            documentName: true,
+            periodStart: true,
+            periodEnd: true,
+          },
+          taxReturns: {
+            id: true,
+            documentType: true,
+            documentName: true,
+            periodStart: true,
+            periodEnd: true,
+          },
+          bankStatements: {
+            id: true,
+            documentType: true,
+            documentName: true,
+            periodStart: true,
+            periodEnd: true,
+          },
+        },
+        bankDetails: {
+          id: true,
+          name: true,
+        },
         authorizedSignatories: {
           id: true,
           name: true,
@@ -114,7 +146,14 @@ export class WarehouseAdminService {
         hrs: {
           personalDetails: true
         },
-        
+        companyInformation: true,
+        financialInformation: {
+          auditReport: true,
+          taxReturns: true,
+          bankStatements: true,
+        },
+        bankDetails: true,
+
       }
     });
     if (!warehouseOperatorApplication) {

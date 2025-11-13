@@ -7,10 +7,14 @@ import {
   ManyToOne,
   JoinColumn,
   OneToMany,
+  OneToOne,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { AuthorizedSignatory } from './authorized-signatories.entity';
 import { HrEntity } from './hr.entity';
+import { CompanyInformation } from './company-information.entity';
+import { FinancialInformationEntity } from './financial-information.entity';
+import { BankDetails } from './bank-details.entity';
 
 export enum WarehouseOperatorApplicationStatus {
   PENDING = 'PENDING',
@@ -45,6 +49,15 @@ export class WarehouseOperatorApplicationRequest {
 
   @OneToMany(() => HrEntity, (hr) => hr.application)
   hrs: HrEntity[];
+
+  @OneToOne(() => CompanyInformation, (companyInformation) => companyInformation.warehouseOperatorApplicationRequest)
+  companyInformation: CompanyInformation;
+
+  @OneToOne(() => FinancialInformationEntity, (financialInformation) => financialInformation.application)
+  financialInformation: FinancialInformationEntity;
+
+  @OneToOne(() => BankDetails, (bankDetails) => bankDetails.application)
+  bankDetails: BankDetails;
 
   @Column({
     type: 'enum',
