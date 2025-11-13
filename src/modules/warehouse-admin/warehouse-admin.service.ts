@@ -89,12 +89,32 @@ export class WarehouseAdminService {
       where: { id },
       select: {
         id: true,
+        user: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true
+        },
         authorizedSignatories: {
-          id: true
-        }
+          id: true,
+          name: true,
+        },
+        hrs: {
+          id: true,
+          personalDetails: {
+            id: true,
+            name: true,
+            email: true
+          }
+        },
       },
       relations: {
-        authorizedSignatories: true
+        user: true,
+        authorizedSignatories: true,
+        hrs: {
+          personalDetails: true
+        },
+        
       }
     });
     if (!warehouseOperatorApplication) {
