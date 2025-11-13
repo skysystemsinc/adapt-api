@@ -17,6 +17,7 @@ import { AdminDashboardModule } from './modules/admin-dashboard/admin-dashboard.
 import { SettingsModule } from './modules/settings/settings.module';
 import { WarehouseModule } from './modules/warehouse/warehouse.module';
 import { CommonModule } from './modules/common/common.module';
+import { WarehouseAdminModule } from './modules/warehouse-admin/warehouse-admin.module';
 import databaseConfig from './config/database.config';
 
 @Module({
@@ -50,6 +51,7 @@ import databaseConfig from './config/database.config';
     SettingsModule,
     WarehouseModule,
     CommonModule,
+    WarehouseAdminModule,
   ],
   controllers: [AppController],
   providers: [AppService],
