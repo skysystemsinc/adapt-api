@@ -1,18 +1,18 @@
 import { IsOptional, IsEnum, IsInt, Min, IsString } from 'class-validator';
 import { Type } from 'class-transformer';
-// import { ApplicationStatus } from '../entities/registration-application.entity';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { WarehouseOperatorApplicationStatus } from 'src/modules/warehouse/entities/warehouse-operator-application-request.entity';
 
 export class QueryOperatorApplicationDto {
-  // @IsOptional()
-  // @IsEnum(ApplicationStatus)
-  // @ApiPropertyOptional({
-  //   description: 'The status of the registration application',
-  //   required: false,
-  //   enum: ApplicationStatus,
-  //   example: ApplicationStatus.PENDING,
-  // })
-  // status?: ApplicationStatus | undefined;
+  @IsOptional()
+  @IsEnum(WarehouseOperatorApplicationStatus)
+  @ApiPropertyOptional({
+    description: 'The status of the warehouse operator application',
+    required: false,
+    enum: WarehouseOperatorApplicationStatus,
+    example: WarehouseOperatorApplicationStatus.PENDING,
+  })
+  status?: WarehouseOperatorApplicationStatus | undefined;
 
   // @IsOptional()
   // @IsString()
@@ -23,14 +23,14 @@ export class QueryOperatorApplicationDto {
   // })
   // applicationTypeId?: string;
 
-  // @IsOptional()
-  // @IsString()
-  // @ApiPropertyOptional({
-  //   description: 'The search query',
-  //   required: false,
-  //   example: 'John Doe',
-  // })
-  // search?: string;
+  @IsOptional()
+  @IsString()
+  @ApiPropertyOptional({
+    description: 'The search query',
+    required: false,
+    example: 'John Doe',
+  })
+  search?: string;
 
   @IsOptional()
   @Type(() => Number)

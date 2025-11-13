@@ -15,7 +15,7 @@ export class WarehouseAdminService {
   ) { }
 
   async findAllWareHouseOperatorsPaginated(query: QueryOperatorApplicationDto) {
-    const { page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'ASC' } = query;
+    const { page = 1, status, search, limit = 10, sortBy = 'createdAt', sortOrder = 'ASC' } = query;
 
     const queryBuilder = this.warehouseOperatorApplicationRequestRepository
       .createQueryBuilder('application')
@@ -32,6 +32,14 @@ export class WarehouseAdminService {
         'user.lastName',
         'user.email',
       ]);
+
+    if (status) {
+      queryBuilder.andWhere('application.status = :status', { status });
+    }
+
+    if (search) {
+      queryBuilder.andWhere('user.firstName LIKE :search OR user.lastName LIKE :search OR user.email LIKE :search', { search: `%${search}%` });
+    }
 
     // Sorting
     queryBuilder.orderBy(`application.${sortBy}`, sortOrder);
