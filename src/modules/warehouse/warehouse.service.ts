@@ -183,7 +183,36 @@ export class WarehouseService {
       applicationId: application.applicationId,
     };
   }
+  async updateAuthorizedSignatory(authorizedSignatoryId: string, createAuthorizedSignatoryDto: CreateAuthorizedSignatoryDto, userId: string) {
+    const authorizedSignatory = await this.authorizedSignatoryRepository.findOne({ where: { id: authorizedSignatoryId } });
+    if (!authorizedSignatory) {
+      throw new NotFoundException('Authorized signatory not found. Please create an authorized signatory first.');
+    }
 
+    const application = await this.warehouseOperatorRepository.findOne({ where: { id: authorizedSignatory.warehouseOperatorApplicationRequestId, userId } });
+    if (!application) {
+      throw new NotFoundException('Warehouse operator application not found. Please create an application first.');
+    }
+    Object.assign(authorizedSignatory, createAuthorizedSignatoryDto);
+    const savedAuthorizedSignatory = await this.authorizedSignatoryRepository.save(authorizedSignatory);
+    return {
+      message: 'Authorized signatory updated successfully',
+      authorizedSignatoryId: savedAuthorizedSignatory.id,
+      applicationId: application.applicationId,
+    };
+  }
+
+  async deleteAuthorizedSignatory(authorizedSignatoryId: string, userId: string) {
+    const authorizedSignatory = await this.authorizedSignatoryRepository.findOne({ where: { id: authorizedSignatoryId } });
+    if (!authorizedSignatory) {
+      throw new NotFoundException('Authorized signatory not found. Please create an authorized signatory first.');
+    }
+    await this.authorizedSignatoryRepository.delete(authorizedSignatoryId);
+    return {
+      message: 'Authorized signatory deleted successfully',
+    };
+  }
+  
   async createCompanyInformation(
     createCompanyInformationDto: CreateCompanyInformationRequestDto,
     userId: string,
@@ -1266,10 +1295,10 @@ export class WarehouseService {
     // Update or create Financial Soundness
     const fsEntity = existingApplicantChecklist.financialSoundness
       ? await this.updateFinancialSoundness(
-          existingApplicantChecklist.financialSoundness,
-          dto.financialSoundness,
-          repos.financialSoundness,
-        )
+        existingApplicantChecklist.financialSoundness,
+        dto.financialSoundness,
+        repos.financialSoundness,
+      )
       : await this.createFinancialSoundness(dto.financialSoundness, existingApplicantChecklist, repos.financialSoundness);
 
     if (!existingApplicantChecklist.financialSoundness) {
@@ -1325,10 +1354,10 @@ export class WarehouseService {
     // Update or create Registration Fee
     const rfEntity = existingApplicantChecklist.registrationFee
       ? await this.updateRegistrationFee(
-          existingApplicantChecklist.registrationFee,
-          dto.registrationFee,
-          repos.registrationFee,
-        )
+        existingApplicantChecklist.registrationFee,
+        dto.registrationFee,
+        repos.registrationFee,
+      )
       : await this.createRegistrationFee(dto.registrationFee, existingApplicantChecklist, repos.registrationFee);
 
     if (!existingApplicantChecklist.registrationFee) {
@@ -1878,13 +1907,13 @@ export class WarehouseService {
         : null,
       other: financialInfo.others?.[0]
         ? {
-           id: financialInfo.others[0].id,
-           documentType: financialInfo.others[0].documentType,
-           documentName: financialInfo.others[0].documentName,
-           periodStart: financialInfo.others[0].periodStart,
-           periodEnd: financialInfo.others[0].periodEnd,
-           remarks: financialInfo.others[0].remarks ?? null,
-         }
+          id: financialInfo.others[0].id,
+          documentType: financialInfo.others[0].documentType,
+          documentName: financialInfo.others[0].documentName,
+          periodStart: financialInfo.others[0].periodStart,
+          periodEnd: financialInfo.others[0].periodEnd,
+          remarks: financialInfo.others[0].remarks ?? null,
+        }
         : null,
     };
   }
@@ -1894,46 +1923,46 @@ export class WarehouseService {
       id: checklist.id,
       humanResources: checklist.humanResources
         ? {
-            id: checklist.humanResources.id,
-            qcPersonnel: checklist.humanResources.qcPersonnel,
-            qcPersonnelFile: checklist.humanResources.qcPersonnelFile ?? null,
-            warehouseSupervisor: checklist.humanResources.warehouseSupervisor,
-            warehouseSupervisorFile: checklist.humanResources.warehouseSupervisorFile ?? null,
-            dataEntryOperator: checklist.humanResources.dataEntryOperator,
-            dataEntryOperatorFile: checklist.humanResources.dataEntryOperatorFile ?? null,
-          }
+          id: checklist.humanResources.id,
+          qcPersonnel: checklist.humanResources.qcPersonnel,
+          qcPersonnelFile: checklist.humanResources.qcPersonnelFile ?? null,
+          warehouseSupervisor: checklist.humanResources.warehouseSupervisor,
+          warehouseSupervisorFile: checklist.humanResources.warehouseSupervisorFile ?? null,
+          dataEntryOperator: checklist.humanResources.dataEntryOperator,
+          dataEntryOperatorFile: checklist.humanResources.dataEntryOperatorFile ?? null,
+        }
         : null,
       financialSoundness: checklist.financialSoundness
         ? {
-            id: checklist.financialSoundness.id,
-            auditedFinancialStatements: checklist.financialSoundness.auditedFinancialStatements,
-            auditedFinancialStatementsFile: checklist.financialSoundness.auditedFinancialStatementsFile ?? null,
-            positiveNetWorth: checklist.financialSoundness.positiveNetWorth,
-            positiveNetWorthFile: checklist.financialSoundness.positiveNetWorthFile ?? null,
-            noLoanDefaults: checklist.financialSoundness.noLoanDefaults,
-            noLoanDefaultsFile: checklist.financialSoundness.noLoanDefaultsFile ?? null,
-            cleanCreditHistory: checklist.financialSoundness.cleanCreditHistory,
-            cleanCreditHistoryFile: checklist.financialSoundness.cleanCreditHistoryFile ?? null,
-            adequateWorkingCapital: checklist.financialSoundness.adequateWorkingCapital,
-            adequateWorkingCapitalFile: checklist.financialSoundness.adequateWorkingCapitalFile ?? null,
-            validInsuranceCoverage: checklist.financialSoundness.validInsuranceCoverage,
-            validInsuranceCoverageFile: checklist.financialSoundness.validInsuranceCoverageFile ?? null,
-            noFinancialFraud: checklist.financialSoundness.noFinancialFraud,
-            noFinancialFraudFile: checklist.financialSoundness.noFinancialFraudFile ?? null,
-          }
+          id: checklist.financialSoundness.id,
+          auditedFinancialStatements: checklist.financialSoundness.auditedFinancialStatements,
+          auditedFinancialStatementsFile: checklist.financialSoundness.auditedFinancialStatementsFile ?? null,
+          positiveNetWorth: checklist.financialSoundness.positiveNetWorth,
+          positiveNetWorthFile: checklist.financialSoundness.positiveNetWorthFile ?? null,
+          noLoanDefaults: checklist.financialSoundness.noLoanDefaults,
+          noLoanDefaultsFile: checklist.financialSoundness.noLoanDefaultsFile ?? null,
+          cleanCreditHistory: checklist.financialSoundness.cleanCreditHistory,
+          cleanCreditHistoryFile: checklist.financialSoundness.cleanCreditHistoryFile ?? null,
+          adequateWorkingCapital: checklist.financialSoundness.adequateWorkingCapital,
+          adequateWorkingCapitalFile: checklist.financialSoundness.adequateWorkingCapitalFile ?? null,
+          validInsuranceCoverage: checklist.financialSoundness.validInsuranceCoverage,
+          validInsuranceCoverageFile: checklist.financialSoundness.validInsuranceCoverageFile ?? null,
+          noFinancialFraud: checklist.financialSoundness.noFinancialFraud,
+          noFinancialFraudFile: checklist.financialSoundness.noFinancialFraudFile ?? null,
+        }
         : null,
       registrationFee: checklist.registrationFee
         ? {
-            id: checklist.registrationFee.id,
-            bankPaymentSlip: checklist.registrationFee.bankPaymentSlip ?? null,
-          }
+          id: checklist.registrationFee.id,
+          bankPaymentSlip: checklist.registrationFee.bankPaymentSlip ?? null,
+        }
         : null,
       declaration: checklist.declaration
         ? {
-            id: checklist.declaration.id,
-            informationTrueComplete: checklist.declaration.informationTrueComplete,
-            authorizeVerification: checklist.declaration.authorizeVerification,
-          }
+          id: checklist.declaration.id,
+          informationTrueComplete: checklist.declaration.informationTrueComplete,
+          authorizeVerification: checklist.declaration.authorizeVerification,
+        }
         : null,
     };
   }
