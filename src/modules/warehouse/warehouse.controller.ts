@@ -19,7 +19,16 @@ import {
   ApplicantChecklistApiResponse401,
   ApplicantChecklistApiResponse404,
 } from './swagger/applicant-checklist.swagger';
+import {
+  AuthorizedSignatoryApiBodySchema,
+  AuthorizedSignatoryApiParam,
+  AuthorizedSignatoryApiResponseSchema,
+  AuthorizedSignatoryApiResponse400,
+  AuthorizedSignatoryApiResponse401,
+  AuthorizedSignatoryApiResponse404,
+} from './swagger/authorized-signatory.swagger';
 import { ListWarehouseOperatorApplicationDto } from './dto/list-warehouse.dto';
+import { CreateAuthorizedSignatoryDto } from './dto/create-authorized-signatory.dto';
 
 @ApiTags('Warehouse')
 @ApiBearerAuth('JWT-auth')
@@ -52,6 +61,24 @@ export class WarehouseController {
   ) {
     const user = request.user as User;
     return this.warehouseService.createOperatorApplication(createWarehouseDto, user.id);
+  }
+
+  @ApiOperation({ summary: 'Create a new authorized signatory for a warehouse operator application' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiBody(AuthorizedSignatoryApiBodySchema)
+  @ApiParam(AuthorizedSignatoryApiParam)
+  @ApiResponse(AuthorizedSignatoryApiResponseSchema)
+  @ApiResponse(AuthorizedSignatoryApiResponse400)
+  @ApiResponse(AuthorizedSignatoryApiResponse401)
+  @ApiResponse(AuthorizedSignatoryApiResponse404)
+  @Post('/operator/application/:id/authorized-signatory')
+  createAuthorizedSignatory(
+    @Param('id') id: string,
+    @Body() createAuthorizedSignatoryDto: CreateAuthorizedSignatoryDto,
+    @Request() request: any
+  ) {
+    const user = request.user as User;
+    return this.warehouseService.createAuthorizedSignatory(id, createAuthorizedSignatoryDto, user.id);
   }
 
   @ApiOperation({ summary: 'Create company information' })
