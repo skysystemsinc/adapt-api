@@ -15,6 +15,7 @@ import { HrEntity } from './hr.entity';
 import { CompanyInformation } from './company-information.entity';
 import { FinancialInformationEntity } from './financial-information.entity';
 import { BankDetails } from './bank-details.entity';
+import { ApplicantChecklistEntity } from './applicant-checklist.entity';
 
 export enum WarehouseOperatorApplicationStatus {
   PENDING = 'PENDING',
@@ -58,6 +59,9 @@ export class WarehouseOperatorApplicationRequest {
 
   @OneToOne(() => BankDetails, (bankDetails) => bankDetails.application)
   bankDetails: BankDetails;
+
+  @OneToOne(() => ApplicantChecklistEntity, (applicantChecklist) => applicantChecklist.application)
+  applicantChecklist: ApplicantChecklistEntity;
 
   @Column({
     type: 'enum',

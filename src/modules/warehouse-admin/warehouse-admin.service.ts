@@ -139,21 +139,29 @@ export class WarehouseAdminService {
             email: true
           }
         },
+        applicantChecklist: {
+          id: true,
+          humanResources: {
+            id: true,
+            qcPersonnel: true,
+            qcPersonnelFile: true,
+          },
+        },
       },
       relations: {
         user: true,
         authorizedSignatories: true,
+        companyInformation: true,
+        bankDetails: true,
         hrs: {
           personalDetails: true
         },
-        companyInformation: true,
         financialInformation: {
           auditReport: true,
           taxReturns: true,
           bankStatements: true,
         },
-        bankDetails: true,
-
+        applicantChecklist: true,
       }
     });
     if (!warehouseOperatorApplication) {
