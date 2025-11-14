@@ -184,6 +184,79 @@ export class WarehouseService {
     };
   }
 
+  async updateAuthorizedSignatory(
+    authorizedSignatoryId: string,
+    updateAuthorizedSignatoryDto: CreateAuthorizedSignatoryDto,
+    userId: string
+  ) {
+    const authorizedSignatory = await this.authorizedSignatoryRepository.findOne({
+      where: { id: authorizedSignatoryId },
+      relations: ['warehouseOperatorApplicationRequest'],
+    });
+
+    if (!authorizedSignatory) {
+      throw new NotFoundException('Authorized signatory not found');
+    }
+
+    const application = authorizedSignatory.warehouseOperatorApplicationRequest;
+    if (!application || application.userId !== userId) {
+      throw new NotFoundException('Authorized signatory not found or access denied');
+    }
+
+    if (![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(application.status)) {
+      throw new BadRequestException('Cannot update authorized signatory after application is approved or submitted');
+    }
+
+    authorizedSignatory.authorizedSignatoryName = updateAuthorizedSignatoryDto.authorizedSignatoryName;
+    authorizedSignatory.name = updateAuthorizedSignatoryDto.name;
+    authorizedSignatory.cnic = updateAuthorizedSignatoryDto.cnic.toString();
+    authorizedSignatory.passport = updateAuthorizedSignatoryDto.passport ?? authorizedSignatory.passport;
+    authorizedSignatory.issuanceDateOfCnic = updateAuthorizedSignatoryDto.issuanceDateOfCnic;
+    authorizedSignatory.expiryDateOfCnic = updateAuthorizedSignatoryDto.expiryDateOfCnic;
+    authorizedSignatory.mailingAddress = updateAuthorizedSignatoryDto.mailingAddress;
+    authorizedSignatory.city = updateAuthorizedSignatoryDto.city;
+    authorizedSignatory.country = updateAuthorizedSignatoryDto.country;
+    authorizedSignatory.postalCode = updateAuthorizedSignatoryDto.postalCode;
+    authorizedSignatory.designation = updateAuthorizedSignatoryDto.designation;
+    authorizedSignatory.mobileNumber = updateAuthorizedSignatoryDto.mobileNumber;
+    authorizedSignatory.email = updateAuthorizedSignatoryDto.email;
+    authorizedSignatory.landlineNumber = updateAuthorizedSignatoryDto.landlineNumber || '';
+
+    const updated = await this.authorizedSignatoryRepository.save(authorizedSignatory);
+
+    return {
+      message: 'Authorized signatory updated successfully',
+      authorizedSignatoryId: updated.id,
+      applicationId: application.applicationId,
+    };
+  }
+
+  async deleteAuthorizedSignatory(authorizedSignatoryId: string, userId: string) {
+    const authorizedSignatory = await this.authorizedSignatoryRepository.findOne({
+      where: { id: authorizedSignatoryId },
+      relations: ['warehouseOperatorApplicationRequest'],
+    });
+
+    if (!authorizedSignatory) {
+      throw new NotFoundException('Authorized signatory not found');
+    }
+
+    const application = authorizedSignatory.warehouseOperatorApplicationRequest;
+    if (!application || application.userId !== userId) {
+      throw new NotFoundException('Authorized signatory not found or access denied');
+    }
+
+    if (![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(application.status)) {
+      throw new BadRequestException('Cannot delete authorized signatory after application is approved or submitted');
+    }
+
+    await this.authorizedSignatoryRepository.remove(authorizedSignatory);
+
+    return {
+      message: 'Authorized signatory deleted successfully',
+    };
+  }
+
   async createCompanyInformation(
     createCompanyInformationDto: CreateCompanyInformationRequestDto,
     userId: string,
