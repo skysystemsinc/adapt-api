@@ -89,6 +89,8 @@ export class WarehouseAdminService {
       where: { id },
       select: {
         id: true,
+        status: true,
+        applicationId: true,
         user: {
           id: true,
           firstName: true,
@@ -164,10 +166,25 @@ export class WarehouseAdminService {
         applicantChecklist: true,
       }
     });
+
     if (!warehouseOperatorApplication) {
       throw new NotFoundException('Warehouse operator application not found');
     }
-    return warehouseOperatorApplication;
+
+    const totalCount =
+      (warehouseOperatorApplication.authorizedSignatories?.length || 0) +
+      (warehouseOperatorApplication.hrs?.length || 0) +
+      (warehouseOperatorApplication.financialInformation?.auditReport ? 1 : 0) +
+      (warehouseOperatorApplication.financialInformation?.taxReturns ? 1 : 0) +
+      (warehouseOperatorApplication.financialInformation?.bankStatements ? 1 : 0) +
+      (warehouseOperatorApplication.companyInformation ? 1 : 0) +
+      (warehouseOperatorApplication.bankDetails ? 1 : 0) +
+      (warehouseOperatorApplication.applicantChecklist ? 1 : 0);
+
+    return {
+      ...warehouseOperatorApplication,
+      totalCount,
+    };
   }
 
   update(id: number, updateWarehouseAdminDto: UpdateWarehouseAdminDto) {
