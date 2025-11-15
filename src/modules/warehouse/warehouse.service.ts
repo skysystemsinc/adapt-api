@@ -19,7 +19,7 @@ import * as path from 'path';
 import { v4 as uuidv4, validate as uuidValidate } from 'uuid';
 import { StepStatus } from './entities/bank-details.entity';
 import { BankDetails } from './entities/bank-details.entity';
-import { UpsertHrInformationDto } from './dto/create-hr-information.dto';
+import { UpsertHrInformationDto, HrPersonalDetailsDto, HrDeclarationDto, HrAcademicQualificationDto, HrProfessionalQualificationDto, HrTrainingDto, HrExperienceDto } from './dto/create-hr-information.dto';
 import { Designation } from '../common/entities/designation.entity';
 import { AccountType, UpdateBankDetailsDto } from './dto/create-bank-details.dto';
 import { FinancialInformationEntity } from './entities/financial-information.entity';
@@ -846,6 +846,1008 @@ export class WarehouseService {
     return {
       message: 'HR information saved successfully',
       data: this.mapHrEntityToResponse(hydratedHr!),
+    };
+  }
+
+  /**
+   * Create HR context for an application
+   */
+  async createHrContext(applicationId: string, userId: string) {
+    const application = await this.warehouseOperatorRepository.findOne({
+      where: { id: applicationId, userId },
+    });
+
+    if (!application) {
+      throw new NotFoundException('Warehouse operator application not found. Please create an application first.');
+    }
+
+    // Check if HR context already exists
+    const existingHr = await this.hrRepository.findOne({
+      where: { applicationId: application.id },
+    });
+
+    if (existingHr) {
+      return {
+        message: 'HR context already exists',
+        data: {
+          id: existingHr.id,
+          applicationId: existingHr.applicationId,
+          createdAt: existingHr.createdAt.toISOString(),
+          updatedAt: existingHr.updatedAt.toISOString(),
+        },
+      };
+    }
+
+    // Create new HR context
+    const hr = this.hrRepository.create({
+      applicationId: application.id,
+    });
+    const savedHr = await this.hrRepository.save(hr);
+
+    return {
+      message: 'HR context created successfully',
+      data: {
+        id: savedHr.id,
+        applicationId: savedHr.applicationId,
+        createdAt: savedHr.createdAt.toISOString(),
+        updatedAt: savedHr.updatedAt.toISOString(),
+      },
+    };
+  }
+
+  /**
+   * Save or update personal details
+   */
+  async savePersonalDetails(
+    applicationId: string,
+    dto: HrPersonalDetailsDto,
+    userId: string,
+    hrInformationId?: string,
+    photographFile?: any,
+  ) {
+    const application = await this.warehouseOperatorRepository.findOne({
+      where: { id: applicationId, userId },
+    });
+
+    if (!application) {
+      throw new NotFoundException('Warehouse operator application not found. Please create an application first.');
+    }
+
+    // Ensure HR context exists
+    let hr = await this.hrRepository.findOne({
+      where: { applicationId: application.id },
+    });
+
+    if (!hr) {
+      const contextResult = await this.createHrContext(applicationId, userId);
+      hr = await this.hrRepository.findOne({
+        where: { id: contextResult.data.id },
+      });
+    }
+
+    if (!hr) {
+      throw new BadRequestException('Failed to create or find HR context');
+    }
+
+    // If hrInformationId is provided, ensure it matches
+    if (hrInformationId && hr.id !== hrInformationId) {
+      throw new BadRequestException('HR information ID mismatch');
+    }
+
+    const normalizeDate = (dateValue: string | undefined): Date => {
+      if (!dateValue) {
+        throw new BadRequestException('Date of birth is required.');
+      }
+      const parsed = new Date(dateValue);
+      if (Number.isNaN(parsed.getTime())) {
+        throw new BadRequestException('Invalid date of birth provided.');
+      }
+      return parsed;
+    };
+
+    const savedResult = await this.dataSource.transaction(async (manager) => {
+      const hrRepo = manager.getRepository(HrEntity);
+      const personalRepo = manager.getRepository(PersonalDetailsEntity);
+      const designationRepo = manager.getRepository(Designation);
+      const documentRepo = manager.getRepository(WarehouseDocument);
+
+      const resolveDesignationId = async (input?: string | null): Promise<string | null> => {
+        if (!input) {
+          return null;
+        }
+
+        if (uuidValidate(input)) {
+          const designation = await designationRepo.findOne({ where: { id: input } });
+          if (designation) {
+            return designation.id;
+          }
+        }
+
+        const trimmed = input.trim().toLowerCase();
+        if (!trimmed) {
+          return null;
+        }
+
+        const designation = await designationRepo
+          .createQueryBuilder('designation')
+          .where('LOWER(designation.slug) = :value', { value: trimmed })
+          .orWhere('LOWER(designation.name) = :value', { value: trimmed })
+          .getOne();
+
+        return designation?.id ?? null;
+      };
+
+      const assignDocument = async (
+        documentId: string | undefined | null,
+        documentableType: string,
+        documentType: string,
+        documentableId: string,
+      ) => {
+        if (!documentId) {
+          return;
+        }
+
+        const document = await documentRepo.findOne({ where: { id: documentId } });
+        if (!document) {
+          throw new NotFoundException('Document not found');
+        }
+
+        if (document.userId !== userId) {
+          throw new BadRequestException('You are not allowed to use this document reference');
+        }
+
+        document.documentableType = documentableType;
+        document.documentableId = documentableId;
+        document.documentType = documentType;
+        await documentRepo.save(document);
+      };
+
+      const resolvedDesignationId =
+        (await resolveDesignationId(dto.designationId)) ??
+        (await resolveDesignationId(dto.designationName)) ??
+        null;
+
+      // Upload photograph if provided
+      let photographDocumentId = dto.photograph;
+      if (photographFile) {
+        const photoDoc = await this.uploadWarehouseDocument(
+          photographFile,
+          userId,
+          'HrPersonalDetails',
+          applicationId, // Temporary ID, will be updated
+          'photograph',
+        );
+        photographDocumentId = photoDoc.id;
+      }
+
+      const currentHr = await hrRepo.findOne({
+        where: { id: hr.id },
+        relations: ['personalDetails'],
+      });
+
+      if (currentHr?.personalDetails) {
+        // Update existing personal details
+        Object.assign(currentHr.personalDetails, {
+          ...dto,
+          designationId: resolvedDesignationId ?? currentHr.personalDetails.designationId ?? undefined,
+          dateOfBirth: normalizeDate(dto.dateOfBirth),
+          photograph: photographDocumentId ?? currentHr.personalDetails.photograph ?? undefined,
+        });
+        await personalRepo.save(currentHr.personalDetails);
+
+        await assignDocument(
+          photographDocumentId ?? null,
+          'HrPersonalDetails',
+          'photograph',
+          currentHr.personalDetails.id,
+        );
+
+        currentHr.personalDetailsId = currentHr.personalDetails.id;
+        await hrRepo.save(currentHr);
+
+        return currentHr.personalDetails;
+      } else {
+        // Create new personal details
+        const personalDetails = personalRepo.create({
+          ...dto,
+          designationId: resolvedDesignationId ?? undefined,
+          dateOfBirth: normalizeDate(dto.dateOfBirth),
+          photograph: photographDocumentId ?? undefined,
+        });
+        await personalRepo.save(personalDetails);
+
+        await assignDocument(
+          photographDocumentId ?? null,
+          'HrPersonalDetails',
+          'photograph',
+          personalDetails.id,
+        );
+
+        currentHr!.personalDetailsId = personalDetails.id;
+        await hrRepo.save(currentHr!);
+
+        return personalDetails;
+      }
+    });
+
+    const hydratedHr = await this.hrRepository.findOne({
+      where: { id: hr.id },
+      relations: [
+        'personalDetails',
+        'personalDetails.designation',
+        'personalDetails.photographDocument',
+      ],
+    });
+
+    return {
+      message: 'Personal details saved successfully',
+      data: {
+        id: savedResult.id,
+        designationId: savedResult.designationId ?? null,
+        designationName: hydratedHr?.personalDetails?.designation?.name ?? null,
+        name: savedResult.name,
+        fathersHusbandName: savedResult.fathersHusbandName,
+        cnicPassport: savedResult.cnicPassport,
+        nationality: savedResult.nationality,
+        dateOfBirth: savedResult.dateOfBirth ? savedResult.dateOfBirth.toISOString().split('T')[0] : null,
+        residentialAddress: savedResult.residentialAddress,
+        businessAddress: savedResult.businessAddress ?? null,
+        telephone: savedResult.telephone ?? null,
+        mobileNumber: savedResult.mobileNumber,
+        email: savedResult.email,
+        nationalTaxNumber: savedResult.nationalTaxNumber ?? null,
+        photograph: savedResult.photograph ?? null,
+        createdAt: savedResult.createdAt.toISOString(),
+        updatedAt: savedResult.updatedAt.toISOString(),
+      },
+    };
+  }
+
+  /**
+   * Save or update declaration
+   */
+  async saveDeclaration(
+    applicationId: string,
+    dto: HrDeclarationDto,
+    userId: string,
+    hrInformationId?: string,
+  ) {
+    const application = await this.warehouseOperatorRepository.findOne({
+      where: { id: applicationId, userId },
+    });
+
+    if (!application) {
+      throw new NotFoundException('Warehouse operator application not found. Please create an application first.');
+    }
+
+    // Ensure HR context exists
+    let hr = await this.hrRepository.findOne({
+      where: { applicationId: application.id },
+    });
+
+    if (!hr) {
+      const contextResult = await this.createHrContext(applicationId, userId);
+      hr = await this.hrRepository.findOne({
+        where: { id: contextResult.data.id },
+      });
+    }
+
+    if (!hr) {
+      throw new BadRequestException('Failed to create or find HR context');
+    }
+
+    // If hrInformationId is provided, ensure it matches
+    if (hrInformationId && hr.id !== hrInformationId) {
+      throw new BadRequestException('HR information ID mismatch');
+    }
+
+    const savedResult = await this.dataSource.transaction(async (manager) => {
+      const hrRepo = manager.getRepository(HrEntity);
+      const declarationRepo = manager.getRepository(DeclarationEntity);
+
+      const currentHr = await hrRepo.findOne({
+        where: { id: hr.id },
+        relations: ['declaration'],
+      });
+
+      if (currentHr?.declaration) {
+        // Update existing declaration
+        Object.assign(currentHr.declaration, dto);
+        await declarationRepo.save(currentHr.declaration);
+        return currentHr.declaration;
+      } else {
+        // Create new declaration
+        const declaration = declarationRepo.create(dto);
+        await declarationRepo.save(declaration);
+
+        currentHr!.declarationId = declaration.id;
+        await hrRepo.save(currentHr!);
+
+        return declaration;
+      }
+    });
+
+    return {
+      message: 'Declaration saved successfully',
+      data: {
+        id: savedResult.id,
+        writeOffAvailed: savedResult.writeOffAvailed,
+        defaultOfFinance: savedResult.defaultOfFinance,
+        placementOnECL: savedResult.placementOnECL,
+        convictionPleaBargain: savedResult.convictionPleaBargain,
+        createdAt: savedResult.createdAt.toISOString(),
+        updatedAt: savedResult.updatedAt.toISOString(),
+      },
+    };
+  }
+
+  /**
+   * Save or update a single academic qualification
+   */
+  async saveAcademicQualification(
+    applicationId: string,
+    dto: HrAcademicQualificationDto,
+    userId: string,
+    id?: string,
+    certificateFile?: any,
+  ) {
+    const application = await this.warehouseOperatorRepository.findOne({
+      where: { id: applicationId, userId },
+    });
+
+    if (!application) {
+      throw new NotFoundException('Warehouse operator application not found. Please create an application first.');
+    }
+
+    // Ensure HR context exists
+    let hr = await this.hrRepository.findOne({
+      where: { applicationId: application.id },
+    });
+
+    if (!hr) {
+      const contextResult = await this.createHrContext(applicationId, userId);
+      hr = await this.hrRepository.findOne({
+        where: { id: contextResult.data.id },
+      });
+    }
+
+    if (!hr) {
+      throw new BadRequestException('Failed to create or find HR context');
+    }
+
+    const savedResult = await this.dataSource.transaction(async (manager) => {
+      const academicRepo = manager.getRepository(AcademicQualificationsEntity);
+      const documentRepo = manager.getRepository(WarehouseDocument);
+
+      const assignDocument = async (
+        documentId: string | undefined | null,
+        documentableType: string,
+        documentType: string,
+        documentableId: string,
+      ) => {
+        if (!documentId) {
+          return;
+        }
+
+        const document = await documentRepo.findOne({ where: { id: documentId } });
+        if (!document) {
+          throw new NotFoundException('Document not found');
+        }
+
+        if (document.userId !== userId) {
+          throw new BadRequestException('You are not allowed to use this document reference');
+        }
+
+        document.documentableType = documentableType;
+        document.documentableId = documentableId;
+        document.documentType = documentType;
+        await documentRepo.save(document);
+      };
+
+      // Upload certificate if provided
+      let certificateDocumentId = dto.academicCertificate;
+      if (certificateFile) {
+        const certDoc = await this.uploadWarehouseDocument(
+          certificateFile,
+          userId,
+          'HrAcademicQualification',
+          applicationId, // Temporary ID, will be updated
+          'academicCertificate',
+        );
+        certificateDocumentId = certDoc.id;
+      }
+
+      if (id) {
+        // Update existing
+        const existing = await academicRepo.findOne({
+          where: { id, hrId: hr.id },
+        });
+
+        if (!existing) {
+          throw new NotFoundException('Academic qualification not found');
+        }
+
+        Object.assign(existing, {
+          ...dto,
+          academicCertificate: certificateDocumentId ?? existing.academicCertificate ?? null,
+        });
+        await academicRepo.save(existing);
+
+        await assignDocument(
+          certificateDocumentId ?? null,
+          'HrAcademicQualification',
+          'academicCertificate',
+          existing.id,
+        );
+
+        return existing;
+      } else {
+        // Create new
+        const academic = academicRepo.create({
+          ...dto,
+          academicCertificate: certificateDocumentId ?? null,
+          hrId: hr.id,
+        });
+        await academicRepo.save(academic);
+
+        await assignDocument(
+          certificateDocumentId ?? null,
+          'HrAcademicQualification',
+          'academicCertificate',
+          academic.id,
+        );
+
+        return academic;
+      }
+    });
+
+    return {
+      message: id ? 'Academic qualification updated successfully' : 'Academic qualification saved successfully',
+      data: {
+        id: savedResult.id,
+        degree: savedResult.degree,
+        major: savedResult.major,
+        institute: savedResult.institute,
+        country: savedResult.country,
+        yearOfPassing: savedResult.yearOfPassing,
+        grade: savedResult.grade ?? null,
+        academicCertificate: savedResult.academicCertificate ?? null,
+        createdAt: savedResult.createdAt.toISOString(),
+        updatedAt: savedResult.updatedAt.toISOString(),
+      },
+    };
+  }
+
+  /**
+   * Delete an academic qualification
+   */
+  async deleteAcademicQualification(id: string, userId: string) {
+    const academic = await this.dataSource.getRepository(AcademicQualificationsEntity).findOne({
+      where: { id },
+      relations: ['hr'],
+    });
+
+    if (!academic) {
+      throw new NotFoundException('Academic qualification not found');
+    }
+
+    // Verify user owns the application
+    const application = await this.warehouseOperatorRepository.findOne({
+      where: { id: academic.hr.applicationId },
+    });
+
+    if (!application || application.userId !== userId) {
+      throw new BadRequestException('You are not authorized to delete this academic qualification');
+    }
+
+    await this.dataSource.getRepository(AcademicQualificationsEntity).remove(academic);
+
+    return {
+      message: 'Academic qualification deleted successfully',
+      success: true,
+    };
+  }
+
+  /**
+   * Save or update a single professional qualification
+   */
+  async saveProfessionalQualification(
+    applicationId: string,
+    dto: HrProfessionalQualificationDto,
+    userId: string,
+    id?: string,
+    certificateFile?: any,
+  ) {
+    const application = await this.warehouseOperatorRepository.findOne({
+      where: { id: applicationId, userId },
+    });
+
+    if (!application) {
+      throw new NotFoundException('Warehouse operator application not found. Please create an application first.');
+    }
+
+    // Ensure HR context exists
+    let hr = await this.hrRepository.findOne({
+      where: { applicationId: application.id },
+    });
+
+    if (!hr) {
+      const contextResult = await this.createHrContext(applicationId, userId);
+      hr = await this.hrRepository.findOne({
+        where: { id: contextResult.data.id },
+      });
+    }
+
+    if (!hr) {
+      throw new BadRequestException('Failed to create or find HR context');
+    }
+
+    const savedResult = await this.dataSource.transaction(async (manager) => {
+      const professionalRepo = manager.getRepository(ProfessionalQualificationsEntity);
+      const documentRepo = manager.getRepository(WarehouseDocument);
+
+      const assignDocument = async (
+        documentId: string | undefined | null,
+        documentableType: string,
+        documentType: string,
+        documentableId: string,
+      ) => {
+        if (!documentId) {
+          return;
+        }
+
+        const document = await documentRepo.findOne({ where: { id: documentId } });
+        if (!document) {
+          throw new NotFoundException('Document not found');
+        }
+
+        if (document.userId !== userId) {
+          throw new BadRequestException('You are not allowed to use this document reference');
+        }
+
+        document.documentableType = documentableType;
+        document.documentableId = documentableId;
+        document.documentType = documentType;
+        await documentRepo.save(document);
+      };
+
+      // Upload certificate if provided
+      let certificateDocumentId = dto.professionalCertificate;
+      if (certificateFile) {
+        const certDoc = await this.uploadWarehouseDocument(
+          certificateFile,
+          userId,
+          'HrProfessionalQualification',
+          applicationId, // Temporary ID, will be updated
+          'professionalCertificate',
+        );
+        certificateDocumentId = certDoc.id;
+      }
+
+      if (id) {
+        // Update existing
+        const existing = await professionalRepo.findOne({
+          where: { id, hrId: hr.id },
+        });
+
+        if (!existing) {
+          throw new NotFoundException('Professional qualification not found');
+        }
+
+        Object.assign(existing, {
+          ...dto,
+          professionalCertificate: certificateDocumentId ?? existing.professionalCertificate ?? null,
+        });
+        await professionalRepo.save(existing);
+
+        await assignDocument(
+          certificateDocumentId ?? null,
+          'HrProfessionalQualification',
+          'professionalCertificate',
+          existing.id,
+        );
+
+        return existing;
+      } else {
+        // Create new
+        const professional = professionalRepo.create({
+          ...dto,
+          professionalCertificate: certificateDocumentId ?? null,
+          hrId: hr.id,
+        });
+        await professionalRepo.save(professional);
+
+        await assignDocument(
+          certificateDocumentId ?? null,
+          'HrProfessionalQualification',
+          'professionalCertificate',
+          professional.id,
+        );
+
+        return professional;
+      }
+    });
+
+    return {
+      message: id ? 'Professional qualification updated successfully' : 'Professional qualification saved successfully',
+      data: {
+        id: savedResult.id,
+        certificationTitle: savedResult.certificationTitle,
+        issuingBody: savedResult.issuingBody,
+        country: savedResult.country,
+        dateOfAward: savedResult.dateOfAward,
+        validity: savedResult.validity ?? null,
+        membershipNumber: savedResult.membershipNumber ?? null,
+        professionalCertificate: savedResult.professionalCertificate ?? null,
+        createdAt: savedResult.createdAt.toISOString(),
+        updatedAt: savedResult.updatedAt.toISOString(),
+      },
+    };
+  }
+
+  /**
+   * Delete a professional qualification
+   */
+  async deleteProfessionalQualification(id: string, userId: string) {
+    const professional = await this.dataSource.getRepository(ProfessionalQualificationsEntity).findOne({
+      where: { id },
+      relations: ['hr'],
+    });
+
+    if (!professional) {
+      throw new NotFoundException('Professional qualification not found');
+    }
+
+    // Verify user owns the application
+    const application = await this.warehouseOperatorRepository.findOne({
+      where: { id: professional.hr.applicationId },
+    });
+
+    if (!application || application.userId !== userId) {
+      throw new BadRequestException('You are not authorized to delete this professional qualification');
+    }
+
+    await this.dataSource.getRepository(ProfessionalQualificationsEntity).remove(professional);
+
+    return {
+      message: 'Professional qualification deleted successfully',
+      success: true,
+    };
+  }
+
+  /**
+   * Save or update a single training
+   */
+  async saveTraining(
+    applicationId: string,
+    dto: HrTrainingDto,
+    userId: string,
+    id?: string,
+    certificateFile?: any,
+  ) {
+    const application = await this.warehouseOperatorRepository.findOne({
+      where: { id: applicationId, userId },
+    });
+
+    if (!application) {
+      throw new NotFoundException('Warehouse operator application not found. Please create an application first.');
+    }
+
+    // Ensure HR context exists
+    let hr = await this.hrRepository.findOne({
+      where: { applicationId: application.id },
+    });
+
+    if (!hr) {
+      const contextResult = await this.createHrContext(applicationId, userId);
+      hr = await this.hrRepository.findOne({
+        where: { id: contextResult.data.id },
+      });
+    }
+
+    if (!hr) {
+      throw new BadRequestException('Failed to create or find HR context');
+    }
+
+    const savedResult = await this.dataSource.transaction(async (manager) => {
+      const trainingsRepo = manager.getRepository(TrainingsEntity);
+      const documentRepo = manager.getRepository(WarehouseDocument);
+
+      const assignDocument = async (
+        documentId: string | undefined | null,
+        documentableType: string,
+        documentType: string,
+        documentableId: string,
+      ) => {
+        if (!documentId) {
+          return;
+        }
+
+        const document = await documentRepo.findOne({ where: { id: documentId } });
+        if (!document) {
+          throw new NotFoundException('Document not found');
+        }
+
+        if (document.userId !== userId) {
+          throw new BadRequestException('You are not allowed to use this document reference');
+        }
+
+        document.documentableType = documentableType;
+        document.documentableId = documentableId;
+        document.documentType = documentType;
+        await documentRepo.save(document);
+      };
+
+      // Upload certificate if provided
+      let certificateDocumentId = dto.trainingCertificate;
+      if (certificateFile) {
+        const certDoc = await this.uploadWarehouseDocument(
+          certificateFile,
+          userId,
+          'HrTraining',
+          applicationId, // Temporary ID, will be updated
+          'trainingCertificate',
+        );
+        certificateDocumentId = certDoc.id;
+      }
+
+      if (id) {
+        // Update existing
+        const existing = await trainingsRepo.findOne({
+          where: { id, hrId: hr.id },
+        });
+
+        if (!existing) {
+          throw new NotFoundException('Training not found');
+        }
+
+        Object.assign(existing, {
+          ...dto,
+          trainingCertificate: certificateDocumentId ?? existing.trainingCertificate ?? null,
+        });
+        await trainingsRepo.save(existing);
+
+        await assignDocument(
+          certificateDocumentId ?? null,
+          'HrTraining',
+          'trainingCertificate',
+          existing.id,
+        );
+
+        return existing;
+      } else {
+        // Create new
+        const training = trainingsRepo.create({
+          ...dto,
+          trainingCertificate: certificateDocumentId ?? null,
+          hrId: hr.id,
+        });
+        await trainingsRepo.save(training);
+
+        await assignDocument(
+          certificateDocumentId ?? null,
+          'HrTraining',
+          'trainingCertificate',
+          training.id,
+        );
+
+        return training;
+      }
+    });
+
+    return {
+      message: id ? 'Training updated successfully' : 'Training saved successfully',
+      data: {
+        id: savedResult.id,
+        trainingTitle: savedResult.trainingTitle,
+        conductedBy: savedResult.conductedBy,
+        trainingType: savedResult.trainingType,
+        durationStart: savedResult.durationStart,
+        durationEnd: savedResult.durationEnd,
+        dateOfCompletion: savedResult.dateOfCompletion,
+        trainingCertificate: savedResult.trainingCertificate ?? null,
+        createdAt: savedResult.createdAt.toISOString(),
+        updatedAt: savedResult.updatedAt.toISOString(),
+      },
+    };
+  }
+
+  /**
+   * Delete a training
+   */
+  async deleteTraining(id: string, userId: string) {
+    const training = await this.dataSource.getRepository(TrainingsEntity).findOne({
+      where: { id },
+      relations: ['hr'],
+    });
+
+    if (!training) {
+      throw new NotFoundException('Training not found');
+    }
+
+    // Verify user owns the application
+    const application = await this.warehouseOperatorRepository.findOne({
+      where: { id: training.hr.applicationId },
+    });
+
+    if (!application || application.userId !== userId) {
+      throw new BadRequestException('You are not authorized to delete this training');
+    }
+
+    await this.dataSource.getRepository(TrainingsEntity).remove(training);
+
+    return {
+      message: 'Training deleted successfully',
+      success: true,
+    };
+  }
+
+  /**
+   * Save or update a single experience
+   */
+  async saveExperience(
+    applicationId: string,
+    dto: HrExperienceDto,
+    userId: string,
+    id?: string,
+    experienceLetterFile?: any,
+  ) {
+    const application = await this.warehouseOperatorRepository.findOne({
+      where: { id: applicationId, userId },
+    });
+
+    if (!application) {
+      throw new NotFoundException('Warehouse operator application not found. Please create an application first.');
+    }
+
+    // Ensure HR context exists
+    let hr = await this.hrRepository.findOne({
+      where: { applicationId: application.id },
+    });
+
+    if (!hr) {
+      const contextResult = await this.createHrContext(applicationId, userId);
+      hr = await this.hrRepository.findOne({
+        where: { id: contextResult.data.id },
+      });
+    }
+
+    if (!hr) {
+      throw new BadRequestException('Failed to create or find HR context');
+    }
+
+    const savedResult = await this.dataSource.transaction(async (manager) => {
+      const experienceRepo = manager.getRepository(ExperienceEntity);
+      const documentRepo = manager.getRepository(WarehouseDocument);
+
+      const assignDocument = async (
+        documentId: string | undefined | null,
+        documentableType: string,
+        documentType: string,
+        documentableId: string,
+      ) => {
+        if (!documentId) {
+          return;
+        }
+
+        const document = await documentRepo.findOne({ where: { id: documentId } });
+        if (!document) {
+          throw new NotFoundException('Document not found');
+        }
+
+        if (document.userId !== userId) {
+          throw new BadRequestException('You are not allowed to use this document reference');
+        }
+
+        document.documentableType = documentableType;
+        document.documentableId = documentableId;
+        document.documentType = documentType;
+        await documentRepo.save(document);
+      };
+
+      // Upload experience letter if provided
+      let letterDocumentId = dto.experienceLetter;
+      if (experienceLetterFile) {
+        const letterDoc = await this.uploadWarehouseDocument(
+          experienceLetterFile,
+          userId,
+          'HrExperience',
+          applicationId, // Temporary ID, will be updated
+          'experienceLetter',
+        );
+        letterDocumentId = letterDoc.id;
+      }
+
+      if (id) {
+        // Update existing
+        const existing = await experienceRepo.findOne({
+          where: { id, hrId: hr.id },
+        });
+
+        if (!existing) {
+          throw new NotFoundException('Experience not found');
+        }
+
+        Object.assign(existing, {
+          ...dto,
+          experienceLetter: letterDocumentId ?? existing.experienceLetter ?? null,
+        });
+        await experienceRepo.save(existing);
+
+        await assignDocument(
+          letterDocumentId ?? null,
+          'HrExperience',
+          'experienceLetter',
+          existing.id,
+        );
+
+        return existing;
+      } else {
+        // Create new
+        const experience = experienceRepo.create({
+          ...dto,
+          experienceLetter: letterDocumentId ?? null,
+          hrId: hr.id,
+        });
+        await experienceRepo.save(experience);
+
+        await assignDocument(
+          letterDocumentId ?? null,
+          'HrExperience',
+          'experienceLetter',
+          experience.id,
+        );
+
+        return experience;
+      }
+    });
+
+    return {
+      message: id ? 'Experience updated successfully' : 'Experience saved successfully',
+      data: {
+        id: savedResult.id,
+        positionHeld: savedResult.positionHeld,
+        organizationName: savedResult.organizationName,
+        organizationAddress: savedResult.organizationAddress,
+        natureOfOrganization: savedResult.natureOfOrganization,
+        dateOfAppointment: savedResult.dateOfAppointment,
+        dateOfLeaving: savedResult.dateOfLeaving ?? null,
+        duration: savedResult.duration ?? null,
+        responsibilities: savedResult.responsibilities ?? null,
+        experienceLetter: savedResult.experienceLetter ?? null,
+        createdAt: savedResult.createdAt.toISOString(),
+        updatedAt: savedResult.updatedAt.toISOString(),
+      },
+    };
+  }
+
+  /**
+   * Delete an experience
+   */
+  async deleteExperience(id: string, userId: string) {
+    const experience = await this.dataSource.getRepository(ExperienceEntity).findOne({
+      where: { id },
+      relations: ['hr'],
+    });
+
+    if (!experience) {
+      throw new NotFoundException('Experience not found');
+    }
+
+    // Verify user owns the application
+    const application = await this.warehouseOperatorRepository.findOne({
+      where: { id: experience.hr.applicationId },
+    });
+
+    if (!application || application.userId !== userId) {
+      throw new BadRequestException('You are not authorized to delete this experience');
+    }
+
+    await this.dataSource.getRepository(ExperienceEntity).remove(experience);
+
+    return {
+      message: 'Experience deleted successfully',
+      success: true,
     };
   }
 

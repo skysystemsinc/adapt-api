@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsBoolean, IsISO8601, IsNotEmpty,  IsOptional, IsString } from "class-validator";
+import { IsBoolean, IsISO8601, IsNotEmpty,  IsOptional, IsString, MaxLength } from "class-validator";
 import { Exclude, Transform } from "class-transformer";
 export { CreateBankDetailsDto } from "./create-bank-details.dto";
 
@@ -69,6 +69,7 @@ export class CreateCompanyInformationRequestDto {
         example: '1234567890',
     })
     @IsString()
+    @MaxLength(10)
     @IsOptional()
     postalCode?: string;
 
