@@ -218,6 +218,10 @@ export class HrDeclarationDto {
   convictionPleaBargain!: string;
 }
 
+export class CreateHrContextDto {
+  // Empty DTO - context creation doesn't require any input
+}
+
 export class UpsertHrInformationDto {
   @IsOptional()
   @IsUUID()

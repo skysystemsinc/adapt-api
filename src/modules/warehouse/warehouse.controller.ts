@@ -8,7 +8,7 @@ import { AuthService } from '../auth/auth.service';
 import { User } from '../users/entities/user.entity';
 import { FileInterceptor, FileFieldsInterceptor } from '@nestjs/platform-express';
 import { UpdateBankDetailsDto } from './dto/create-bank-details.dto';
-import { UpsertHrInformationDto } from './dto/create-hr-information.dto';
+import { UpsertHrInformationDto, HrPersonalDetailsDto, HrDeclarationDto, HrAcademicQualificationDto, HrProfessionalQualificationDto, HrTrainingDto, HrExperienceDto } from './dto/create-hr-information.dto';
 import { CreateFinancialInformationDto } from './dto/create-financial-information.dto';
 import { CreateApplicantChecklistDto } from './dto/create-applicant-checklist.dto';
 import {
@@ -29,6 +29,7 @@ import {
 } from './swagger/authorized-signatory.swagger';
 import { ListWarehouseOperatorApplicationDto } from './dto/list-warehouse.dto';
 import { CreateAuthorizedSignatoryDto } from './dto/create-authorized-signatory.dto';
+import { request } from 'http';
 
 @ApiTags('Warehouse')
 @ApiBearerAuth('JWT-auth')
@@ -272,6 +273,408 @@ export class WarehouseController {
       user.id,
       files
     );
+  }
+
+  @ApiOperation({ summary: 'Create HR context for an application' })
+  @ApiBearerAuth('JWT-auth')
+  @Post('/operator/application/:applicationId/hr/context')
+  createHrContext(
+    @Param('applicationId') applicationId: string,
+    @Request() request: any,
+  ) {
+    const user = request.user as User;
+    return this.warehouseService.createHrContext(applicationId, user.id);
+  }
+
+  @ApiOperation({ summary: 'Save or update personal details' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('photograph', {
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10MB max
+    },
+  }))
+  @Post('/operator/application/:applicationId/hr/personal-details')
+  savePersonalDetails(
+    @Param('applicationId') applicationId: string,
+    @Body('data') dataString: string,
+    @UploadedFile() photograph: any,
+    @Request() request: any,
+    @Query('hrInformationId') hrInformationId?: string,
+  ) {
+    if (!dataString) {
+      throw new BadRequestException('Data field is required');
+    }
+
+    let payload: HrPersonalDetailsDto;
+    try {
+      payload = JSON.parse(dataString);
+    } catch (error) {
+      throw new BadRequestException('Invalid JSON in data field');
+    }
+
+    const user = request.user as User;
+    return this.warehouseService.savePersonalDetails(
+      applicationId,
+      payload,
+      user.id,
+      hrInformationId,
+      photograph,
+    );
+  }
+
+  @ApiOperation({ summary: 'Save or update declaration' })
+  @ApiBearerAuth('JWT-auth')
+  @Post('/operator/application/:applicationId/hr/declaration')
+  saveDeclaration(
+    @Param('applicationId') applicationId: string,
+    @Body() dto: HrDeclarationDto,
+    @Request() request: any,
+    @Query('hrInformationId') hrInformationId?: string,
+  ) {
+    const user = request.user as User;
+    return this.warehouseService.saveDeclaration(
+      applicationId,
+      dto,
+      user.id,
+      hrInformationId,
+    );
+  }
+
+  @ApiOperation({ summary: 'Save a single academic qualification' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('academicCertificate', {
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10MB max
+    },
+  }))
+  @Post('/operator/application/:applicationId/hr/academic-qualifications')
+  createAcademicQualification(
+    @Param('applicationId') applicationId: string,
+    @Body('data') dataString: string,
+    @UploadedFile() academicCertificate: any,
+    @Request() request: any,
+  ) {
+    if (!dataString) {
+      throw new BadRequestException('Data field is required');
+    }
+
+    let payload: HrAcademicQualificationDto;
+    try {
+      payload = JSON.parse(dataString);
+    } catch (error) {
+      throw new BadRequestException('Invalid JSON in data field');
+    }
+
+    const user = request.user as User;
+    return this.warehouseService.saveAcademicQualification(
+      applicationId,
+      payload,
+      user.id,
+      undefined,
+      academicCertificate,
+    );
+  }
+
+  @ApiOperation({ summary: 'Update a single academic qualification' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('academicCertificate', {
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10MB max
+    },
+  }))
+  @Post('/operator/application/:applicationId/hr/academic-qualifications/:id')
+  updateAcademicQualification(
+    @Param('applicationId') applicationId: string,
+    @Param('id') id: string,
+    @Body('data') dataString: string,
+    @UploadedFile() academicCertificate: any,
+    @Request() request: any,
+  ) {
+    if (!dataString) {
+      throw new BadRequestException('Data field is required');
+    }
+
+    let payload: HrAcademicQualificationDto;
+    try {
+      payload = JSON.parse(dataString);
+    } catch (error) {
+      throw new BadRequestException('Invalid JSON in data field');
+    }
+
+    const user = request.user as User;
+    return this.warehouseService.saveAcademicQualification(
+      applicationId,
+      payload,
+      user.id,
+      id,
+      academicCertificate,
+    );
+  }
+
+  @ApiOperation({ summary: 'Delete an academic qualification' })
+  @ApiBearerAuth('JWT-auth')
+  @Delete('/operator/application/hr/academic-qualifications/:id')
+  deleteAcademicQualification(
+    @Param('id') id: string,
+    @Request() request: any,
+  ) {
+    const user = request.user as User;
+    return this.warehouseService.deleteAcademicQualification(id, user.id);
+  }
+
+  @ApiOperation({ summary: 'Save a single professional qualification' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('professionalCertificate', {
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10MB max
+    },
+  }))
+  @Post('/operator/application/:applicationId/hr/professional-qualifications')
+  createProfessionalQualification(
+    @Param('applicationId') applicationId: string,
+    @Body('data') dataString: string,
+    @UploadedFile() professionalCertificate: any,
+    @Request() request: any,
+  ) {
+    if (!dataString) {
+      throw new BadRequestException('Data field is required');
+    }
+
+    let payload: HrProfessionalQualificationDto;
+    try {
+      payload = JSON.parse(dataString);
+    } catch (error) {
+      throw new BadRequestException('Invalid JSON in data field');
+    }
+
+    const user = request.user as User;
+    return this.warehouseService.saveProfessionalQualification(
+      applicationId,
+      payload,
+      user.id,
+      undefined,
+      professionalCertificate,
+    );
+  }
+
+  @ApiOperation({ summary: 'Update a single professional qualification' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('professionalCertificate', {
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10MB max
+    },
+  }))
+  @Post('/operator/application/:applicationId/hr/professional-qualifications/:id')
+  updateProfessionalQualification(
+    @Param('applicationId') applicationId: string,
+    @Param('id') id: string,
+    @Body('data') dataString: string,
+    @UploadedFile() professionalCertificate: any,
+    @Request() request: any,
+  ) {
+    if (!dataString) {
+      throw new BadRequestException('Data field is required');
+    }
+
+    let payload: HrProfessionalQualificationDto;
+    try {
+      payload = JSON.parse(dataString);
+    } catch (error) {
+      throw new BadRequestException('Invalid JSON in data field');
+    }
+
+    const user = request.user as User;
+    return this.warehouseService.saveProfessionalQualification(
+      applicationId,
+      payload,
+      user.id,
+      id,
+      professionalCertificate,
+    );
+  }
+
+  @ApiOperation({ summary: 'Delete a professional qualification' })
+  @ApiBearerAuth('JWT-auth')
+  @Delete('/operator/application/hr/professional-qualifications/:id')
+  deleteProfessionalQualification(
+    @Param('id') id: string,
+    @Request() request: any,
+  ) {
+    const user = request.user as User;
+    return this.warehouseService.deleteProfessionalQualification(id, user.id);
+  }
+
+  @ApiOperation({ summary: 'Save a single training' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('trainingCertificate', {
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10MB max
+    },
+  }))
+  @Post('/operator/application/:applicationId/hr/trainings')
+  createTraining(
+    @Param('applicationId') applicationId: string,
+    @Body('data') dataString: string,
+    @UploadedFile() trainingCertificate: any,
+    @Request() request: any,
+  ) {
+    if (!dataString) {
+      throw new BadRequestException('Data field is required');
+    }
+
+    let payload: HrTrainingDto;
+    try {
+      payload = JSON.parse(dataString);
+    } catch (error) {
+      throw new BadRequestException('Invalid JSON in data field');
+    }
+
+    const user = request.user as User;
+    return this.warehouseService.saveTraining(
+      applicationId,
+      payload,
+      user.id,
+      undefined,
+      trainingCertificate,
+    );
+  }
+
+  @ApiOperation({ summary: 'Update a single training' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('trainingCertificate', {
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10MB max
+    },
+  }))
+  @Post('/operator/application/:applicationId/hr/trainings/:id')
+  updateTraining(
+    @Param('applicationId') applicationId: string,
+    @Param('id') id: string,
+    @Body('data') dataString: string,
+    @UploadedFile() trainingCertificate: any,
+    @Request() request: any,
+  ) {
+    if (!dataString) {
+      throw new BadRequestException('Data field is required');
+    }
+
+    let payload: HrTrainingDto;
+    try {
+      payload = JSON.parse(dataString);
+    } catch (error) {
+      throw new BadRequestException('Invalid JSON in data field');
+    }
+
+    const user = request.user as User;
+    return this.warehouseService.saveTraining(
+      applicationId,
+      payload,
+      user.id,
+      id,
+      trainingCertificate,
+    );
+  }
+
+  @ApiOperation({ summary: 'Delete a training' })
+  @ApiBearerAuth('JWT-auth')
+  @Delete('/operator/application/hr/trainings/:id')
+  deleteTraining(
+    @Param('id') id: string,
+    @Request() request: any,
+  ) {
+    const user = request.user as User;
+    return this.warehouseService.deleteTraining(id, user.id);
+  }
+
+  @ApiOperation({ summary: 'Save a single experience' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('experienceLetter', {
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10MB max
+    },
+  }))
+  @Post('/operator/application/:applicationId/hr/experience')
+  createExperience(
+    @Param('applicationId') applicationId: string,
+    @Body('data') dataString: string,
+    @UploadedFile() experienceLetter: any,
+    @Request() request: any,
+  ) {
+    if (!dataString) {
+      throw new BadRequestException('Data field is required');
+    }
+
+    let payload: HrExperienceDto;
+    try {
+      payload = JSON.parse(dataString);
+    } catch (error) {
+      throw new BadRequestException('Invalid JSON in data field');
+    }
+
+    const user = request.user as User;
+    return this.warehouseService.saveExperience(
+      applicationId,
+      payload,
+      user.id,
+      undefined,
+      experienceLetter,
+    );
+  }
+
+  @ApiOperation({ summary: 'Update a single experience' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('experienceLetter', {
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10MB max
+    },
+  }))
+  @Post('/operator/application/:applicationId/hr/experience/:id')
+  updateExperience(
+    @Param('applicationId') applicationId: string,
+    @Param('id') id: string,
+    @Body('data') dataString: string,
+    @UploadedFile() experienceLetter: any,
+    @Request() request: any,
+  ) {
+    if (!dataString) {
+      throw new BadRequestException('Data field is required');
+    }
+
+    let payload: HrExperienceDto;
+    try {
+      payload = JSON.parse(dataString);
+    } catch (error) {
+      throw new BadRequestException('Invalid JSON in data field');
+    }
+
+    const user = request.user as User;
+    return this.warehouseService.saveExperience(
+      applicationId,
+      payload,
+      user.id,
+      id,
+      experienceLetter,
+    );
+  }
+
+  @ApiOperation({ summary: 'Delete an experience' })
+  @ApiBearerAuth('JWT-auth')
+  @Delete('/operator/application/hr/experience/:id')
+  deleteExperience(
+    @Param('id') id: string,
+    @Request() request: any,
+  ) {
+    const user = request.user as User;
+    return this.warehouseService.deleteExperience(id, user.id);
   }
 
   @ApiOperation({ summary: 'Create or update financial information' })
