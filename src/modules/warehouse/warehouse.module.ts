@@ -29,6 +29,7 @@ import { HumanResourcesChecklistEntity } from './entities/checklist/human-resour
 import { FinancialSoundnessChecklistEntity } from './entities/checklist/financial-soundness.entity';
 import { RegistrationFeeChecklistEntity } from './entities/checklist/registration-fee.entity';
 import { DeclarationChecklistEntity } from './entities/checklist/declaration.entity';
+import { WarehouseApplicantVerificationModule } from './warehouse-applicant-verification/warehouse-applicant-verification.module';
 
 @Module({
   controllers: [WarehouseController],
@@ -69,6 +70,7 @@ import { DeclarationChecklistEntity } from './entities/checklist/declaration.ent
       }),
       inject: [ConfigService],
     }),
+    WarehouseApplicantVerificationModule,
   ],
   exports: [WarehouseService],
 })

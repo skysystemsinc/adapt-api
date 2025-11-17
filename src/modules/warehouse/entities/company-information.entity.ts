@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import { WarehouseOperatorApplicationRequest } from './warehouse-operator-application-request.entity';
 import { WarehouseDocument } from './warehouse-document.entity';
+import { WarehouseApplicantVerification } from '../warehouse-applicant-verification/entities/warehouse-applicant-verification.entity';
 
 @Entity('company_information')
 export class CompanyInformation {
@@ -61,5 +62,7 @@ export class CompanyInformation {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  verifications?: WarehouseApplicantVerification[];
 }
 
