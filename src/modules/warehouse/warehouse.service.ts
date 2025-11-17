@@ -850,6 +850,49 @@ export class WarehouseService {
   }
 
   /**
+   * Get HR information for an application
+   */
+  async getHrInformation(applicationId: string, userId: string) {
+    const application = await this.warehouseOperatorRepository.findOne({
+      where: { id: applicationId, userId },
+    });
+
+    if (!application) {
+      throw new NotFoundException('Warehouse operator application not found');
+    }
+
+    // Find HR information for this application
+    const hr = await this.hrRepository.findOne({
+      where: { applicationId: application.id },
+      relations: [
+        'personalDetails',
+        'personalDetails.designation',
+        'academicQualifications',
+        'academicQualifications.academicCertificateDocument',
+        'professionalQualifications',
+        'professionalQualifications.professionalCertificateDocument',
+        'trainings',
+        'trainings.trainingCertificateDocument',
+        'experiences',
+        'experiences.experienceLetterDocument',
+        'declaration',
+      ],
+    });
+
+    if (!hr) {
+      return {
+        message: 'HR information not found',
+        data: null,
+      };
+    }
+
+    return {
+      message: 'HR information retrieved successfully',
+      data: this.mapHrEntityToResponse(hr),
+    };
+  }
+
+  /**
    * Create HR context for an application
    */
   async createHrContext(applicationId: string, userId: string) {
@@ -2864,8 +2907,12 @@ export class WarehouseService {
         country: item.country,
         yearOfPassing: item.yearOfPassing,
         grade: item.grade ?? null,
-        academicCertificate: item.academicCertificate ?? null,
-        academicCertificateDocumentName: item.academicCertificateDocument?.originalFileName ?? null,
+        academicCertificate: item.academicCertificateDocument
+          ? {
+              documentId: item.academicCertificate,
+              originalFileName: item.academicCertificateDocument.originalFileName ?? undefined,
+            }
+          : null,
       })) ?? [],
       professionalQualifications: hr.professionalQualifications?.map((item) => ({
         id: item.id,
@@ -2875,8 +2922,12 @@ export class WarehouseService {
         dateOfAward: item.dateOfAward,
         validity: item.validity ?? null,
         membershipNumber: item.membershipNumber ?? null,
-        professionalCertificate: item.professionalCertificate ?? null,
-        professionalCertificateDocumentName: item.professionalCertificateDocument?.originalFileName ?? null,
+        professionalCertificate: item.professionalCertificateDocument
+          ? {
+              documentId: item.professionalCertificate,
+              originalFileName: item.professionalCertificateDocument.originalFileName ?? undefined,
+            }
+          : null,
       })) ?? [],
       trainings: hr.trainings?.map((item) => ({
         id: item.id,
@@ -2886,8 +2937,12 @@ export class WarehouseService {
         durationStart: item.durationStart,
         durationEnd: item.durationEnd,
         dateOfCompletion: item.dateOfCompletion,
-        trainingCertificate: item.trainingCertificate ?? null,
-        trainingCertificateDocumentName: item.trainingCertificateDocument?.originalFileName ?? null,
+        trainingCertificate: item.trainingCertificateDocument
+          ? {
+              documentId: item.trainingCertificate,
+              originalFileName: item.trainingCertificateDocument.originalFileName ?? undefined,
+            }
+          : null,
       })) ?? [],
       experiences: hr.experiences?.map((item) => ({
         id: item.id,
@@ -2899,8 +2954,12 @@ export class WarehouseService {
         dateOfLeaving: item.dateOfLeaving ?? null,
         duration: item.duration ?? null,
         responsibilities: item.responsibilities ?? null,
-        experienceLetter: item.experienceLetter ?? null,
-        experienceLetterDocumentName: item.experienceLetterDocument?.originalFileName ?? null,
+        experienceLetter: item.experienceLetterDocument
+          ? {
+              documentId: item.experienceLetter,
+              originalFileName: item.experienceLetterDocument.originalFileName ?? undefined,
+            }
+          : null,
       })) ?? [],
       declaration: hr.declaration
         ? {

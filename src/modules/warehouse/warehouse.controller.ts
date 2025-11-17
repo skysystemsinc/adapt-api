@@ -275,6 +275,17 @@ export class WarehouseController {
     );
   }
 
+  @ApiOperation({ summary: 'Get HR information for an application' })
+  @ApiBearerAuth('JWT-auth')
+  @Get('/operator/application/:applicationId/hr-information')
+  getHrInformation(
+    @Param('applicationId') applicationId: string,
+    @Request() request: any,
+  ) {
+    const user = request.user as User;
+    return this.warehouseService.getHrInformation(applicationId, user.id);
+  }
+
   @ApiOperation({ summary: 'Create HR context for an application' })
   @ApiBearerAuth('JWT-auth')
   @Post('/operator/application/:applicationId/hr/context')
