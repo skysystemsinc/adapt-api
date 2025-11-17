@@ -944,6 +944,7 @@ export class WarehouseService {
       relations: [
         'personalDetails',
         'personalDetails.designation',
+        'personalDetails.photographDocument',
         'academicQualifications',
         'academicQualifications.academicCertificateDocument',
         'professionalQualifications',
