@@ -135,16 +135,6 @@ export class WarehouseController {
     return this.warehouseService.deleteAuthorizedSignatory(authorizedSignatoryId, user.id);
   }
 
-  @ApiOperation({ summary: 'Get company information by id for an application' })
-  @ApiBearerAuth('JWT-auth')
-  @Get('/operator/application/company-information/:companyInformationId')
-  getCompanyInformationById(
-    @Param('companyInformationId') companyInformationId: string,
-    @Request() request: any,
-  ) {
-    return this.warehouseService.getCompanyInformationById(companyInformationId);
-  }
-
   @ApiOperation({ summary: 'Create company information' })
   @ApiBearerAuth('JWT-auth')
   @ApiConsumes('multipart/form-data')
@@ -345,6 +335,17 @@ export class WarehouseController {
     const user = request.user as User;
     return this.warehouseService.getCompanyInformation(applicationId, user.id);
   }
+
+  @ApiOperation({ summary: 'Get company information by id for an application' })
+  @ApiBearerAuth('JWT-auth')
+  @Get('/operator/application/company-information/:companyInformationId')
+  getCompanyInformationById(
+    @Param('companyInformationId') companyInformationId: string,
+    @Request() request: any,
+  ) {
+    return this.warehouseService.getCompanyInformationById(companyInformationId);
+  }
+
 
   @ApiOperation({ summary: 'Get bank details for an application' })
   @ApiBearerAuth('JWT-auth')

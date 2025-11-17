@@ -1035,6 +1035,40 @@ export class WarehouseService {
     };
   }
 
+  
+  async getCompanyInformationById(companyInformationId: string) {
+    const companyInformation = await this.companyInformationRepository.findOne({
+      where: { id: companyInformationId },
+      relations: ['ntcCertificate'],
+    });
+
+    if (!companyInformation) {
+      throw new NotFoundException('Company information not found');
+    }
+
+    return {
+      message: 'Company information retrieved successfully',
+      data: {
+        id: companyInformation.id,
+        companyName: companyInformation.companyName,
+        secpRegistrationNumber: companyInformation.secpRegistrationNumber,
+        activeFilerStatus: companyInformation.activeFilerStatus,
+        dateOfIncorporation: companyInformation.dateOfIncorporation,
+        businessCommencementDate: companyInformation.businessCommencementDate,
+        registeredOfficeAddress: companyInformation.registeredOfficeAddress,
+        postalCode: companyInformation.postalCode,
+        nationalTaxNumber: companyInformation.nationalTaxNumber,
+        salesTaxRegistrationNumber: companyInformation.salesTaxRegistrationNumber,
+        ntcCertificate: companyInformation.ntcCertificate
+          ? {
+            documentId: companyInformation.ntcCertificate.id,
+            originalFileName: companyInformation.ntcCertificate.originalFileName ?? undefined,
+          }
+          : null,
+      },
+    };
+  }
+
   async getBankDetails(applicationId: string, userId: string) {
     const application = await this.warehouseOperatorRepository.findOne({
       where: { id: applicationId, userId },
@@ -2912,39 +2946,6 @@ export class WarehouseService {
     return await repo.save(repo.create({ ...dto, applicantChecklist: checklist }));
   }
 
-
-  async getCompanyInformationById(companyInformationId: string) {
-    const companyInformation = await this.companyInformationRepository.findOne({
-      where: { id: companyInformationId },
-      relations: ['ntcCertificate'],
-    });
-
-    if (!companyInformation) {
-      throw new NotFoundException('Company information not found');
-    }
-
-    return {
-      message: 'Company information retrieved successfully',
-      data: {
-        id: companyInformation.id,
-        companyName: companyInformation.companyName,
-        secpRegistrationNumber: companyInformation.secpRegistrationNumber,
-        activeFilerStatus: companyInformation.activeFilerStatus,
-        dateOfIncorporation: companyInformation.dateOfIncorporation,
-        businessCommencementDate: companyInformation.businessCommencementDate,
-        registeredOfficeAddress: companyInformation.registeredOfficeAddress,
-        postalCode: companyInformation.postalCode,
-        nationalTaxNumber: companyInformation.nationalTaxNumber,
-        salesTaxRegistrationNumber: companyInformation.salesTaxRegistrationNumber,
-        ntcCertificate: companyInformation.ntcCertificate
-          ? {
-            documentId: companyInformation.ntcCertificate.id,
-            originalFileName: companyInformation.ntcCertificate.originalFileName ?? undefined,
-          }
-          : null,
-      },
-    };
-  }
 
   /**
    * Get company information with related documents
