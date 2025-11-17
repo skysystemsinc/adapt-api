@@ -165,6 +165,34 @@ export class WarehouseController {
     );
   }
 
+  @ApiOperation({ summary: 'Update company information for a warehouse operator application' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor('ntcCertificate', {
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB max
+      },
+    }),
+  )
+  @Patch('/operator/application/:applicationId/company-information/:companyInformationId')
+  updateCompanyInformation(
+    @Body() createCompanyInformationDto: CreateCompanyInformationRequestDto,
+    @UploadedFile() ntcCertificateFile: any,
+    @Request() request: any,
+    @Param('applicationId') applicationId: string,
+    @Param('companyInformationId') companyInformationId: string
+  ) {
+    const user = request.user as User;
+    return this.warehouseService.updateCompanyInformation(
+      createCompanyInformationDto,
+      user.id,
+      applicationId,
+      companyInformationId,
+      ntcCertificateFile
+    );
+  }
+
   @ApiOperation({ summary: 'Upload warehouse document' })
   @ApiBearerAuth('JWT-auth')
   @ApiConsumes('multipart/form-data')
@@ -284,6 +312,61 @@ export class WarehouseController {
   ) {
     const user = request.user as User;
     return this.warehouseService.getHrInformation(applicationId, user.id);
+  }
+
+  @ApiOperation({ summary: 'Get warehouse application with authorized signatories' })
+  @ApiBearerAuth('JWT-auth')
+  @Get('/operator/application/:applicationId/warehouse-application')
+  getWarehouseApplication(
+    @Param('applicationId') applicationId: string,
+    @Request() request: any,
+  ) {
+    const user = request.user as User;
+    return this.warehouseService.getWarehouseApplication(applicationId, user.id);
+  }
+
+  @ApiOperation({ summary: 'Get company information for an application' })
+  @ApiBearerAuth('JWT-auth')
+  @Get('/operator/application/:applicationId/company-information')
+  getCompanyInformation(
+    @Param('applicationId') applicationId: string,
+    @Request() request: any,
+  ) {
+    const user = request.user as User;
+    return this.warehouseService.getCompanyInformation(applicationId, user.id);
+  }
+
+  @ApiOperation({ summary: 'Get bank details for an application' })
+  @ApiBearerAuth('JWT-auth')
+  @Get('/operator/application/:applicationId/bank-details')
+  getBankDetails(
+    @Param('applicationId') applicationId: string,
+    @Request() request: any,
+  ) {
+    const user = request.user as User;
+    return this.warehouseService.getBankDetails(applicationId, user.id);
+  }
+
+  @ApiOperation({ summary: 'Get financial information for an application' })
+  @ApiBearerAuth('JWT-auth')
+  @Get('/operator/application/:applicationId/financial-information')
+  getFinancialInformation(
+    @Param('applicationId') applicationId: string,
+    @Request() request: any,
+  ) {
+    const user = request.user as User;
+    return this.warehouseService.getFinancialInformation(applicationId, user.id);
+  }
+
+  @ApiOperation({ summary: 'Get applicant checklist for an application' })
+  @ApiBearerAuth('JWT-auth')
+  @Get('/operator/application/:applicationId/applicant-checklist')
+  getApplicantChecklist(
+    @Param('applicationId') applicationId: string,
+    @Request() request: any,
+  ) {
+    const user = request.user as User;
+    return this.warehouseService.getApplicantChecklist(applicationId, user.id);
   }
 
   @ApiOperation({ summary: 'Create HR context for an application' })

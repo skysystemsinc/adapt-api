@@ -330,6 +330,83 @@ export class WarehouseService {
     };
   }
 
+  async updateCompanyInformation(
+    createCompanyInformationDto: CreateCompanyInformationRequestDto,
+    userId: string,
+    applicationId: string,
+    companyInformationId: string,
+    ntcCertificateFile?: any
+  ) {
+    // Find existing warehouse operator application for this user
+    const existingApplication = await this.warehouseOperatorRepository.findOne({
+      where: { userId, id: applicationId },
+    });
+
+    if (!existingApplication) {
+      throw new NotFoundException('Warehouse operator application not found. Please create an application first.');
+    }
+
+    if (![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(existingApplication.status)) {
+      throw new BadRequestException('Cannot update company information after application is approved or submitted');
+    }
+
+    // Find existing company information
+    const existingCompanyInfo = await this.companyInformationRepository.findOne({
+      where: { id: companyInformationId, applicationId: existingApplication.id },
+      relations: ['ntcCertificate'],
+    });
+
+    if (!existingCompanyInfo) {
+      throw new NotFoundException('Company information not found');
+    }
+
+    // Update company information fields
+    existingCompanyInfo.companyName = createCompanyInformationDto.companyName;
+    existingCompanyInfo.secpRegistrationNumber = createCompanyInformationDto.secpRegistrationNumber;
+    existingCompanyInfo.activeFilerStatus = createCompanyInformationDto.activeFilerStatus;
+    existingCompanyInfo.dateOfIncorporation = createCompanyInformationDto.dateOfIncorporation;
+    existingCompanyInfo.businessCommencementDate = createCompanyInformationDto.businessCommencementDate ?? existingCompanyInfo.businessCommencementDate ?? null;
+    existingCompanyInfo.registeredOfficeAddress = createCompanyInformationDto.registeredOfficeAddress;
+    existingCompanyInfo.postalCode = createCompanyInformationDto.postalCode ?? existingCompanyInfo.postalCode ?? null;
+    existingCompanyInfo.nationalTaxNumber = createCompanyInformationDto.nationalTaxNumber;
+    existingCompanyInfo.salesTaxRegistrationNumber = createCompanyInformationDto.salesTaxRegistrationNumber;
+
+    const savedCompanyInformation = await this.companyInformationRepository.save(existingCompanyInfo);
+
+    // If ntcCertificate file is provided, upload it and link to company information
+    let ntcCertificateDocumentId: string | undefined;
+    if (ntcCertificateFile) {
+      const documentResult = await this.uploadWarehouseDocument(
+        ntcCertificateFile,
+        userId,
+        'CompanyInformation',
+        savedCompanyInformation.id,
+        'ntcCertificate'
+      );
+      ntcCertificateDocumentId = documentResult.id;
+
+      // Update company information with the ntcCertificate foreign key
+      const ntcCertificateDocument = await this.warehouseDocumentRepository.findOne({
+        where: { id: ntcCertificateDocumentId }
+      });
+
+      if (ntcCertificateDocument) {
+        savedCompanyInformation.ntcCertificate = ntcCertificateDocument;
+        await this.companyInformationRepository.save(savedCompanyInformation);
+      }
+    } else if (existingCompanyInfo.ntcCertificate) {
+      // Keep existing certificate if no new file is provided
+      ntcCertificateDocumentId = existingCompanyInfo.ntcCertificate.id;
+    }
+
+    return {
+      message: 'Company information updated successfully',
+      companyInformationId: savedCompanyInformation.id,
+      applicationId: existingApplication.applicationId,
+      ntcCertificate: ntcCertificateDocumentId,
+    };
+  }
+
   async upsertHrInformation(
     applicationId: string,
     dto: UpsertHrInformationDto,
@@ -889,6 +966,181 @@ export class WarehouseService {
     return {
       message: 'HR information retrieved successfully',
       data: this.mapHrEntityToResponse(hr),
+    };
+  }
+
+  async getWarehouseApplication(applicationId: string, userId: string) {
+    const application = await this.warehouseOperatorRepository.findOne({
+      where: { id: applicationId, userId },
+      relations: ['authorizedSignatories'],
+    });
+
+    if (!application) {
+      throw new NotFoundException('Warehouse operator application not found');
+    }
+
+    return {
+      message: 'Warehouse application retrieved successfully',
+      data: {
+        id: application.id,
+        applicationId: application.applicationId,
+        applicationType: application.applicationType,
+        status: application.status,
+        authorizedSignatories: application.authorizedSignatories || [],
+      },
+    };
+  }
+
+  async getCompanyInformation(applicationId: string, userId: string) {
+    const application = await this.warehouseOperatorRepository.findOne({
+      where: { id: applicationId, userId },
+    });
+
+    if (!application) {
+      throw new NotFoundException('Warehouse operator application not found');
+    }
+
+    const companyInformation = await this.companyInformationRepository.findOne({
+      where: { applicationId: application.id },
+      relations: ['ntcCertificate'],
+    });
+
+    if (!companyInformation) {
+      return {
+        message: 'Company information not found',
+        data: null,
+      };
+    }
+
+    return {
+      message: 'Company information retrieved successfully',
+      data: {
+        id: companyInformation.id,
+        companyName: companyInformation.companyName,
+        secpRegistrationNumber: companyInformation.secpRegistrationNumber,
+        activeFilerStatus: companyInformation.activeFilerStatus,
+        dateOfIncorporation: companyInformation.dateOfIncorporation,
+        businessCommencementDate: companyInformation.businessCommencementDate,
+        registeredOfficeAddress: companyInformation.registeredOfficeAddress,
+        postalCode: companyInformation.postalCode,
+        nationalTaxNumber: companyInformation.nationalTaxNumber,
+        salesTaxRegistrationNumber: companyInformation.salesTaxRegistrationNumber,
+        ntcCertificate: companyInformation.ntcCertificate
+          ? {
+              documentId: companyInformation.ntcCertificate.id,
+              originalFileName: companyInformation.ntcCertificate.originalFileName ?? undefined,
+            }
+          : null,
+      },
+    };
+  }
+
+  async getBankDetails(applicationId: string, userId: string) {
+    const application = await this.warehouseOperatorRepository.findOne({
+      where: { id: applicationId, userId },
+    });
+
+    if (!application) {
+      throw new NotFoundException('Warehouse operator application not found');
+    }
+
+    const bankDetails = await this.bankDetailsRepository.findOne({
+      where: { applicationId: application.id },
+    });
+
+    if (!bankDetails) {
+      return {
+        message: 'Bank details not found',
+        data: null,
+      };
+    }
+
+    return {
+      message: 'Bank details retrieved successfully',
+      data: {
+        id: bankDetails.id,
+        name: bankDetails.name,
+        accountTitle: bankDetails.accountTitle,
+        iban: bankDetails.iban,
+        accountType: bankDetails.accountType,
+        branchAddress: bankDetails.branchAddress,
+        status: bankDetails.status,
+      },
+    };
+  }
+
+  async getFinancialInformation(applicationId: string, userId: string) {
+    const application = await this.warehouseOperatorRepository.findOne({
+      where: { id: applicationId, userId },
+    });
+
+    if (!application) {
+      throw new NotFoundException('Warehouse operator application not found');
+    }
+
+    const financialInfo = await this.financialInformationRepository.findOne({
+      where: { applicationId: application.id },
+      relations: [
+        'auditReport',
+        'taxReturns',
+        'bankStatements',
+        'others',
+      ],
+    });
+
+    if (!financialInfo) {
+      return {
+        message: 'Financial information not found',
+        data: null,
+      };
+    }
+
+    return {
+      message: 'Financial information retrieved successfully',
+      data: this.mapFinancialInformationEntityToResponse(financialInfo),
+    };
+  }
+
+  async getApplicantChecklist(applicationId: string, userId: string) {
+    const application = await this.warehouseOperatorRepository.findOne({
+      where: { id: applicationId, userId },
+    });
+
+    if (!application) {
+      throw new NotFoundException('Warehouse operator application not found');
+    }
+
+    const checklist = await this.applicantChecklistRepository.findOne({
+      where: { applicationId: application.id },
+      relations: [
+        'humanResources',
+        'humanResources.qcPersonnelDocument',
+        'humanResources.warehouseSupervisorDocument',
+        'humanResources.dataEntryOperatorDocument',
+        'financialSoundness',
+        'financialSoundness.auditedFinancialStatementsDocument',
+        'financialSoundness.positiveNetWorthDocument',
+        'financialSoundness.noLoanDefaultsDocument',
+        'financialSoundness.cleanCreditHistoryDocument',
+        'financialSoundness.adequateWorkingCapitalDocument',
+        'financialSoundness.validInsuranceCoverageDocument',
+        'financialSoundness.noFinancialFraudDocument',
+        'registrationFee',
+        'registrationFee.bankPaymentSlipDocument',
+        'declaration',
+      ],
+    });
+
+    if (!checklist) {
+      return {
+        message: 'Applicant checklist not found',
+        data: null,
+      };
+    }
+
+    return {
+      message: 'Applicant checklist retrieved successfully',
+      data: this.mapApplicantChecklistEntityToResponse(checklist),
     };
   }
 
@@ -2785,7 +3037,7 @@ export class WarehouseService {
 
     const bankDetails = this.bankDetailsRepository.create({
       applicationId: application.id,
-      name: createBankDetailsDto.accountTitle,
+      name: createBankDetailsDto.name,
       accountTitle: createBankDetailsDto.accountTitle,
       iban: createBankDetailsDto.iban,
       accountType: createBankDetailsDto.accountType,
@@ -2895,8 +3147,12 @@ export class WarehouseService {
           mobileNumber: hr.personalDetails.mobileNumber,
           email: hr.personalDetails.email,
           nationalTaxNumber: hr.personalDetails.nationalTaxNumber ?? null,
-          photograph: hr.personalDetails.photograph ?? null,
-          photographDocumentName: hr.personalDetails.photographDocument?.originalFileName ?? null,
+          photograph: hr.personalDetails.photographDocument && hr.personalDetails.photograph
+            ? {
+                documentId: hr.personalDetails.photograph,
+                originalFileName: hr.personalDetails.photographDocument?.originalFileName ?? undefined,
+              }
+            : null,
         }
         : null,
       academicQualifications: hr.academicQualifications?.map((item) => ({
@@ -3030,36 +3286,91 @@ export class WarehouseService {
         ? {
             id: checklist.humanResources.id,
             qcPersonnel: checklist.humanResources.qcPersonnel,
-            qcPersonnelFile: checklist.humanResources.qcPersonnelFile ?? null,
+            qcPersonnelFile: checklist.humanResources.qcPersonnelDocument
+              ? {
+                  documentId: checklist.humanResources.qcPersonnelFile,
+                  originalFileName: checklist.humanResources.qcPersonnelDocument.originalFileName ?? undefined,
+                }
+              : null,
             warehouseSupervisor: checklist.humanResources.warehouseSupervisor,
-            warehouseSupervisorFile: checklist.humanResources.warehouseSupervisorFile ?? null,
+            warehouseSupervisorFile: checklist.humanResources.warehouseSupervisorDocument
+              ? {
+                  documentId: checklist.humanResources.warehouseSupervisorFile,
+                  originalFileName: checklist.humanResources.warehouseSupervisorDocument.originalFileName ?? undefined,
+                }
+              : null,
             dataEntryOperator: checklist.humanResources.dataEntryOperator,
-            dataEntryOperatorFile: checklist.humanResources.dataEntryOperatorFile ?? null,
+            dataEntryOperatorFile: checklist.humanResources.dataEntryOperatorDocument
+              ? {
+                  documentId: checklist.humanResources.dataEntryOperatorFile,
+                  originalFileName: checklist.humanResources.dataEntryOperatorDocument.originalFileName ?? undefined,
+                }
+              : null,
           }
         : null,
       financialSoundness: checklist.financialSoundness
         ? {
             id: checklist.financialSoundness.id,
             auditedFinancialStatements: checklist.financialSoundness.auditedFinancialStatements,
-            auditedFinancialStatementsFile: checklist.financialSoundness.auditedFinancialStatementsFile ?? null,
+            auditedFinancialStatementsFile: checklist.financialSoundness.auditedFinancialStatementsDocument
+              ? {
+                  documentId: checklist.financialSoundness.auditedFinancialStatementsFile,
+                  originalFileName: checklist.financialSoundness.auditedFinancialStatementsDocument.originalFileName ?? undefined,
+                }
+              : null,
             positiveNetWorth: checklist.financialSoundness.positiveNetWorth,
-            positiveNetWorthFile: checklist.financialSoundness.positiveNetWorthFile ?? null,
+            positiveNetWorthFile: checklist.financialSoundness.positiveNetWorthDocument
+              ? {
+                  documentId: checklist.financialSoundness.positiveNetWorthFile,
+                  originalFileName: checklist.financialSoundness.positiveNetWorthDocument.originalFileName ?? undefined,
+                }
+              : null,
             noLoanDefaults: checklist.financialSoundness.noLoanDefaults,
-            noLoanDefaultsFile: checklist.financialSoundness.noLoanDefaultsFile ?? null,
+            noLoanDefaultsFile: checklist.financialSoundness.noLoanDefaultsDocument
+              ? {
+                  documentId: checklist.financialSoundness.noLoanDefaultsFile,
+                  originalFileName: checklist.financialSoundness.noLoanDefaultsDocument.originalFileName ?? undefined,
+                }
+              : null,
             cleanCreditHistory: checklist.financialSoundness.cleanCreditHistory,
-            cleanCreditHistoryFile: checklist.financialSoundness.cleanCreditHistoryFile ?? null,
+            cleanCreditHistoryFile: checklist.financialSoundness.cleanCreditHistoryDocument
+              ? {
+                  documentId: checklist.financialSoundness.cleanCreditHistoryFile,
+                  originalFileName: checklist.financialSoundness.cleanCreditHistoryDocument.originalFileName ?? undefined,
+                }
+              : null,
             adequateWorkingCapital: checklist.financialSoundness.adequateWorkingCapital,
-            adequateWorkingCapitalFile: checklist.financialSoundness.adequateWorkingCapitalFile ?? null,
+            adequateWorkingCapitalFile: checklist.financialSoundness.adequateWorkingCapitalDocument
+              ? {
+                  documentId: checklist.financialSoundness.adequateWorkingCapitalFile,
+                  originalFileName: checklist.financialSoundness.adequateWorkingCapitalDocument.originalFileName ?? undefined,
+                }
+              : null,
             validInsuranceCoverage: checklist.financialSoundness.validInsuranceCoverage,
-            validInsuranceCoverageFile: checklist.financialSoundness.validInsuranceCoverageFile ?? null,
+            validInsuranceCoverageFile: checklist.financialSoundness.validInsuranceCoverageDocument
+              ? {
+                  documentId: checklist.financialSoundness.validInsuranceCoverageFile,
+                  originalFileName: checklist.financialSoundness.validInsuranceCoverageDocument.originalFileName ?? undefined,
+                }
+              : null,
             noFinancialFraud: checklist.financialSoundness.noFinancialFraud,
-            noFinancialFraudFile: checklist.financialSoundness.noFinancialFraudFile ?? null,
+            noFinancialFraudFile: checklist.financialSoundness.noFinancialFraudDocument
+              ? {
+                  documentId: checklist.financialSoundness.noFinancialFraudFile,
+                  originalFileName: checklist.financialSoundness.noFinancialFraudDocument.originalFileName ?? undefined,
+                }
+              : null,
           }
         : null,
       registrationFee: checklist.registrationFee
         ? {
             id: checklist.registrationFee.id,
-            bankPaymentSlip: checklist.registrationFee.bankPaymentSlip ?? null,
+            bankPaymentSlip: checklist.registrationFee.bankPaymentSlipDocument
+              ? {
+                  documentId: checklist.registrationFee.bankPaymentSlip,
+                  originalFileName: checklist.registrationFee.bankPaymentSlipDocument.originalFileName ?? undefined,
+                }
+              : null,
           }
         : null,
       declaration: checklist.declaration
