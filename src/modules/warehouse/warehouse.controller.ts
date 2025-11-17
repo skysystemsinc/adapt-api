@@ -29,7 +29,7 @@ import {
 } from './swagger/authorized-signatory.swagger';
 import { ListWarehouseOperatorApplicationDto } from './dto/list-warehouse.dto';
 import { CreateAuthorizedSignatoryDto } from './dto/create-authorized-signatory.dto';
-import { request } from 'http';
+
 
 @ApiTags('Warehouse')
 @ApiBearerAuth('JWT-auth')
@@ -64,6 +64,18 @@ export class WarehouseController {
     return this.warehouseService.createOperatorApplication(createWarehouseDto, user.id);
   }
 
+  @ApiOperation({ summary: 'Get application entity data by type and id' })
+  @ApiBearerAuth('JWT-auth')
+  @Get('/operator/application/:entityType/:entityId')
+  async getApplicationEntityById(
+    @Param('entityType') entityType: 'authorized_signatories' | 'company_information' | 'bank_details' | 'hrs' | 'financial_information' | 'applicant_checklist',
+    @Param('entityId') entityId: string,
+  ) {
+    console.log("ENTITY TYPE:", entityType);
+    console.log("ENTITY ID:", entityId);
+    return this.warehouseService.getApplicationEntityById(entityType, entityId);
+  }
+
   @ApiOperation({ summary: 'Create a new authorized signatory for a warehouse operator application' })
   @ApiBearerAuth('JWT-auth')
   @ApiBody(AuthorizedSignatoryApiBodySchema)
@@ -80,18 +92,6 @@ export class WarehouseController {
   ) {
     const user = request.user as User;
     return this.warehouseService.createAuthorizedSignatory(id, createAuthorizedSignatoryDto, user.id);
-  }
-
-
-
-  @ApiOperation({ summary: 'Get authorized signatory by id for an application' })
-  @ApiBearerAuth('JWT-auth')
-  @Get('/operator/application/authorized-signatory/:authorizedSignatoryId')
-  getAuthorizedSignatoryById(
-    @Param('authorizedSignatoryId') authorizedSignatoryId: string,
-    @Request() request: any,
-  ) {
-    return this.warehouseService.getAuthorizedSignatoryById(authorizedSignatoryId);
   }
 
   @ApiOperation({ summary: 'Update authorized signatory' })
@@ -145,16 +145,6 @@ export class WarehouseController {
   ) {
     const user = request.user as User;
     return this.warehouseService.deleteAuthorizedSignatory(authorizedSignatoryId, user.id);
-  }
-
-  @ApiOperation({ summary: 'Get company information by id for an application' })
-  @ApiBearerAuth('JWT-auth')
-  @Get('/operator/application/company-information/:companyInformationId')
-  getCompanyInformationById(
-    @Param('companyInformationId') companyInformationId: string,
-    @Request() request: any,
-  ) {
-    return this.warehouseService.getCompanyInformationById(companyInformationId);
   }
 
   @ApiOperation({ summary: 'Create company information' })
@@ -242,16 +232,6 @@ export class WarehouseController {
   ) {
     const user = request.user as User;
     return this.warehouseService.createBankDetails(applicationId, createBankDetailsDto, user.id);
-  }
-
-  @ApiOperation({ summary: 'Get bank details by id for an application' })
-  @ApiBearerAuth('JWT-auth')
-  @Get('/operator/application/bank-details/:bankDetailsId')
-  getBankDetailsById(
-    @Param('bankDetailsId') bankDetailsId: string,
-    @Request() request: any,
-  ) {
-    return this.warehouseService.getBankDetailsById(bankDetailsId);
   }
 
   @ApiOperation({ summary: 'Create or update HR information profile' })

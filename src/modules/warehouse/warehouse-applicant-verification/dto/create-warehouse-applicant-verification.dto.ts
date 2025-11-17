@@ -25,10 +25,10 @@ export class CreateWarehouseApplicantVerificationDto {
     remarks?: string;
 
     @IsOptional()
-    @IsNumber()
-    approvedBy?: number;
+    @IsString()
+    approvedBy?: string;
 
     @IsOptional()
-    @IsNumber()
-    rejectedBy?: number;
+    @IsString()
+    rejectedBy?: string;
 }
