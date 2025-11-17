@@ -184,6 +184,30 @@ export class WarehouseService {
     };
   }
 
+  async getAuthorizedSignatoryById(authorizedSignatoryId: string) {
+    const authorizedSignatory = await this.authorizedSignatoryRepository.findOne({
+      where: { id: authorizedSignatoryId },
+    });
+
+    if (!authorizedSignatory) {
+      throw new NotFoundException('Company information not found');
+    }
+
+    const {
+      id,
+      warehouseOperatorApplicationRequestId,
+      isActive,
+      createdAt,
+      updatedAt,
+      ...cleanData
+    } = authorizedSignatory;
+
+    return {
+      message: 'Company information retrieved successfully',
+      data: cleanData
+    };
+  }
+
   async updateAuthorizedSignatory(
     authorizedSignatoryId: string,
     updateAuthorizedSignatoryDto: CreateAuthorizedSignatoryDto,
@@ -2792,6 +2816,28 @@ export class WarehouseService {
     };
   }
 
+  async getBankDetailsById(bankDetailsId: string) {
+    const bankDetails = await this.bankDetailsRepository.findOne({
+      where: { id: bankDetailsId },
+    });
+
+    if (!bankDetails) {
+      throw new NotFoundException('Company information not found');
+    }
+
+    return {
+      message: 'Company information retrieved successfully',
+      data: {
+        id: bankDetails.id,
+        name: bankDetails.name,
+        accountTitle: bankDetails.accountTitle,
+        iban: bankDetails.iban,
+        accountType: bankDetails.accountType,
+        branchAddress: bankDetails.branchAddress,
+      }
+    };
+  }
+
   async updateBankDetails(
     applicationId: string,
     bankDetailsId: string,
@@ -3003,39 +3049,39 @@ export class WarehouseService {
       id: checklist.id,
       humanResources: checklist.humanResources
         ? {
-            id: checklist.humanResources.id,
-            qcPersonnel: checklist.humanResources.qcPersonnel,
-            qcPersonnelFile: checklist.humanResources.qcPersonnelFile ?? null,
-            warehouseSupervisor: checklist.humanResources.warehouseSupervisor,
-            warehouseSupervisorFile: checklist.humanResources.warehouseSupervisorFile ?? null,
-            dataEntryOperator: checklist.humanResources.dataEntryOperator,
-            dataEntryOperatorFile: checklist.humanResources.dataEntryOperatorFile ?? null,
-          }
+          id: checklist.humanResources.id,
+          qcPersonnel: checklist.humanResources.qcPersonnel,
+          qcPersonnelFile: checklist.humanResources.qcPersonnelFile ?? null,
+          warehouseSupervisor: checklist.humanResources.warehouseSupervisor,
+          warehouseSupervisorFile: checklist.humanResources.warehouseSupervisorFile ?? null,
+          dataEntryOperator: checklist.humanResources.dataEntryOperator,
+          dataEntryOperatorFile: checklist.humanResources.dataEntryOperatorFile ?? null,
+        }
         : null,
       financialSoundness: checklist.financialSoundness
         ? {
-            id: checklist.financialSoundness.id,
-            auditedFinancialStatements: checklist.financialSoundness.auditedFinancialStatements,
-            auditedFinancialStatementsFile: checklist.financialSoundness.auditedFinancialStatementsFile ?? null,
-            positiveNetWorth: checklist.financialSoundness.positiveNetWorth,
-            positiveNetWorthFile: checklist.financialSoundness.positiveNetWorthFile ?? null,
-            noLoanDefaults: checklist.financialSoundness.noLoanDefaults,
-            noLoanDefaultsFile: checklist.financialSoundness.noLoanDefaultsFile ?? null,
-            cleanCreditHistory: checklist.financialSoundness.cleanCreditHistory,
-            cleanCreditHistoryFile: checklist.financialSoundness.cleanCreditHistoryFile ?? null,
-            adequateWorkingCapital: checklist.financialSoundness.adequateWorkingCapital,
-            adequateWorkingCapitalFile: checklist.financialSoundness.adequateWorkingCapitalFile ?? null,
-            validInsuranceCoverage: checklist.financialSoundness.validInsuranceCoverage,
-            validInsuranceCoverageFile: checklist.financialSoundness.validInsuranceCoverageFile ?? null,
-            noFinancialFraud: checklist.financialSoundness.noFinancialFraud,
-            noFinancialFraudFile: checklist.financialSoundness.noFinancialFraudFile ?? null,
-          }
+          id: checklist.financialSoundness.id,
+          auditedFinancialStatements: checklist.financialSoundness.auditedFinancialStatements,
+          auditedFinancialStatementsFile: checklist.financialSoundness.auditedFinancialStatementsFile ?? null,
+          positiveNetWorth: checklist.financialSoundness.positiveNetWorth,
+          positiveNetWorthFile: checklist.financialSoundness.positiveNetWorthFile ?? null,
+          noLoanDefaults: checklist.financialSoundness.noLoanDefaults,
+          noLoanDefaultsFile: checklist.financialSoundness.noLoanDefaultsFile ?? null,
+          cleanCreditHistory: checklist.financialSoundness.cleanCreditHistory,
+          cleanCreditHistoryFile: checklist.financialSoundness.cleanCreditHistoryFile ?? null,
+          adequateWorkingCapital: checklist.financialSoundness.adequateWorkingCapital,
+          adequateWorkingCapitalFile: checklist.financialSoundness.adequateWorkingCapitalFile ?? null,
+          validInsuranceCoverage: checklist.financialSoundness.validInsuranceCoverage,
+          validInsuranceCoverageFile: checklist.financialSoundness.validInsuranceCoverageFile ?? null,
+          noFinancialFraud: checklist.financialSoundness.noFinancialFraud,
+          noFinancialFraudFile: checklist.financialSoundness.noFinancialFraudFile ?? null,
+        }
         : null,
       registrationFee: checklist.registrationFee
         ? {
-            id: checklist.registrationFee.id,
-            bankPaymentSlip: checklist.registrationFee.bankPaymentSlip ?? null,
-          }
+          id: checklist.registrationFee.id,
+          bankPaymentSlip: checklist.registrationFee.bankPaymentSlip ?? null,
+        }
         : null,
       declaration: checklist.declaration
         ? {
