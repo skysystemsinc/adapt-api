@@ -45,8 +45,8 @@ async function runSeeders() {
     // const settingsSeeder = new SettingsSeeder();
     // await settingsSeeder.run(AppDataSource);
 
-    const designationSeeder = new DesignationSeeder();
-    await designationSeeder.run(AppDataSource);
+    // const designationSeeder = new DesignationSeeder();
+    // await designationSeeder.run(AppDataSource);
 
     console.log('\n✅ Seeding completed successfully!');
     process.exit(0);
