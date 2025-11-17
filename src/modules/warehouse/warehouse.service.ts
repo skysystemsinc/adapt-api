@@ -2636,10 +2636,10 @@ export class WarehouseService {
     // Update or create Financial Soundness
     const fsEntity = existingApplicantChecklist.financialSoundness
       ? await this.updateFinancialSoundness(
-          existingApplicantChecklist.financialSoundness,
-          dto.financialSoundness,
-          repos.financialSoundness,
-        )
+        existingApplicantChecklist.financialSoundness,
+        dto.financialSoundness,
+        repos.financialSoundness,
+      )
       : await this.createFinancialSoundness(dto.financialSoundness, existingApplicantChecklist, repos.financialSoundness);
 
     if (!existingApplicantChecklist.financialSoundness) {
@@ -2695,10 +2695,10 @@ export class WarehouseService {
     // Update or create Registration Fee
     const rfEntity = existingApplicantChecklist.registrationFee
       ? await this.updateRegistrationFee(
-          existingApplicantChecklist.registrationFee,
-          dto.registrationFee,
-          repos.registrationFee,
-        )
+        existingApplicantChecklist.registrationFee,
+        dto.registrationFee,
+        repos.registrationFee,
+      )
       : await this.createRegistrationFee(dto.registrationFee, existingApplicantChecklist, repos.registrationFee);
 
     if (!existingApplicantChecklist.registrationFee) {
@@ -2910,6 +2910,40 @@ export class WarehouseService {
    */
   private async createRegistrationFee(dto: any, checklist: ApplicantChecklistEntity, repo: Repository<any>) {
     return await repo.save(repo.create({ ...dto, applicantChecklist: checklist }));
+  }
+
+
+  async getCompanyInformationById(companyInformationId: string) {
+    const companyInformation = await this.companyInformationRepository.findOne({
+      where: { id: companyInformationId },
+      relations: ['ntcCertificate'],
+    });
+
+    if (!companyInformation) {
+      throw new NotFoundException('Company information not found');
+    }
+
+    return {
+      message: 'Company information retrieved successfully',
+      data: {
+        id: companyInformation.id,
+        companyName: companyInformation.companyName,
+        secpRegistrationNumber: companyInformation.secpRegistrationNumber,
+        activeFilerStatus: companyInformation.activeFilerStatus,
+        dateOfIncorporation: companyInformation.dateOfIncorporation,
+        businessCommencementDate: companyInformation.businessCommencementDate,
+        registeredOfficeAddress: companyInformation.registeredOfficeAddress,
+        postalCode: companyInformation.postalCode,
+        nationalTaxNumber: companyInformation.nationalTaxNumber,
+        salesTaxRegistrationNumber: companyInformation.salesTaxRegistrationNumber,
+        ntcCertificate: companyInformation.ntcCertificate
+          ? {
+            documentId: companyInformation.ntcCertificate.id,
+            originalFileName: companyInformation.ntcCertificate.originalFileName ?? undefined,
+          }
+          : null,
+      },
+    };
   }
 
   /**
@@ -3268,13 +3302,13 @@ export class WarehouseService {
         : null,
       other: financialInfo.others?.[0]
         ? {
-           id: financialInfo.others[0].id,
-           documentType: financialInfo.others[0].documentType,
-           documentName: financialInfo.others[0].documentName,
-           periodStart: financialInfo.others[0].periodStart,
-           periodEnd: financialInfo.others[0].periodEnd,
-           remarks: financialInfo.others[0].remarks ?? null,
-         }
+          id: financialInfo.others[0].id,
+          documentType: financialInfo.others[0].documentType,
+          documentName: financialInfo.others[0].documentName,
+          periodStart: financialInfo.others[0].periodStart,
+          periodEnd: financialInfo.others[0].periodEnd,
+          remarks: financialInfo.others[0].remarks ?? null,
+        }
         : null,
     };
   }
@@ -3375,10 +3409,10 @@ export class WarehouseService {
         : null,
       declaration: checklist.declaration
         ? {
-            id: checklist.declaration.id,
-            informationTrueComplete: checklist.declaration.informationTrueComplete,
-            authorizeVerification: checklist.declaration.authorizeVerification,
-          }
+          id: checklist.declaration.id,
+          informationTrueComplete: checklist.declaration.informationTrueComplete,
+          authorizeVerification: checklist.declaration.authorizeVerification,
+        }
         : null,
     };
   }
