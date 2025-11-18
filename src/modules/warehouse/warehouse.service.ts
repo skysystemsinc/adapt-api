@@ -3302,16 +3302,16 @@ export class WarehouseService {
           remarks: financialInfo.bankStatements[0].remarks ?? null,
         }
         : null,
-      other: financialInfo.others?.[0]
-        ? {
-          id: financialInfo.others[0].id,
-          documentType: financialInfo.others[0].documentType,
-          documentName: financialInfo.others[0].documentName,
-          periodStart: financialInfo.others[0].periodStart,
-          periodEnd: financialInfo.others[0].periodEnd,
-          remarks: financialInfo.others[0].remarks ?? null,
-        }
-        : null,
+      other: financialInfo.others && financialInfo.others.length > 0
+        ? financialInfo.others.map((other) => ({
+          id: other.id,
+          documentType: other.documentType,
+          documentName: other.documentName,
+          periodStart: other.periodStart,
+          periodEnd: other.periodEnd,
+          remarks: other.remarks ?? null,
+        }))
+        : [],
     };
   }
 
