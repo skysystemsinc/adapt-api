@@ -1017,7 +1017,8 @@ export class WarehouseController {
   createApplicantChecklist(
     @Param('applicationId') applicationId: string,
     @Body('data') dataString: string,
-    @UploadedFiles() files: {
+    @Query('submit') submitParam?: string,
+    @UploadedFiles() files?: {
       qcPersonnelFile?: any[];
       warehouseSupervisorFile?: any[];
       dataEntryOperatorFile?: any[];
@@ -1030,7 +1031,7 @@ export class WarehouseController {
       noFinancialFraudFile?: any[];
       bankPaymentSlip?: any[];
     },
-    @Request() request: any,
+    @Request() request?: any,
   ) {
     if (!dataString) {
       throw new BadRequestException('Data field is required');
@@ -1043,8 +1044,12 @@ export class WarehouseController {
       throw new BadRequestException('Invalid JSON in data field');
     }
 
-    const user = request.user as User;
-    return this.warehouseService.createApplicantChecklist(applicationId, payload, user.id, files);
+    const user = request?.user as User;
+    if (!user) {
+      throw new BadRequestException('User not found in request');
+    }
+    const submit = submitParam === 'true' || submitParam === '1';
+    return this.warehouseService.createApplicantChecklist(applicationId, payload, user.id, files, submit);
   }
 
   @Get()
