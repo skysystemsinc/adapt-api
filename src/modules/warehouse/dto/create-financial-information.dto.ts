@@ -140,6 +140,10 @@ export class OthersDto {
   @IsString()
   @MaxLength(200)
   remarks?: string;
+
+  @IsOptional()
+  @IsUUID()
+  document?: string; // Document ID for existing documents
 }
 
 export class CreateFinancialInformationDto {

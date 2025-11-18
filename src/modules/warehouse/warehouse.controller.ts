@@ -9,7 +9,7 @@ import { User } from '../users/entities/user.entity';
 import { FileInterceptor, FileFieldsInterceptor } from '@nestjs/platform-express';
 import { UpdateBankDetailsDto } from './dto/create-bank-details.dto';
 import { UpsertHrInformationDto, HrPersonalDetailsDto, HrDeclarationDto, HrAcademicQualificationDto, HrProfessionalQualificationDto, HrTrainingDto, HrExperienceDto } from './dto/create-hr-information.dto';
-import { CreateFinancialInformationDto } from './dto/create-financial-information.dto';
+import { CreateFinancialInformationDto, OthersDto } from './dto/create-financial-information.dto';
 import { CreateApplicantChecklistDto } from './dto/create-applicant-checklist.dto';
 import {
   ApplicantChecklistApiBodySchema,
@@ -793,6 +793,179 @@ export class WarehouseController {
   ) {
     const user = request.user as User;
     return this.warehouseService.createFinancialInformation(applicationId, payload, user.id);
+  }
+
+  @ApiOperation({ summary: 'Save a new other document' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor('document', {
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB max
+      },
+    }),
+  )
+  @Post('/operator/application/:applicationId/financial-information/others')
+  saveOther(
+    @Param('applicationId') applicationId: string,
+    @Body('data') dataString: string,
+    @UploadedFile() documentFile: any,
+    @Request() request: any,
+  ) {
+    if (!dataString) {
+      throw new BadRequestException('Data field is required');
+    }
+
+    let payload: OthersDto;
+    try {
+      payload = JSON.parse(dataString);
+    } catch (error) {
+      throw new BadRequestException('Invalid JSON in data field');
+    }
+
+    const user = request.user as User;
+    return this.warehouseService.saveOther(applicationId, payload, user.id, undefined, documentFile);
+  }
+
+  @ApiOperation({ summary: 'Update an existing other document' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor('document', {
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB max
+      },
+    }),
+  )
+  @Post('/operator/application/:applicationId/financial-information/others/:id')
+  updateOther(
+    @Param('applicationId') applicationId: string,
+    @Param('id') id: string,
+    @Body('data') dataString: string,
+    @UploadedFile() documentFile: any,
+    @Request() request: any,
+  ) {
+    if (!dataString) {
+      throw new BadRequestException('Data field is required');
+    }
+
+    let payload: OthersDto;
+    try {
+      payload = JSON.parse(dataString);
+    } catch (error) {
+      throw new BadRequestException('Invalid JSON in data field');
+    }
+
+    const user = request.user as User;
+    return this.warehouseService.saveOther(applicationId, payload, user.id, id, documentFile);
+  }
+
+  @ApiOperation({ summary: 'Delete an other document' })
+  @ApiBearerAuth('JWT-auth')
+  @Delete('/operator/application/financial-information/others/:id')
+  deleteOther(
+    @Param('id') id: string,
+    @Request() request: any,
+  ) {
+    const user = request.user as User;
+    return this.warehouseService.deleteOther(id, user.id);
+  }
+
+  @ApiOperation({ summary: 'Save a new financial subsection (unified endpoint)' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiConsumes('multipart/form-data')
+  @ApiParam({ name: 'sectionType', enum: ['audit-report', 'tax-return', 'bank-statement', 'other'] })
+  @UseInterceptors(
+    FileInterceptor('document', {
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB max
+      },
+    }),
+  )
+  @Post('/operator/application/:applicationId/financial-information/:sectionType')
+  saveFinancialSubsection(
+    @Param('applicationId') applicationId: string,
+    @Param('sectionType') sectionType: 'audit-report' | 'tax-return' | 'bank-statement' | 'other',
+    @Body('data') dataString: string,
+    @UploadedFile() documentFile: any,
+    @Request() request: any,
+  ) {
+    if (!dataString) {
+      throw new BadRequestException('Data field is required');
+    }
+
+    let payload: any;
+    try {
+      payload = JSON.parse(dataString);
+    } catch (error) {
+      throw new BadRequestException('Invalid JSON in data field');
+    }
+
+    const user = request.user as User;
+    return this.warehouseService.saveFinancialSubsection(
+      sectionType,
+      applicationId,
+      payload,
+      user.id,
+      undefined,
+      documentFile,
+    );
+  }
+
+  @ApiOperation({ summary: 'Update an existing financial subsection (unified endpoint)' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiConsumes('multipart/form-data')
+  @ApiParam({ name: 'sectionType', enum: ['audit-report', 'tax-return', 'bank-statement', 'other'] })
+  @UseInterceptors(
+    FileInterceptor('document', {
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB max
+      },
+    }),
+  )
+  @Post('/operator/application/:applicationId/financial-information/:sectionType/:id')
+  updateFinancialSubsection(
+    @Param('applicationId') applicationId: string,
+    @Param('sectionType') sectionType: 'audit-report' | 'tax-return' | 'bank-statement' | 'other',
+    @Param('id') id: string,
+    @Body('data') dataString: string,
+    @UploadedFile() documentFile: any,
+    @Request() request: any,
+  ) {
+    if (!dataString) {
+      throw new BadRequestException('Data field is required');
+    }
+
+    let payload: any;
+    try {
+      payload = JSON.parse(dataString);
+    } catch (error) {
+      throw new BadRequestException('Invalid JSON in data field');
+    }
+
+    const user = request.user as User;
+    return this.warehouseService.saveFinancialSubsection(
+      sectionType,
+      applicationId,
+      payload,
+      user.id,
+      id,
+      documentFile,
+    );
+  }
+
+  @ApiOperation({ summary: 'Delete a financial subsection (unified endpoint)' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiParam({ name: 'sectionType', enum: ['audit-report', 'tax-return', 'bank-statement', 'other'] })
+  @Delete('/operator/application/:applicationId/financial-information/:sectionType/:id')
+  deleteFinancialSubsection(
+    @Param('applicationId') applicationId: string,
+    @Param('sectionType') sectionType: 'audit-report' | 'tax-return' | 'bank-statement' | 'other',
+    @Param('id') id: string,
+    @Request() request: any,
+  ) {
+    const user = request.user as User;
+    return this.warehouseService.deleteFinancialSubsection(sectionType, id, user.id);
   }
 
   @ApiOperation({ summary: 'Update a bank details for a warehouse operator application' })

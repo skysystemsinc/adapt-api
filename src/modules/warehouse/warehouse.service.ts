@@ -27,7 +27,7 @@ import { AuditReportEntity } from './entities/financial/audit-report.entity';
 import { TaxReturnEntity } from './entities/financial/tax-return.entity';
 import { BankStatementEntity } from './entities/financial/bank-statement.entity';
 import { OthersEntity } from './entities/financial/others.entity';
-import { CreateFinancialInformationDto } from './dto/create-financial-information.dto';
+import { CreateFinancialInformationDto, OthersDto } from './dto/create-financial-information.dto';
 import { CreateApplicantChecklistDto } from './dto/create-applicant-checklist.dto';
 import { ApplicantChecklistEntity } from './entities/applicant-checklist.entity';
 import { FinancialSoundnessChecklistEntity } from './entities/checklist/financial-soundness.entity';
@@ -36,6 +36,8 @@ import { HumanResourcesChecklistEntity } from './entities/checklist/human-resour
 import { RegistrationFeeChecklistEntity } from './entities/checklist/registration-fee.entity';
 import { ListWarehouseOperatorApplicationDto } from './dto/list-warehouse.dto';
 import { CreateAuthorizedSignatoryDto } from './dto/create-authorized-signatory.dto';
+import { forwardRef, Inject } from '@nestjs/common';
+import { FinancialInformationService } from './financial-information.service';
 
 @Injectable()
 export class WarehouseService {
@@ -61,6 +63,8 @@ export class WarehouseService {
     @InjectRepository(ApplicantChecklistEntity)
     private readonly applicantChecklistRepository: Repository<ApplicantChecklistEntity>,
     private readonly dataSource: DataSource,
+    @Inject(forwardRef(() => FinancialInformationService))
+    private readonly financialInformationService: FinancialInformationService,
   ) {
     // Ensure upload directory exists
     this.ensureUploadDirectory();
@@ -1120,6 +1124,7 @@ export class WarehouseService {
         'taxReturns',
         'bankStatements',
         'others',
+        'others.document',
       ],
     });
 
@@ -2341,6 +2346,62 @@ export class WarehouseService {
   }
 
   /**
+   * Save or update a single other document
+   * @deprecated Use FinancialInformationService.saveOther instead
+   */
+  async saveOther(
+    applicationId: string,
+    dto: OthersDto,
+    userId: string,
+    id?: string,
+    documentFile?: any,
+  ) {
+    return this.financialInformationService.saveOther(applicationId, dto, userId, id, documentFile);
+  }
+
+  /**
+   * Delete an other document
+   * @deprecated Use FinancialInformationService.deleteOther instead
+   */
+  async deleteOther(id: string, userId: string) {
+    return this.financialInformationService.deleteOther(id, userId);
+  }
+
+  /**
+   * Unified method to save or update a financial subsection
+   * @deprecated Use FinancialInformationService.saveFinancialSubsection instead
+   */
+  async saveFinancialSubsection(
+    sectionType: 'audit-report' | 'tax-return' | 'bank-statement' | 'other',
+    applicationId: string,
+    dto: any,
+    userId: string,
+    id?: string,
+    documentFile?: any,
+  ) {
+    return this.financialInformationService.saveFinancialSubsection(
+      sectionType,
+      applicationId,
+      dto,
+      userId,
+      id,
+      documentFile,
+    );
+  }
+
+  /**
+   * Unified method to delete a financial subsection
+   * @deprecated Use FinancialInformationService.deleteFinancialSubsection instead
+   */
+  async deleteFinancialSubsection(
+    sectionType: 'audit-report' | 'tax-return' | 'bank-statement' | 'other',
+    id: string,
+    userId: string,
+  ) {
+    return this.financialInformationService.deleteFinancialSubsection(sectionType, id, userId);
+  }
+
+  /**
    * Upload applicant checklist files and return document IDs
    */
   private async uploadApplicantChecklistFiles(
@@ -3310,6 +3371,12 @@ export class WarehouseService {
           periodStart: other.periodStart,
           periodEnd: other.periodEnd,
           remarks: other.remarks ?? null,
+          document: other.document && other.document.id
+            ? {
+                documentId: other.document.id,
+                originalFileName: other.document.originalFileName ?? undefined,
+              }
+            : null,
         }))
         : [],
     };
