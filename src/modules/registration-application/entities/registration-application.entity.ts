@@ -1,6 +1,7 @@
 import { ApplicationType } from "../../application-type/entities/application-type.entity";
 import { Column, CreateDateColumn, Entity, JoinColumn, OneToMany, OneToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { RegistrationApplicationDetails } from "./registration-application-details.entity";
+import { User } from "../../users/entities/user.entity";
 
 export enum ApplicationStatus {
     PENDING = 'PENDING',
@@ -22,10 +23,14 @@ export class RegistrationApplication {
     @JoinColumn({ name: 'applicationTypeId' })
     applicationTypeId: ApplicationType | null;
 
+    @OneToOne(() => User, { nullable: true })
+    @JoinColumn({ name: 'userId' })
+    user: User | null;
+
     @OneToMany(() => RegistrationApplicationDetails, details => details.application, { cascade: true })
     details: RegistrationApplicationDetails[];
 
-    @Column({ 
+    @Column({
         type: 'enum',
         enum: ApplicationStatus,
         default: ApplicationStatus.PENDING,

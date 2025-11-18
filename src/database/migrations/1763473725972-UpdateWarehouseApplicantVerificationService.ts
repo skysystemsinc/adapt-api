@@ -4,9 +4,9 @@ export class UpdateWarehouseApplicantVerificationService1763473725972 implements
     name = 'UpdateWarehouseApplicantVerificationService1763473725972'
 
     public async up(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`ALTER TABLE "registration_application" DROP CONSTRAINT "FK_79bad6b8ec15830e8d666eaf05d"`);
-        await queryRunner.query(`ALTER TABLE "registration_application" DROP CONSTRAINT "UQ_79bad6b8ec15830e8d666eaf05d"`);
-        await queryRunner.query(`ALTER TABLE "registration_application" DROP COLUMN "userId"`);
+        // await queryRunner.query(`ALTER TABLE "registration_application" DROP CONSTRAINT "FK_79bad6b8ec15830e8d666eaf05d"`);
+        // await queryRunner.query(`ALTER TABLE "registration_application" DROP CONSTRAINT "UQ_79bad6b8ec15830e8d666eaf05d"`);
+        // await queryRunner.query(`ALTER TABLE "registration_application" DROP COLUMN "userId"`);
         await queryRunner.query(`ALTER TABLE "warehouse_applicant_verifications" DROP COLUMN "approvedBy"`);
         await queryRunner.query(`ALTER TABLE "warehouse_applicant_verifications" ADD "approvedBy" uuid`);
         await queryRunner.query(`ALTER TABLE "warehouse_applicant_verifications" DROP COLUMN "rejectedBy"`);
