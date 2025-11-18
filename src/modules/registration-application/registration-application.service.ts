@@ -307,13 +307,18 @@ export class RegistrationApplicationService {
 
     // If approved, create user account
     if (dto.status === ApplicationStatus.APPROVED) {
-      await this.createUserFromApplication(application);
+      const userId = await this.createUserFromApplication(application);
+      const user = await this.usersService.findOne(userId);
+      if (user) {
+        application.user = user;
+        await this.registrationApplicationRepository.save(application);
+      }
     }
 
     return this.findOne(id);
   }
 
-  private async createUserFromApplication(application: RegistrationApplication): Promise<void> {
+  private async createUserFromApplication(application: RegistrationApplication): Promise<string> {
     try {
       // Get form fields to find email field by type
       const formFields = await this.formFieldRepository.find({
@@ -362,7 +367,7 @@ export class RegistrationApplicationService {
       // const randomPassword = this.generateSecurePassword();
 
       // Create user with business name as firstName, lastName always N/A
-      await this.usersService.create({
+      const createdUser = await this.usersService.create({
         email: emailDetail.value,
         password: "Password@123",
         firstName: businessNameDetail?.value || 'N/A',
@@ -370,10 +375,12 @@ export class RegistrationApplicationService {
         roleId: applicantRole.id,
       });
 
+      return createdUser.id;
+
     } catch (error) {
       // Log error but don't fail the approval process
       console.error('Failed to create user from application:', error.message);
-      // You might want to set a flag on the application indicating user creation failed
+      throw error; // Re-throw to handle in calling method
     }
   }
 

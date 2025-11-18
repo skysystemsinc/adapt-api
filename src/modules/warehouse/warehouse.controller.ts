@@ -66,7 +66,7 @@ export class WarehouseController {
 
   @ApiOperation({ summary: 'Get application entity data by type and id' })
   @ApiBearerAuth('JWT-auth')
-  @Get('/operator/application/:entityType/:entityId')
+  @Get('/operator/application/entity/:entityType/:entityId')
   async getApplicationEntityById(
     @Param('entityType') entityType: 'authorized_signatories' | 'company_information' | 'bank_details' | 'hrs' | 'financial_information' | 'applicant_checklist',
     @Param('entityId') entityId: string,
