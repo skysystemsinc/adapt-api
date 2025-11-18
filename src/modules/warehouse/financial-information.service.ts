@@ -189,11 +189,6 @@ export class FinancialInformationService {
           throw new NotFoundException('Tax return not found');
         }
 
-        // Validate: If no document exists, require a new document to be uploaded
-        if (!existing.document && !documentFile) {
-          throw new BadRequestException('Document is required for tax return. Please upload a document.');
-        }
-
         Object.assign(existing, {
           documentType: dto.documentType,
           documentName: dto.documentName,
@@ -203,7 +198,10 @@ export class FinancialInformationService {
         });
 
         // Handle document upload/update
+        // If file is provided, overwrite the old document
+        // If string (documentId) is provided in dto.document, ignore it (keep existing document)
         if (documentFile) {
+          // Upload new document (replace existing if any)
           const doc = await this.warehouseService.uploadWarehouseDocument(
             documentFile,
             userId,
@@ -216,6 +214,7 @@ export class FinancialInformationService {
             existing.document = documentEntity;
           }
         }
+        // If documentId (string) is provided in dto.document, ignore it - keep existing document relationship
 
         await taxReturnRepo.save(existing);
         return existing;
@@ -305,11 +304,6 @@ export class FinancialInformationService {
           throw new NotFoundException('Bank statement not found');
         }
 
-        // Validate: If no document exists, require a new document to be uploaded
-        if (!existing.document && !documentFile) {
-          throw new BadRequestException('Document is required for bank statement. Please upload a document.');
-        }
-
         Object.assign(existing, {
           documentType: dto.documentType,
           documentName: dto.documentName,
@@ -319,7 +313,10 @@ export class FinancialInformationService {
         });
 
         // Handle document upload/update
+        // If file is provided, overwrite the old document
+        // If string (documentId) is provided in dto.document, ignore it (keep existing document)
         if (documentFile) {
+          // Upload new document (replace existing if any)
           const doc = await this.warehouseService.uploadWarehouseDocument(
             documentFile,
             userId,
@@ -332,6 +329,7 @@ export class FinancialInformationService {
             existing.document = documentEntity;
           }
         }
+        // If documentId (string) is provided in dto.document, ignore it - keep existing document relationship
 
         await bankStatementRepo.save(existing);
         return existing;
@@ -401,7 +399,7 @@ export class FinancialInformationService {
    */
   async saveOther(
     applicationId: string,
-    dto: OthersDto,
+    dto: OthersDto & { document?: string | { documentId?: string; id?: string } },
     userId: string,
     id?: string,
     documentFile?: any,
@@ -464,11 +462,6 @@ export class FinancialInformationService {
           throw new NotFoundException('Other document not found');
         }
 
-        // Validate: If no document exists, require either a new document to be uploaded OR a document ID
-        if (!existing.document && !documentFile && !dto.document) {
-          throw new BadRequestException('Document is required for other document. Please upload a document.');
-        }
-
         Object.assign(existing, {
           documentType: dto.documentType,
           documentName: dto.documentName,
@@ -478,8 +471,10 @@ export class FinancialInformationService {
         });
 
         // Handle document upload/update
+        // If file is provided, overwrite the old document
+        // If string (documentId) is provided, ignore it (keep existing document)
         if (documentFile) {
-          // Upload new document
+          // Upload new document (replace existing if any)
           const doc = await this.warehouseService.uploadWarehouseDocument(
             documentFile,
             userId,
@@ -496,30 +491,14 @@ export class FinancialInformationService {
           if (documentEntity) {
             existing.document = documentEntity;
           }
-        } else if (dto.document) {
-          // Assign existing document by ID
-          await assignDocument(
-            dto.document,
-            'FinancialOthers',
-            dto.documentType,
-            existing.id,
-          );
-          
-          // Reload the document entity
-          const documentEntity = await documentRepo.findOne({
-            where: { id: dto.document },
-          });
-
-          if (documentEntity) {
-            existing.document = documentEntity;
-          }
         }
+        // If documentId (string) is provided, ignore it - keep existing document relationship
 
         await othersRepo.save(existing);
 
         return existing;
       } else {
-        // Create new - document is required
+        // Create new - document file is required
         if (!documentFile) {
           throw new BadRequestException('Document is required for other document. Please upload a document.');
         }

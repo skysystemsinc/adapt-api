@@ -1122,7 +1122,9 @@ export class WarehouseService {
       relations: [
         'auditReport',
         'taxReturns',
+        'taxReturns.document',
         'bankStatements',
+        'bankStatements.document',
         'others',
         'others.document',
       ],
@@ -2383,9 +2385,9 @@ export class WarehouseService {
       sectionType,
       applicationId,
       dto,
-      userId,
+            userId,
       id,
-      documentFile,
+            documentFile,
     );
   }
 
@@ -3351,6 +3353,12 @@ export class WarehouseService {
           periodStart: financialInfo.taxReturns[0].periodStart,
           periodEnd: financialInfo.taxReturns[0].periodEnd,
           remarks: financialInfo.taxReturns[0].remarks ?? null,
+          taxDocument: financialInfo.taxReturns[0].document && financialInfo.taxReturns[0].document.id
+            ? {
+                documentId: financialInfo.taxReturns[0].document.id,
+                originalFileName: financialInfo.taxReturns[0].document.originalFileName ?? undefined,
+              }
+            : null,
         }
         : null,
       bankStatement: financialInfo.bankStatements?.[0]
@@ -3361,6 +3369,12 @@ export class WarehouseService {
           periodStart: financialInfo.bankStatements[0].periodStart,
           periodEnd: financialInfo.bankStatements[0].periodEnd,
           remarks: financialInfo.bankStatements[0].remarks ?? null,
+          bankDocument: financialInfo.bankStatements[0].document && financialInfo.bankStatements[0].document.id
+            ? {
+                documentId: financialInfo.bankStatements[0].document.id,
+                originalFileName: financialInfo.bankStatements[0].document.originalFileName ?? undefined,
+              }
+            : null,
         }
         : null,
       other: financialInfo.others && financialInfo.others.length > 0
