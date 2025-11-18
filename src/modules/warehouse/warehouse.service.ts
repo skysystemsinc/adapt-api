@@ -158,6 +158,35 @@ export class WarehouseService {
     };
   }
 
+
+  async getApplicationEntityById(
+    entityType: string,
+    entityId: string,
+  ) {
+    switch (entityType) {
+      case 'authorized_signatories':
+        return this.getAuthorizedSignatoryData(entityId);
+
+      case 'company_information':
+        return this.getCompanyInformationData(entityId);
+
+      case 'bank_details':
+        return this.getBankDetailsData(entityId);
+
+      case 'hrs':
+        return this.getHrInformationData(entityId);
+
+      case 'financial_information':
+        return this.getFinancialInformationData(entityId);
+
+      case 'applicant_checklist':
+        return this.getApplicantChecklistData(entityId);
+
+      default:
+        throw new BadRequestException('Invalid entity type');
+    }
+  }
+
   async createAuthorizedSignatory(id: string, createAuthorizedSignatoryDto: CreateAuthorizedSignatoryDto, userId: string) {
     const application = await this.warehouseOperatorRepository.findOne({ where: { id, userId } });
     if (!application) {
@@ -188,6 +217,107 @@ export class WarehouseService {
     };
   }
 
+  private async getAuthorizedSignatoryData(authorizedSignatoryId: string) {
+    const authorizedSignatory = await this.authorizedSignatoryRepository.findOne({
+      where: { id: authorizedSignatoryId },
+    });
+
+    if (!authorizedSignatory) {
+      throw new NotFoundException('Authorized Signatory not found');
+    }
+
+    const {
+      id,
+      warehouseOperatorApplicationRequestId,
+      isActive,
+      createdAt,
+      updatedAt,
+      ...cleanData
+    } = authorizedSignatory;
+
+    return {
+      message: 'Authorized Signatory retrieved successfully',
+      data: cleanData
+    };
+  }
+
+  private async getHrInformationData(hrInformationId: string) {
+    const hrInformation = await this.hrRepository.findOne({
+      where: { id: hrInformationId },
+      relations: ['personalDetails', 'academicQualifications', 'professionalQualifications', 'trainings', 'experiences', 'declaration']
+    });
+
+    if (!hrInformation) {
+      throw new NotFoundException('HR information not found');
+    }
+
+    const {
+      id,
+      isActive,
+      createdAt,
+      updatedAt,
+      applicationId,
+      declarationId,
+      personalDetailsId,
+      ...cleanData
+    } = hrInformation;
+
+    return {
+      message: 'HR information retrieved successfully',
+      data: cleanData
+    };
+  }
+  
+  private async getFinancialInformationData(financialInformationId: string) {
+    const financialInformation = await this.financialInformationRepository.findOne({
+      where: { id: financialInformationId },
+      relations: ['auditReport', 'taxReturns', 'bankStatements', 'others']
+    });
+
+    if (!financialInformation) {
+      throw new NotFoundException('Financial information not found');
+    }
+
+    const {
+      id,
+      isActive,
+      createdAt,
+      updatedAt,
+      auditReportId,
+      applicationId,
+      ...cleanData
+    } = financialInformation;
+
+    return {
+      message: 'Financial information retrieved successfully',
+      data: cleanData
+    };
+  }
+
+  private async getApplicantChecklistData(applicantChecklistId: string) {
+    const applicantChecklist = await this.applicantChecklistRepository.findOne({
+      where: { id: applicantChecklistId },
+      relations: ['humanResources', 'financialSoundness', 'registrationFee', 'declaration']
+    });
+
+    if (!applicantChecklist) {
+      throw new NotFoundException('Applicant Checklist not found');
+    }
+
+    const {
+      id,
+      isActive,
+      createdAt,
+      updatedAt,
+      ...cleanData
+    } = applicantChecklist;
+
+    return {
+      message: 'Applicant Checklist retrieved successfully',
+      data: cleanData
+    };
+  }
+  
   async updateAuthorizedSignatory(
     authorizedSignatoryId: string,
     updateAuthorizedSignatoryDto: CreateAuthorizedSignatoryDto,
@@ -3126,6 +3256,39 @@ export class WarehouseService {
   }
 
 
+  private async getCompanyInformationData(companyInformationId: string) {
+    const companyInformation = await this.companyInformationRepository.findOne({
+      where: { id: companyInformationId },
+      relations: ['ntcCertificate'],
+    });
+
+    if (!companyInformation) {
+      throw new NotFoundException('Company information not found');
+    }
+
+    return {
+      message: 'Company information retrieved successfully',
+      data: {
+        id: companyInformation.id,
+        companyName: companyInformation.companyName,
+        secpRegistrationNumber: companyInformation.secpRegistrationNumber,
+        activeFilerStatus: companyInformation.activeFilerStatus,
+        dateOfIncorporation: companyInformation.dateOfIncorporation,
+        businessCommencementDate: companyInformation.businessCommencementDate,
+        registeredOfficeAddress: companyInformation.registeredOfficeAddress,
+        postalCode: companyInformation.postalCode,
+        nationalTaxNumber: companyInformation.nationalTaxNumber,
+        salesTaxRegistrationNumber: companyInformation.salesTaxRegistrationNumber,
+        ntcCertificate: companyInformation.ntcCertificate
+          ? {
+            documentId: companyInformation.ntcCertificate.id,
+            originalFileName: companyInformation.ntcCertificate.originalFileName ?? undefined,
+          }
+          : null,
+      },
+    };
+  }
+
   /**
    * Get company information with related documents
    */
@@ -3264,6 +3427,28 @@ export class WarehouseService {
     return {
       message: 'Bank details saved successfully',
       bankDetailsId: bankDetails.id,
+    };
+  }
+
+  private async getBankDetailsData(bankDetailsId: string) {
+    const bankDetails = await this.bankDetailsRepository.findOne({
+      where: { id: bankDetailsId },
+    });
+
+    if (!bankDetails) {
+      throw new NotFoundException('Bank Details not found');
+    }
+
+    return {
+      message: 'Bank Details retrieved successfully',
+      data: {
+        id: bankDetails.id,
+        name: bankDetails.name,
+        accountTitle: bankDetails.accountTitle,
+        iban: bankDetails.iban,
+        accountType: bankDetails.accountType,
+        branchAddress: bankDetails.branchAddress,
+      }
     };
   }
 

@@ -29,7 +29,7 @@ import {
 } from './swagger/authorized-signatory.swagger';
 import { ListWarehouseOperatorApplicationDto } from './dto/list-warehouse.dto';
 import { CreateAuthorizedSignatoryDto } from './dto/create-authorized-signatory.dto';
-import { request } from 'http';
+
 
 @ApiTags('Warehouse')
 @ApiBearerAuth('JWT-auth')
@@ -51,7 +51,7 @@ export class WarehouseController {
     const user = request.user as User;
     return this.warehouseService.listWarehouseOperatorApplication(user.id, listWarehouseOperatorApplicationDto);
   }
-  
+
   @ApiOperation({ summary: 'Create a new warehouse operator application' })
   @ApiBearerAuth('JWT-auth')
   @ApiBody({ type: CreateWarehouseOperatorApplicationRequestDto })
@@ -62,6 +62,18 @@ export class WarehouseController {
   ) {
     const user = request.user as User;
     return this.warehouseService.createOperatorApplication(createWarehouseDto, user.id);
+  }
+
+  @ApiOperation({ summary: 'Get application entity data by type and id' })
+  @ApiBearerAuth('JWT-auth')
+  @Get('/operator/application/:entityType/:entityId')
+  async getApplicationEntityById(
+    @Param('entityType') entityType: 'authorized_signatories' | 'company_information' | 'bank_details' | 'hrs' | 'financial_information' | 'applicant_checklist',
+    @Param('entityId') entityId: string,
+  ) {
+    console.log("ENTITY TYPE:", entityType);
+    console.log("ENTITY ID:", entityId);
+    return this.warehouseService.getApplicationEntityById(entityType, entityId);
   }
 
   @ApiOperation({ summary: 'Create a new authorized signatory for a warehouse operator application' })
@@ -977,12 +989,12 @@ export class WarehouseController {
     @Param('bankDetailsId') bankDetailsId: string,
     @Body() updateBankDetailsDto: UpdateBankDetailsDto,
     @Request() request: any
-  ) { 
+  ) {
     const user = request.user as User;
     return this.warehouseService.updateBankDetails(applicationId, bankDetailsId, updateBankDetailsDto, user.id);
   }
 
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Create or update applicant checklist for a warehouse operator application',
     description: 'Submit applicant checklist with optional file uploads. Files are uploaded via multipart/form-data and linked to warehouse_documents table.'
   })
