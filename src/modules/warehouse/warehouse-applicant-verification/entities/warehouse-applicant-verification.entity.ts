@@ -1,14 +1,16 @@
+import { User } from "../../../users/entities/user.entity";
 import { ApprovalStatus } from "../../../../common/enums/ApprovalStatus";
 import { EntityType } from "../../../../common/enums/WarehouseApplicantEntityType";
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 
 @Entity('warehouse_applicant_verifications')
 export class WarehouseApplicantVerification {
-    @PrimaryGeneratedColumn()
-    id: number;
+    @PrimaryGeneratedColumn('uuid')
+    @Index()
+    id: string;
 
-    @Column()
-    entityId: number;
+    @Column({ nullable: true, type: 'uuid' })
+    entityId?: string | null;
 
     @Column({
         type: 'enum',
@@ -33,16 +35,24 @@ export class WarehouseApplicantVerification {
     remarks: string;
 
     @Column({ nullable: true })
-    approvedBy: number;
+    approvedBy?: string | null;
+
+    @ManyToOne(() => User, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'approvedBy' })
+    approvedByUser?: User | null;
 
     @Column({ nullable: true })
-    rejectedBy: number;
+    rejectedBy?: string | null;
+
+    @ManyToOne(() => User, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'rejectedBy' })
+    rejectedByUser?: User | null;
 
     @Column({ type: 'timestamp', nullable: true })
-    approvedAt: Date;
+    approvedAt?: Date | null;
 
     @Column({ type: 'timestamp', nullable: true })
-    rejectedAt: Date;
+    rejectedAt?: Date | null;
 
     @Column({ default: true })
     isActive: boolean;

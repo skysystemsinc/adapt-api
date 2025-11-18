@@ -71,8 +71,6 @@ export class WarehouseController {
     @Param('entityType') entityType: 'authorized_signatories' | 'company_information' | 'bank_details' | 'hrs' | 'financial_information' | 'applicant_checklist',
     @Param('entityId') entityId: string,
   ) {
-    console.log("ENTITY TYPE:", entityType);
-    console.log("ENTITY ID:", entityId);
     return this.warehouseService.getApplicationEntityById(entityType, entityId);
   }
 
