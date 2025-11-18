@@ -5,9 +5,11 @@ import { UpdateWarehouseApplicantVerificationDto } from './dto/update-warehouse-
 import { ApproveVerificationDto } from './dto/approve-verification.dto';
 import { RejectVerificationDto } from './dto/reject-verification.dto';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
+import { ApiBearerAuth } from '@nestjs/swagger';
 
 @Controller('warehouse-applicant-verification')
-@UseGuards(JwtAuthGuard)
+// @UseGuards(JwtAuthGuard)
+// @ApiBearerAuth('JWT-auth')
 export class WarehouseApplicantVerificationController {
   constructor(private readonly warehouseApplicantVerificationService: WarehouseApplicantVerificationService) {}
 
@@ -22,13 +24,13 @@ export class WarehouseApplicantVerificationController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.warehouseApplicantVerificationService.findOne(+id);
+  findByEntityId(@Param('id') id: string) {
+    return this.warehouseApplicantVerificationService.findByEntityId(id);
   }
 
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateWarehouseApplicantVerificationDto: UpdateWarehouseApplicantVerificationDto) {
-    return this.warehouseApplicantVerificationService.update(+id, updateWarehouseApplicantVerificationDto);
+    return this.warehouseApplicantVerificationService.update(id, updateWarehouseApplicantVerificationDto);
   }
 
   @Delete(':id')
@@ -44,7 +46,7 @@ export class WarehouseApplicantVerificationController {
     @Request() request: any,
   ) {
     const userId = request.user?.sub || request.user?.id;
-    return this.warehouseApplicantVerificationService.approve(+id, approveDto, userId);
+    return this.warehouseApplicantVerificationService.approve(id, approveDto, userId);
   }
 
   @Patch(':id/reject')
@@ -55,6 +57,6 @@ export class WarehouseApplicantVerificationController {
     @Request() request: any,
   ) {
     const userId = request.user?.sub || request.user?.id;
-    return this.warehouseApplicantVerificationService.reject(+id, rejectDto, userId);
+    return this.warehouseApplicantVerificationService.reject(id, rejectDto, userId);
   }
 }

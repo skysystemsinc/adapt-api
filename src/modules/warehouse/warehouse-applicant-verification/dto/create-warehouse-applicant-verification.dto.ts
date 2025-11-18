@@ -1,10 +1,10 @@
-import { IsEnum, IsNumber, IsOptional, IsString } from "class-validator";
+import { IsEnum, IsOptional, IsString } from "class-validator";
 import { ApprovalStatus } from "src/common/enums/ApprovalStatus";
 import { EntityType } from "src/common/enums/WarehouseApplicantEntityType";
 
 export class CreateWarehouseApplicantVerificationDto {
-    @IsNumber()
-    entityId: number;
+    @IsString()
+    entityId: string;
 
     @IsEnum(EntityType)
     entityType: EntityType;

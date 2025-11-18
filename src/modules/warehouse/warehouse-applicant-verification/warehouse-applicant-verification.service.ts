@@ -24,13 +24,29 @@ export class WarehouseApplicantVerificationService {
     return this.repo.find();
   }
 
-  async findOne(id: number) {
-    const record = await this.repo.findOne({ where: { id } });
+  async findOne(id: string) {
+    const record = await this.repo.findOne({
+      where: { id },
+      select: [
+        'id', 'fieldKey', 'fieldValue', 'status', 'remarks',
+      ]
+    });
     if (!record) throw new NotFoundException('Verification record not found');
     return record;
   }
 
-  async update(id: number, updateWarehouseApplicantVerificationDto: UpdateWarehouseApplicantVerificationDto) {
+  async findByEntityId(entityId: string) {
+    const record = await this.repo.find({
+      where: { entityId },
+      select: [
+        'id', 'fieldKey', 'fieldValue', 'status', 'remarks',
+      ]
+    });
+    if (!record) throw new NotFoundException('Verification record not found');
+    return record;
+  }
+
+  async update(id: string, updateWarehouseApplicantVerificationDto: UpdateWarehouseApplicantVerificationDto) {
     const record = await this.findOne(id);
     const updated = Object.assign(record, updateWarehouseApplicantVerificationDto);
     return this.repo.save(updated);
@@ -40,22 +56,20 @@ export class WarehouseApplicantVerificationService {
     return this.repo.delete(id);
   }
 
-  async approve(id: number, approveDto: ApproveVerificationDto, userId: string) {
+  async approve(id: string, approveDto: ApproveVerificationDto, userId: string) {
     const record = await this.findOne(id);
-    
+
     record.status = ApprovalStatus.APPROVED;
     record.approvedBy = userId;
     record.approvedAt = new Date();
     record.remarks = approveDto.remarks || record.remarks;
-    record.rejectedBy = null;
-    record.rejectedAt = null;
 
     return this.repo.save(record);
   }
 
-  async reject(id: number, rejectDto: RejectVerificationDto, userId: string) {
+  async reject(id: string, rejectDto: RejectVerificationDto, userId: string) {
     const record = await this.findOne(id);
-    
+
     record.status = ApprovalStatus.REJECTED;
     record.rejectedBy = userId;
     record.rejectedAt = new Date();
