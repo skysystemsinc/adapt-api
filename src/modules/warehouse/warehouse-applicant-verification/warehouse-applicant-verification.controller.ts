@@ -28,6 +28,11 @@ export class WarehouseApplicantVerificationController {
     return this.warehouseApplicantVerificationService.findByEntityId(id);
   }
 
+  @Get('/:id/key/:key')
+  findByEntityKey(@Param('id') id: string, @Param('key') key: string) {
+    return this.warehouseApplicantVerificationService.findByEntityKey(id, key);
+  }
+
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateWarehouseApplicantVerificationDto: UpdateWarehouseApplicantVerificationDto) {
     return this.warehouseApplicantVerificationService.update(id, updateWarehouseApplicantVerificationDto);

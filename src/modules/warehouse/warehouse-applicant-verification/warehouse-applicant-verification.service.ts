@@ -45,6 +45,17 @@ export class WarehouseApplicantVerificationService {
     if (!record) throw new NotFoundException('Verification record not found');
     return record;
   }
+  
+  async findByEntityKey(id: string, key: string) {
+    const record = await this.repo.find({
+      where: { fieldKey: key, applicationId: id },
+      select: [
+        'id', 'fieldKey', 'fieldValue', 'status', 'remarks', 'applicationId', 'entityId', 'entityType',
+      ]
+    });
+    if (!record) throw new NotFoundException('Verification record not found');
+    return record;
+  }
 
   async update(id: string, updateWarehouseApplicantVerificationDto: UpdateWarehouseApplicantVerificationDto) {
     const record = await this.findOne(id);

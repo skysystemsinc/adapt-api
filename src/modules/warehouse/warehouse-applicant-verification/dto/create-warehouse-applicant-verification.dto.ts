@@ -1,4 +1,4 @@
-import { IsEnum, IsOptional, IsString } from "class-validator";
+import { IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID } from "class-validator";
 import { ApprovalStatus } from "src/common/enums/ApprovalStatus";
 import { EntityType } from "src/common/enums/WarehouseApplicantEntityType";
 
@@ -31,4 +31,8 @@ export class CreateWarehouseApplicantVerificationDto {
     @IsOptional()
     @IsString()
     rejectedBy?: string;
+
+    @IsNotEmpty()
+    @IsUUID()
+    applicationId: string;
 }

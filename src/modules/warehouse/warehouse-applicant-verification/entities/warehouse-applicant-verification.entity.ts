@@ -2,6 +2,7 @@ import { User } from "../../../users/entities/user.entity";
 import { ApprovalStatus } from "../../../../common/enums/ApprovalStatus";
 import { EntityType } from "../../../../common/enums/WarehouseApplicantEntityType";
 import { Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { WarehouseOperatorApplicationRequest } from "../../entities/warehouse-operator-application-request.entity";
 
 @Entity('warehouse_applicant_verifications')
 export class WarehouseApplicantVerification {
@@ -33,6 +34,13 @@ export class WarehouseApplicantVerification {
 
     @Column({ type: 'text', nullable: true })
     remarks: string;
+
+    @Column({ nullable: true })
+    applicationId?: string | null;
+
+    @ManyToOne(() => WarehouseOperatorApplicationRequest, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'applicationId' })
+    application?: WarehouseOperatorApplicationRequest | null;
 
     @Column({ nullable: true })
     approvedBy?: string | null;
