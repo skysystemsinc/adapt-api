@@ -1,0 +1,688 @@
+import { BadRequestException, forwardRef, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { DataSource, Repository } from 'typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
+import { FinancialInformationEntity } from './entities/financial-information.entity';
+import { TaxReturnEntity } from './entities/financial/tax-return.entity';
+import { BankStatementEntity } from './entities/financial/bank-statement.entity';
+import { OthersEntity } from './entities/financial/others.entity';
+import { AuditReportEntity } from './entities/financial/audit-report.entity';
+import { WarehouseDocument } from './entities/warehouse-document.entity';
+import { WarehouseOperatorApplicationRequest } from './entities/warehouse-operator-application-request.entity';
+import { OthersDto } from './dto/create-financial-information.dto';
+import { WarehouseService } from './warehouse.service';
+
+@Injectable()
+export class FinancialInformationService {
+  constructor(
+    @InjectRepository(FinancialInformationEntity)
+    private readonly financialInformationRepository: Repository<FinancialInformationEntity>,
+    @InjectRepository(TaxReturnEntity)
+    private readonly taxReturnRepository: Repository<TaxReturnEntity>,
+    @InjectRepository(BankStatementEntity)
+    private readonly bankStatementRepository: Repository<BankStatementEntity>,
+    @InjectRepository(OthersEntity)
+    private readonly othersRepository: Repository<OthersEntity>,
+    @InjectRepository(AuditReportEntity)
+    private readonly auditReportRepository: Repository<AuditReportEntity>,
+    @InjectRepository(WarehouseDocument)
+    private readonly warehouseDocumentRepository: Repository<WarehouseDocument>,
+    @InjectRepository(WarehouseOperatorApplicationRequest)
+    private readonly warehouseOperatorRepository: Repository<WarehouseOperatorApplicationRequest>,
+    private readonly dataSource: DataSource,
+    @Inject(forwardRef(() => WarehouseService))
+    private readonly warehouseService: WarehouseService,
+  ) {}
+
+  /**
+   * Unified method to save or update a financial subsection
+   * Supports: audit-report, tax-return, bank-statement, other
+   */
+  async saveFinancialSubsection(
+    sectionType: 'audit-report' | 'tax-return' | 'bank-statement' | 'other',
+    applicationId: string,
+    dto: any,
+    userId: string,
+    id?: string,
+    documentFile?: any,
+  ) {
+    const application = await this.warehouseOperatorRepository.findOne({
+      where: { id: applicationId, userId },
+    });
+
+    if (!application) {
+      throw new NotFoundException('Warehouse operator application not found. Please create an application first.');
+    }
+
+    // Ensure financial information context exists
+    let financialInfo = await this.financialInformationRepository.findOne({
+      where: { applicationId: application.id },
+    });
+
+    if (!financialInfo) {
+      // Create financial information context if it doesn't exist
+      financialInfo = this.financialInformationRepository.create({
+        applicationId: application.id,
+      });
+      await this.financialInformationRepository.save(financialInfo);
+    }
+
+    switch (sectionType) {
+      case 'audit-report':
+        return this.saveAuditReport(financialInfo, dto, userId, id, documentFile);
+      case 'tax-return':
+        return this.saveTaxReturn(financialInfo, dto, userId, id, documentFile);
+      case 'bank-statement':
+        return this.saveBankStatement(financialInfo, dto, userId, id, documentFile);
+      case 'other':
+        return this.saveOther(applicationId, dto, userId, id, documentFile);
+      default:
+        throw new BadRequestException(`Invalid section type: ${sectionType}`);
+    }
+  }
+
+  /**
+   * Save or update audit report
+   */
+  private async saveAuditReport(
+    financialInfo: FinancialInformationEntity,
+    dto: any,
+    userId: string,
+    id?: string,
+    documentFile?: any,
+  ) {
+    const savedResult = await this.dataSource.transaction(async (manager) => {
+      const auditReportRepo = manager.getRepository(AuditReportEntity);
+      const documentRepo = manager.getRepository(WarehouseDocument);
+
+      if (id) {
+        // Update existing
+        const existing = await auditReportRepo.findOne({
+          where: { id, financialInformationId: financialInfo.id },
+        });
+
+        if (!existing) {
+          throw new NotFoundException('Audit report not found');
+        }
+
+        Object.assign(existing, {
+          documentType: dto.documentType,
+          documentName: dto.documentName,
+          periodStart: dto.periodStart,
+          periodEnd: dto.periodEnd,
+          assets: dto.assets,
+          liabilities: dto.liabilities,
+          equity: dto.equity,
+          revenue: dto.revenue,
+          netProfitLoss: dto.netProfitLoss,
+          remarks: dto.remarks ?? null,
+        });
+
+        await auditReportRepo.save(existing);
+        return existing;
+      } else {
+        // Create new
+        const auditReport = auditReportRepo.create({
+          documentType: dto.documentType,
+          documentName: dto.documentName,
+          periodStart: dto.periodStart,
+          periodEnd: dto.periodEnd,
+          assets: dto.assets,
+          liabilities: dto.liabilities,
+          equity: dto.equity,
+          revenue: dto.revenue,
+          netProfitLoss: dto.netProfitLoss,
+          remarks: dto.remarks ?? undefined,
+          financialInformationId: financialInfo.id,
+        });
+        await auditReportRepo.save(auditReport);
+
+        // Update financial info with audit report
+        financialInfo.auditReportId = auditReport.id;
+        await manager.getRepository(FinancialInformationEntity).save(financialInfo);
+
+        return auditReport;
+      }
+    });
+
+    return {
+      message: id ? 'Audit report updated successfully' : 'Audit report saved successfully',
+      data: {
+        id: savedResult.id,
+        documentType: savedResult.documentType,
+        documentName: savedResult.documentName,
+        periodStart: savedResult.periodStart,
+        periodEnd: savedResult.periodEnd,
+        assets: savedResult.assets,
+        liabilities: savedResult.liabilities,
+        equity: savedResult.equity,
+        revenue: savedResult.revenue,
+        netProfitLoss: savedResult.netProfitLoss,
+        remarks: savedResult.remarks ?? null,
+        createdAt: savedResult.createdAt.toISOString(),
+        updatedAt: savedResult.updatedAt.toISOString(),
+      },
+    };
+  }
+
+  /**
+   * Save or update tax return
+   */
+  private async saveTaxReturn(
+    financialInfo: FinancialInformationEntity,
+    dto: any,
+    userId: string,
+    id?: string,
+    documentFile?: any,
+  ) {
+    const savedResult = await this.dataSource.transaction(async (manager) => {
+      const taxReturnRepo = manager.getRepository(TaxReturnEntity);
+      const documentRepo = manager.getRepository(WarehouseDocument);
+
+      if (id) {
+        // Update existing
+        const existing = await taxReturnRepo.findOne({
+          where: { id, financialInformationId: financialInfo.id },
+          relations: ['document'],
+        });
+
+        if (!existing) {
+          throw new NotFoundException('Tax return not found');
+        }
+
+        Object.assign(existing, {
+          documentType: dto.documentType,
+          documentName: dto.documentName,
+          periodStart: dto.periodStart,
+          periodEnd: dto.periodEnd,
+          remarks: dto.remarks ?? null,
+        });
+
+        // Handle document upload/update
+        // If file is provided, overwrite the old document
+        // If string (documentId) is provided in dto.document, ignore it (keep existing document)
+        if (documentFile) {
+          // Upload new document (replace existing if any)
+          const doc = await this.warehouseService.uploadWarehouseDocument(
+            documentFile,
+            userId,
+            'TaxReturn',
+            existing.id,
+            'document',
+          );
+          const documentEntity = await documentRepo.findOne({ where: { id: doc.id } });
+          if (documentEntity) {
+            existing.document = documentEntity;
+          }
+        }
+        // If documentId (string) is provided in dto.document, ignore it - keep existing document relationship
+
+        await taxReturnRepo.save(existing);
+        return existing;
+      } else {
+        // Create new - document is required
+        if (!documentFile) {
+          throw new BadRequestException('Document is required for tax return. Please upload a document.');
+        }
+
+        const taxReturn = taxReturnRepo.create({
+          documentType: dto.documentType,
+          documentName: dto.documentName,
+          periodStart: dto.periodStart,
+          periodEnd: dto.periodEnd,
+          remarks: dto.remarks ?? undefined,
+          financialInformationId: financialInfo.id,
+        });
+        await taxReturnRepo.save(taxReturn);
+
+        // Handle document upload after creating the entity
+        const doc = await this.warehouseService.uploadWarehouseDocument(
+          documentFile,
+          userId,
+          'TaxReturn',
+          taxReturn.id,
+          'document',
+        );
+        const documentEntity = await documentRepo.findOne({ where: { id: doc.id } });
+        if (documentEntity) {
+          taxReturn.document = documentEntity;
+          await taxReturnRepo.save(taxReturn);
+        }
+
+        return taxReturn;
+      }
+    });
+
+    // Reload the entity with document relation to return complete data
+    const resultWithDocument = await this.dataSource.getRepository(TaxReturnEntity).findOne({
+      where: { id: savedResult.id },
+      relations: ['document'],
+    });
+
+    return {
+      message: id ? 'Tax return updated successfully' : 'Tax return saved successfully',
+      data: {
+        id: savedResult.id,
+        documentType: savedResult.documentType,
+        documentName: savedResult.documentName,
+        periodStart: savedResult.periodStart,
+        periodEnd: savedResult.periodEnd,
+        remarks: savedResult.remarks ?? null,
+        document: resultWithDocument?.document && resultWithDocument.document.id
+          ? {
+              documentId: resultWithDocument.document.id,
+              originalFileName: resultWithDocument.document.originalFileName ?? undefined,
+            }
+          : null,
+        createdAt: savedResult.createdAt.toISOString(),
+        updatedAt: savedResult.updatedAt.toISOString(),
+      },
+    };
+  }
+
+  /**
+   * Save or update bank statement
+   */
+  private async saveBankStatement(
+    financialInfo: FinancialInformationEntity,
+    dto: any,
+    userId: string,
+    id?: string,
+    documentFile?: any,
+  ) {
+    const savedResult = await this.dataSource.transaction(async (manager) => {
+      const bankStatementRepo = manager.getRepository(BankStatementEntity);
+      const documentRepo = manager.getRepository(WarehouseDocument);
+
+      if (id) {
+        // Update existing
+        const existing = await bankStatementRepo.findOne({
+          where: { id, financialInformationId: financialInfo.id },
+          relations: ['document'],
+        });
+
+        if (!existing) {
+          throw new NotFoundException('Bank statement not found');
+        }
+
+        Object.assign(existing, {
+          documentType: dto.documentType,
+          documentName: dto.documentName,
+          periodStart: dto.periodStart,
+          periodEnd: dto.periodEnd,
+          remarks: dto.remarks ?? null,
+        });
+
+        // Handle document upload/update
+        // If file is provided, overwrite the old document
+        // If string (documentId) is provided in dto.document, ignore it (keep existing document)
+        if (documentFile) {
+          // Upload new document (replace existing if any)
+          const doc = await this.warehouseService.uploadWarehouseDocument(
+            documentFile,
+            userId,
+            'BankStatement',
+            existing.id,
+            'document',
+          );
+          const documentEntity = await documentRepo.findOne({ where: { id: doc.id } });
+          if (documentEntity) {
+            existing.document = documentEntity;
+          }
+        }
+        // If documentId (string) is provided in dto.document, ignore it - keep existing document relationship
+
+        await bankStatementRepo.save(existing);
+        return existing;
+      } else {
+        // Create new - document is required
+        if (!documentFile) {
+          throw new BadRequestException('Document is required for bank statement. Please upload a document.');
+        }
+
+        const bankStatement = bankStatementRepo.create({
+          documentType: dto.documentType,
+          documentName: dto.documentName,
+          periodStart: dto.periodStart,
+          periodEnd: dto.periodEnd,
+          remarks: dto.remarks ?? undefined,
+          financialInformationId: financialInfo.id,
+        });
+        await bankStatementRepo.save(bankStatement);
+
+        // Handle document upload after creating the entity
+        const doc = await this.warehouseService.uploadWarehouseDocument(
+          documentFile,
+          userId,
+          'BankStatement',
+          bankStatement.id,
+          'document',
+        );
+        const documentEntity = await documentRepo.findOne({ where: { id: doc.id } });
+        if (documentEntity) {
+          bankStatement.document = documentEntity;
+          await bankStatementRepo.save(bankStatement);
+        }
+
+        return bankStatement;
+      }
+    });
+
+    // Reload the entity with document relation to return complete data
+    const resultWithDocument = await this.dataSource.getRepository(BankStatementEntity).findOne({
+      where: { id: savedResult.id },
+      relations: ['document'],
+    });
+
+    return {
+      message: id ? 'Bank statement updated successfully' : 'Bank statement saved successfully',
+      data: {
+        id: savedResult.id,
+        documentType: savedResult.documentType,
+        documentName: savedResult.documentName,
+        periodStart: savedResult.periodStart,
+        periodEnd: savedResult.periodEnd,
+        remarks: savedResult.remarks ?? null,
+        document: resultWithDocument?.document && resultWithDocument.document.id
+          ? {
+              documentId: resultWithDocument.document.id,
+              originalFileName: resultWithDocument.document.originalFileName ?? undefined,
+            }
+          : null,
+        createdAt: savedResult.createdAt.toISOString(),
+        updatedAt: savedResult.updatedAt.toISOString(),
+      },
+    };
+  }
+
+  /**
+   * Save or update other document
+   */
+  async saveOther(
+    applicationId: string,
+    dto: OthersDto & { document?: string | { documentId?: string; id?: string } },
+    userId: string,
+    id?: string,
+    documentFile?: any,
+  ) {
+    const application = await this.warehouseOperatorRepository.findOne({
+      where: { id: applicationId, userId },
+    });
+
+    if (!application) {
+      throw new NotFoundException('Warehouse operator application not found. Please create an application first.');
+    }
+
+    // Ensure financial information context exists
+    // Financial information must be created first via the main createFinancialInformation endpoint
+    const financialInfo = await this.financialInformationRepository.findOne({
+      where: { applicationId: application.id },
+    });
+
+    if (!financialInfo) {
+      throw new NotFoundException('Financial information not found. Please create financial information first by completing the audit report, tax return, and bank statement sections.');
+    }
+
+    const savedResult = await this.dataSource.transaction(async (manager) => {
+      const othersRepo = manager.getRepository(OthersEntity);
+      const documentRepo = manager.getRepository(WarehouseDocument);
+
+      const assignDocument = async (
+        documentId: string | undefined | null,
+        documentableType: string,
+        documentType: string,
+        documentableId: string,
+      ) => {
+        if (!documentId) {
+          return;
+        }
+
+        const document = await documentRepo.findOne({ where: { id: documentId } });
+        if (!document) {
+          throw new NotFoundException('Document not found');
+        }
+
+        if (document.userId !== userId) {
+          throw new BadRequestException('You are not allowed to use this document reference');
+        }
+
+        document.documentableType = documentableType;
+        document.documentableId = documentableId;
+        document.documentType = documentType;
+        await documentRepo.save(document);
+      };
+
+      if (id) {
+        // Update existing
+        const existing = await othersRepo.findOne({
+          where: { id, financialInformationId: financialInfo.id },
+          relations: ['document'],
+        });
+
+        if (!existing) {
+          throw new NotFoundException('Other document not found');
+        }
+
+        Object.assign(existing, {
+          documentType: dto.documentType,
+          documentName: dto.documentName,
+          periodStart: dto.periodStart,
+          periodEnd: dto.periodEnd,
+          remarks: dto.remarks ?? null,
+        });
+
+        // Handle document upload/update
+        // If file is provided, overwrite the old document
+        // If string (documentId) is provided, ignore it (keep existing document)
+        if (documentFile) {
+          // Upload new document (replace existing if any)
+          const doc = await this.warehouseService.uploadWarehouseDocument(
+            documentFile,
+            userId,
+            'FinancialOthers',
+            existing.id,
+            'document',
+          );
+          
+          // Get the document entity
+          const documentEntity = await documentRepo.findOne({
+            where: { id: doc.id },
+          });
+
+          if (documentEntity) {
+            existing.document = documentEntity;
+          }
+        }
+        // If documentId (string) is provided, ignore it - keep existing document relationship
+
+        await othersRepo.save(existing);
+
+        return existing;
+      } else {
+        // Create new - document file is required
+        if (!documentFile) {
+          throw new BadRequestException('Document is required for other document. Please upload a document.');
+        }
+
+        const other = othersRepo.create({
+          documentType: dto.documentType,
+          documentName: dto.documentName,
+          periodStart: dto.periodStart,
+          periodEnd: dto.periodEnd,
+          remarks: dto.remarks ?? undefined,
+          financialInformationId: financialInfo.id,
+        });
+        await othersRepo.save(other);
+
+        // Handle document upload after creating the entity
+        const doc = await this.warehouseService.uploadWarehouseDocument(
+          documentFile,
+          userId,
+          'FinancialOthers',
+          other.id,
+          'document',
+        );
+        
+        // Get the document entity
+        const documentEntity = await documentRepo.findOne({
+          where: { id: doc.id },
+        });
+
+        if (documentEntity) {
+          other.document = documentEntity;
+          await othersRepo.save(other);
+        }
+
+        return other;
+      }
+    });
+
+    // Reload the entity with document relation to return complete data
+    const resultWithDocument = await this.dataSource.getRepository(OthersEntity).findOne({
+      where: { id: savedResult.id },
+      relations: ['document'],
+    });
+
+    return {
+      message: id ? 'Other document updated successfully' : 'Other document saved successfully',
+      data: {
+        id: savedResult.id,
+        documentType: savedResult.documentType,
+        documentName: savedResult.documentName,
+        periodStart: savedResult.periodStart,
+        periodEnd: savedResult.periodEnd,
+        remarks: savedResult.remarks ?? null,
+        document: resultWithDocument?.document && resultWithDocument.document.id
+          ? {
+              documentId: resultWithDocument.document.id,
+              originalFileName: resultWithDocument.document.originalFileName ?? undefined,
+            }
+          : null,
+        createdAt: savedResult.createdAt.toISOString(),
+        updatedAt: savedResult.updatedAt.toISOString(),
+      },
+    };
+  }
+
+  /**
+   * Unified method to delete a financial subsection
+   */
+  async deleteFinancialSubsection(
+    sectionType: 'audit-report' | 'tax-return' | 'bank-statement' | 'other',
+    id: string,
+    userId: string,
+  ) {
+    switch (sectionType) {
+      case 'audit-report':
+        return this.deleteAuditReport(id, userId);
+      case 'tax-return':
+        return this.deleteTaxReturn(id, userId);
+      case 'bank-statement':
+        return this.deleteBankStatement(id, userId);
+      case 'other':
+        return this.deleteOther(id, userId);
+      default:
+        throw new BadRequestException(`Invalid section type: ${sectionType}`);
+    }
+  }
+
+  /**
+   * Delete audit report
+   */
+  private async deleteAuditReport(id: string, userId: string) {
+    const auditReport = await this.dataSource.getRepository(AuditReportEntity).findOne({
+      where: { id },
+      relations: ['financialInformation', 'financialInformation.application'],
+    });
+
+    if (!auditReport) {
+      throw new NotFoundException('Audit report not found');
+    }
+
+    if (auditReport.financialInformation?.application?.userId !== userId) {
+      throw new BadRequestException('You are not allowed to delete this audit report');
+    }
+
+    await this.dataSource.getRepository(AuditReportEntity).remove(auditReport);
+
+    return {
+      message: 'Audit report deleted successfully',
+      success: true,
+    };
+  }
+
+  /**
+   * Delete tax return
+   */
+  private async deleteTaxReturn(id: string, userId: string) {
+    const taxReturn = await this.dataSource.getRepository(TaxReturnEntity).findOne({
+      where: { id },
+      relations: ['financialInformation', 'financialInformation.application'],
+    });
+
+    if (!taxReturn) {
+      throw new NotFoundException('Tax return not found');
+    }
+
+    if (taxReturn.financialInformation?.application?.userId !== userId) {
+      throw new BadRequestException('You are not allowed to delete this tax return');
+    }
+
+    await this.dataSource.getRepository(TaxReturnEntity).remove(taxReturn);
+
+    return {
+      message: 'Tax return deleted successfully',
+      success: true,
+    };
+  }
+
+  /**
+   * Delete bank statement
+   */
+  private async deleteBankStatement(id: string, userId: string) {
+    const bankStatement = await this.dataSource.getRepository(BankStatementEntity).findOne({
+      where: { id },
+      relations: ['financialInformation', 'financialInformation.application'],
+    });
+
+    if (!bankStatement) {
+      throw new NotFoundException('Bank statement not found');
+    }
+
+    if (bankStatement.financialInformation?.application?.userId !== userId) {
+      throw new BadRequestException('You are not allowed to delete this bank statement');
+    }
+
+    await this.dataSource.getRepository(BankStatementEntity).remove(bankStatement);
+
+    return {
+      message: 'Bank statement deleted successfully',
+      success: true,
+    };
+  }
+
+  /**
+   * Delete an other document
+   */
+  async deleteOther(id: string, userId: string) {
+    const other = await this.dataSource.getRepository(OthersEntity).findOne({
+      where: { id },
+      relations: ['financialInformation', 'financialInformation.application'],
+    });
+
+    if (!other) {
+      throw new NotFoundException('Other document not found');
+    }
+
+    if (other.financialInformation?.application?.userId !== userId) {
+      throw new BadRequestException('You are not allowed to delete this other document');
+    }
+
+    await this.dataSource.getRepository(OthersEntity).remove(other);
+
+    return {
+      message: 'Other document deleted successfully',
+      success: true,
+    };
+  }
+}
+

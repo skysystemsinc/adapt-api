@@ -1,6 +1,7 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { WarehouseService } from './warehouse.service';
 import { WarehouseController } from './warehouse.controller';
+import { FinancialInformationService } from './financial-information.service';
 import { Warehouse } from './entities/warehouse.entity';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from '../auth/auth.module';
@@ -33,7 +34,7 @@ import { WarehouseApplicantVerificationModule } from './warehouse-applicant-veri
 
 @Module({
   controllers: [WarehouseController],
-  providers: [WarehouseService],
+  providers: [WarehouseService, FinancialInformationService],
   imports: [
     TypeOrmModule.forFeature([
       Warehouse,

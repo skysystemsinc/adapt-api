@@ -9,7 +9,7 @@ import { User } from '../users/entities/user.entity';
 import { FileInterceptor, FileFieldsInterceptor } from '@nestjs/platform-express';
 import { UpdateBankDetailsDto } from './dto/create-bank-details.dto';
 import { UpsertHrInformationDto, HrPersonalDetailsDto, HrDeclarationDto, HrAcademicQualificationDto, HrProfessionalQualificationDto, HrTrainingDto, HrExperienceDto } from './dto/create-hr-information.dto';
-import { CreateFinancialInformationDto } from './dto/create-financial-information.dto';
+import { CreateFinancialInformationDto, OthersDto } from './dto/create-financial-information.dto';
 import { CreateApplicantChecklistDto } from './dto/create-applicant-checklist.dto';
 import {
   ApplicantChecklistApiBodySchema,
@@ -177,6 +177,34 @@ export class WarehouseController {
     );
   }
 
+  @ApiOperation({ summary: 'Update company information for a warehouse operator application' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor('ntcCertificate', {
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB max
+      },
+    }),
+  )
+  @Patch('/operator/application/:applicationId/company-information/:companyInformationId')
+  updateCompanyInformation(
+    @Body() createCompanyInformationDto: CreateCompanyInformationRequestDto,
+    @UploadedFile() ntcCertificateFile: any,
+    @Request() request: any,
+    @Param('applicationId') applicationId: string,
+    @Param('companyInformationId') companyInformationId: string
+  ) {
+    const user = request.user as User;
+    return this.warehouseService.updateCompanyInformation(
+      createCompanyInformationDto,
+      user.id,
+      applicationId,
+      companyInformationId,
+      ntcCertificateFile
+    );
+  }
+
   @ApiOperation({ summary: 'Upload warehouse document' })
   @ApiBearerAuth('JWT-auth')
   @ApiConsumes('multipart/form-data')
@@ -285,6 +313,83 @@ export class WarehouseController {
       user.id,
       files
     );
+  }
+
+  @ApiOperation({ summary: 'Get HR information for an application' })
+  @ApiBearerAuth('JWT-auth')
+  @Get('/operator/application/:applicationId/hr-information')
+  getHrInformation(
+    @Param('applicationId') applicationId: string,
+    @Request() request: any,
+  ) {
+    const user = request.user as User;
+    return this.warehouseService.getHrInformation(applicationId, user.id);
+  }
+
+  @ApiOperation({ summary: 'Get warehouse application with authorized signatories' })
+  @ApiBearerAuth('JWT-auth')
+  @Get('/operator/application/:applicationId/warehouse-application')
+  getWarehouseApplication(
+    @Param('applicationId') applicationId: string,
+    @Request() request: any,
+  ) {
+    const user = request.user as User;
+    return this.warehouseService.getWarehouseApplication(applicationId, user.id);
+  }
+
+  @ApiOperation({ summary: 'Get company information for an application' })
+  @ApiBearerAuth('JWT-auth')
+  @Get('/operator/application/:applicationId/company-information')
+  getCompanyInformation(
+    @Param('applicationId') applicationId: string,
+    @Request() request: any,
+  ) {
+    const user = request.user as User;
+    return this.warehouseService.getCompanyInformation(applicationId, user.id);
+  }
+
+  @ApiOperation({ summary: 'Get company information by id for an application' })
+  @ApiBearerAuth('JWT-auth')
+  @Get('/operator/application/company-information/:companyInformationId')
+  getCompanyInformationById(
+    @Param('companyInformationId') companyInformationId: string,
+    @Request() request: any,
+  ) {
+    return this.warehouseService.getCompanyInformationById(companyInformationId);
+  }
+
+
+  @ApiOperation({ summary: 'Get bank details for an application' })
+  @ApiBearerAuth('JWT-auth')
+  @Get('/operator/application/:applicationId/bank-details')
+  getBankDetails(
+    @Param('applicationId') applicationId: string,
+    @Request() request: any,
+  ) {
+    const user = request.user as User;
+    return this.warehouseService.getBankDetails(applicationId, user.id);
+  }
+
+  @ApiOperation({ summary: 'Get financial information for an application' })
+  @ApiBearerAuth('JWT-auth')
+  @Get('/operator/application/:applicationId/financial-information')
+  getFinancialInformation(
+    @Param('applicationId') applicationId: string,
+    @Request() request: any,
+  ) {
+    const user = request.user as User;
+    return this.warehouseService.getFinancialInformation(applicationId, user.id);
+  }
+
+  @ApiOperation({ summary: 'Get applicant checklist for an application' })
+  @ApiBearerAuth('JWT-auth')
+  @Get('/operator/application/:applicationId/applicant-checklist')
+  getApplicantChecklist(
+    @Param('applicationId') applicationId: string,
+    @Request() request: any,
+  ) {
+    const user = request.user as User;
+    return this.warehouseService.getApplicantChecklist(applicationId, user.id);
   }
 
   @ApiOperation({ summary: 'Create HR context for an application' })
@@ -702,6 +807,179 @@ export class WarehouseController {
     return this.warehouseService.createFinancialInformation(applicationId, payload, user.id);
   }
 
+  @ApiOperation({ summary: 'Save a new other document' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor('document', {
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB max
+      },
+    }),
+  )
+  @Post('/operator/application/:applicationId/financial-information/others')
+  saveOther(
+    @Param('applicationId') applicationId: string,
+    @Body('data') dataString: string,
+    @UploadedFile() documentFile: any,
+    @Request() request: any,
+  ) {
+    if (!dataString) {
+      throw new BadRequestException('Data field is required');
+    }
+
+    let payload: OthersDto;
+    try {
+      payload = JSON.parse(dataString);
+    } catch (error) {
+      throw new BadRequestException('Invalid JSON in data field');
+    }
+
+    const user = request.user as User;
+    return this.warehouseService.saveOther(applicationId, payload, user.id, undefined, documentFile);
+  }
+
+  @ApiOperation({ summary: 'Update an existing other document' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor('document', {
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB max
+      },
+    }),
+  )
+  @Post('/operator/application/:applicationId/financial-information/others/:id')
+  updateOther(
+    @Param('applicationId') applicationId: string,
+    @Param('id') id: string,
+    @Body('data') dataString: string,
+    @UploadedFile() documentFile: any,
+    @Request() request: any,
+  ) {
+    if (!dataString) {
+      throw new BadRequestException('Data field is required');
+    }
+
+    let payload: OthersDto;
+    try {
+      payload = JSON.parse(dataString);
+    } catch (error) {
+      throw new BadRequestException('Invalid JSON in data field');
+    }
+
+    const user = request.user as User;
+    return this.warehouseService.saveOther(applicationId, payload, user.id, id, documentFile);
+  }
+
+  @ApiOperation({ summary: 'Delete an other document' })
+  @ApiBearerAuth('JWT-auth')
+  @Delete('/operator/application/financial-information/others/:id')
+  deleteOther(
+    @Param('id') id: string,
+    @Request() request: any,
+  ) {
+    const user = request.user as User;
+    return this.warehouseService.deleteOther(id, user.id);
+  }
+
+  @ApiOperation({ summary: 'Save a new financial subsection (unified endpoint)' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiConsumes('multipart/form-data')
+  @ApiParam({ name: 'sectionType', enum: ['audit-report', 'tax-return', 'bank-statement', 'other'] })
+  @UseInterceptors(
+    FileInterceptor('document', {
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB max
+      },
+    }),
+  )
+  @Post('/operator/application/:applicationId/financial-information/:sectionType')
+  saveFinancialSubsection(
+    @Param('applicationId') applicationId: string,
+    @Param('sectionType') sectionType: 'audit-report' | 'tax-return' | 'bank-statement' | 'other',
+    @Body('data') dataString: string,
+    @UploadedFile() documentFile: any,
+    @Request() request: any,
+  ) {
+    if (!dataString) {
+      throw new BadRequestException('Data field is required');
+    }
+
+    let payload: any;
+    try {
+      payload = JSON.parse(dataString);
+    } catch (error) {
+      throw new BadRequestException('Invalid JSON in data field');
+    }
+
+    const user = request.user as User;
+    return this.warehouseService.saveFinancialSubsection(
+      sectionType,
+      applicationId,
+      payload,
+      user.id,
+      undefined,
+      documentFile,
+    );
+  }
+
+  @ApiOperation({ summary: 'Update an existing financial subsection (unified endpoint)' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiConsumes('multipart/form-data')
+  @ApiParam({ name: 'sectionType', enum: ['audit-report', 'tax-return', 'bank-statement', 'other'] })
+  @UseInterceptors(
+    FileInterceptor('document', {
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB max
+      },
+    }),
+  )
+  @Post('/operator/application/:applicationId/financial-information/:sectionType/:id')
+  updateFinancialSubsection(
+    @Param('applicationId') applicationId: string,
+    @Param('sectionType') sectionType: 'audit-report' | 'tax-return' | 'bank-statement' | 'other',
+    @Param('id') id: string,
+    @Body('data') dataString: string,
+    @UploadedFile() documentFile: any,
+    @Request() request: any,
+  ) {
+    if (!dataString) {
+      throw new BadRequestException('Data field is required');
+    }
+
+    let payload: any;
+    try {
+      payload = JSON.parse(dataString);
+    } catch (error) {
+      throw new BadRequestException('Invalid JSON in data field');
+    }
+
+    const user = request.user as User;
+    return this.warehouseService.saveFinancialSubsection(
+      sectionType,
+      applicationId,
+      payload,
+      user.id,
+      id,
+      documentFile,
+    );
+  }
+
+  @ApiOperation({ summary: 'Delete a financial subsection (unified endpoint)' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiParam({ name: 'sectionType', enum: ['audit-report', 'tax-return', 'bank-statement', 'other'] })
+  @Delete('/operator/application/:applicationId/financial-information/:sectionType/:id')
+  deleteFinancialSubsection(
+    @Param('applicationId') applicationId: string,
+    @Param('sectionType') sectionType: 'audit-report' | 'tax-return' | 'bank-statement' | 'other',
+    @Param('id') id: string,
+    @Request() request: any,
+  ) {
+    const user = request.user as User;
+    return this.warehouseService.deleteFinancialSubsection(sectionType, id, user.id);
+  }
+
   @ApiOperation({ summary: 'Update a bank details for a warehouse operator application' })
   @ApiBearerAuth('JWT-auth')
   @ApiBody({ type: UpdateBankDetailsDto })
@@ -751,7 +1029,8 @@ export class WarehouseController {
   createApplicantChecklist(
     @Param('applicationId') applicationId: string,
     @Body('data') dataString: string,
-    @UploadedFiles() files: {
+    @Query('submit') submitParam?: string,
+    @UploadedFiles() files?: {
       qcPersonnelFile?: any[];
       warehouseSupervisorFile?: any[];
       dataEntryOperatorFile?: any[];
@@ -764,7 +1043,7 @@ export class WarehouseController {
       noFinancialFraudFile?: any[];
       bankPaymentSlip?: any[];
     },
-    @Request() request: any,
+    @Request() request?: any,
   ) {
     if (!dataString) {
       throw new BadRequestException('Data field is required');
@@ -777,8 +1056,12 @@ export class WarehouseController {
       throw new BadRequestException('Invalid JSON in data field');
     }
 
-    const user = request.user as User;
-    return this.warehouseService.createApplicantChecklist(applicationId, payload, user.id, files);
+    const user = request?.user as User;
+    if (!user) {
+      throw new BadRequestException('User not found in request');
+    }
+    const submit = submitParam === 'true' || submitParam === '1';
+    return this.warehouseService.createApplicantChecklist(applicationId, payload, user.id, files, submit);
   }
 
   @Get()

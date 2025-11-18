@@ -27,7 +27,7 @@ import { AuditReportEntity } from './entities/financial/audit-report.entity';
 import { TaxReturnEntity } from './entities/financial/tax-return.entity';
 import { BankStatementEntity } from './entities/financial/bank-statement.entity';
 import { OthersEntity } from './entities/financial/others.entity';
-import { CreateFinancialInformationDto } from './dto/create-financial-information.dto';
+import { CreateFinancialInformationDto, OthersDto } from './dto/create-financial-information.dto';
 import { CreateApplicantChecklistDto } from './dto/create-applicant-checklist.dto';
 import { ApplicantChecklistEntity } from './entities/applicant-checklist.entity';
 import { FinancialSoundnessChecklistEntity } from './entities/checklist/financial-soundness.entity';
@@ -36,6 +36,8 @@ import { HumanResourcesChecklistEntity } from './entities/checklist/human-resour
 import { RegistrationFeeChecklistEntity } from './entities/checklist/registration-fee.entity';
 import { ListWarehouseOperatorApplicationDto } from './dto/list-warehouse.dto';
 import { CreateAuthorizedSignatoryDto } from './dto/create-authorized-signatory.dto';
+import { forwardRef, Inject } from '@nestjs/common';
+import { FinancialInformationService } from './financial-information.service';
 
 @Injectable()
 export class WarehouseService {
@@ -61,6 +63,8 @@ export class WarehouseService {
     @InjectRepository(ApplicantChecklistEntity)
     private readonly applicantChecklistRepository: Repository<ApplicantChecklistEntity>,
     private readonly dataSource: DataSource,
+    @Inject(forwardRef(() => FinancialInformationService))
+    private readonly financialInformationService: FinancialInformationService,
   ) {
     // Ensure upload directory exists
     this.ensureUploadDirectory();
@@ -454,6 +458,83 @@ export class WarehouseService {
 
     return {
       message: 'Company information saved successfully',
+      companyInformationId: savedCompanyInformation.id,
+      applicationId: existingApplication.applicationId,
+      ntcCertificate: ntcCertificateDocumentId,
+    };
+  }
+
+  async updateCompanyInformation(
+    createCompanyInformationDto: CreateCompanyInformationRequestDto,
+    userId: string,
+    applicationId: string,
+    companyInformationId: string,
+    ntcCertificateFile?: any
+  ) {
+    // Find existing warehouse operator application for this user
+    const existingApplication = await this.warehouseOperatorRepository.findOne({
+      where: { userId, id: applicationId },
+    });
+
+    if (!existingApplication) {
+      throw new NotFoundException('Warehouse operator application not found. Please create an application first.');
+    }
+
+    if (![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(existingApplication.status)) {
+      throw new BadRequestException('Cannot update company information after application is approved or submitted');
+    }
+
+    // Find existing company information
+    const existingCompanyInfo = await this.companyInformationRepository.findOne({
+      where: { id: companyInformationId, applicationId: existingApplication.id },
+      relations: ['ntcCertificate'],
+    });
+
+    if (!existingCompanyInfo) {
+      throw new NotFoundException('Company information not found');
+    }
+
+    // Update company information fields
+    existingCompanyInfo.companyName = createCompanyInformationDto.companyName;
+    existingCompanyInfo.secpRegistrationNumber = createCompanyInformationDto.secpRegistrationNumber;
+    existingCompanyInfo.activeFilerStatus = createCompanyInformationDto.activeFilerStatus;
+    existingCompanyInfo.dateOfIncorporation = createCompanyInformationDto.dateOfIncorporation;
+    existingCompanyInfo.businessCommencementDate = createCompanyInformationDto.businessCommencementDate ?? existingCompanyInfo.businessCommencementDate ?? null;
+    existingCompanyInfo.registeredOfficeAddress = createCompanyInformationDto.registeredOfficeAddress;
+    existingCompanyInfo.postalCode = createCompanyInformationDto.postalCode ?? existingCompanyInfo.postalCode ?? null;
+    existingCompanyInfo.nationalTaxNumber = createCompanyInformationDto.nationalTaxNumber;
+    existingCompanyInfo.salesTaxRegistrationNumber = createCompanyInformationDto.salesTaxRegistrationNumber;
+
+    const savedCompanyInformation = await this.companyInformationRepository.save(existingCompanyInfo);
+
+    // If ntcCertificate file is provided, upload it and link to company information
+    let ntcCertificateDocumentId: string | undefined;
+    if (ntcCertificateFile) {
+      const documentResult = await this.uploadWarehouseDocument(
+        ntcCertificateFile,
+        userId,
+        'CompanyInformation',
+        savedCompanyInformation.id,
+        'ntcCertificate'
+      );
+      ntcCertificateDocumentId = documentResult.id;
+
+      // Update company information with the ntcCertificate foreign key
+      const ntcCertificateDocument = await this.warehouseDocumentRepository.findOne({
+        where: { id: ntcCertificateDocumentId }
+      });
+
+      if (ntcCertificateDocument) {
+        savedCompanyInformation.ntcCertificate = ntcCertificateDocument;
+        await this.companyInformationRepository.save(savedCompanyInformation);
+      }
+    } else if (existingCompanyInfo.ntcCertificate) {
+      // Keep existing certificate if no new file is provided
+      ntcCertificateDocumentId = existingCompanyInfo.ntcCertificate.id;
+    }
+
+    return {
+      message: 'Company information updated successfully',
       companyInformationId: savedCompanyInformation.id,
       applicationId: existingApplication.applicationId,
       ntcCertificate: ntcCertificateDocumentId,
@@ -976,6 +1057,262 @@ export class WarehouseService {
     return {
       message: 'HR information saved successfully',
       data: this.mapHrEntityToResponse(hydratedHr!),
+    };
+  }
+
+  /**
+   * Get HR information for an application
+   */
+  async getHrInformation(applicationId: string, userId: string) {
+    const application = await this.warehouseOperatorRepository.findOne({
+      where: { id: applicationId, userId },
+    });
+
+    if (!application) {
+      throw new NotFoundException('Warehouse operator application not found');
+    }
+
+    // Find HR information for this application
+    const hr = await this.hrRepository.findOne({
+      where: { applicationId: application.id },
+      relations: [
+        'personalDetails',
+        'personalDetails.designation',
+        'personalDetails.photographDocument',
+        'academicQualifications',
+        'academicQualifications.academicCertificateDocument',
+        'professionalQualifications',
+        'professionalQualifications.professionalCertificateDocument',
+        'trainings',
+        'trainings.trainingCertificateDocument',
+        'experiences',
+        'experiences.experienceLetterDocument',
+        'declaration',
+      ],
+    });
+
+    if (!hr) {
+      return {
+        message: 'HR information not found',
+        data: null,
+      };
+    }
+
+    return {
+      message: 'HR information retrieved successfully',
+      data: this.mapHrEntityToResponse(hr),
+    };
+  }
+
+  async getWarehouseApplication(applicationId: string, userId: string) {
+    const application = await this.warehouseOperatorRepository.findOne({
+      where: { id: applicationId, userId },
+      relations: ['authorizedSignatories'],
+    });
+
+    if (!application) {
+      throw new NotFoundException('Warehouse operator application not found');
+    }
+
+    return {
+      message: 'Warehouse application retrieved successfully',
+      data: {
+        id: application.id,
+        applicationId: application.applicationId,
+        applicationType: application.applicationType,
+        status: application.status,
+        authorizedSignatories: application.authorizedSignatories || [],
+      },
+    };
+  }
+
+  async getCompanyInformation(applicationId: string, userId: string) {
+    const application = await this.warehouseOperatorRepository.findOne({
+      where: { id: applicationId, userId },
+    });
+
+    if (!application) {
+      throw new NotFoundException('Warehouse operator application not found');
+    }
+
+    const companyInformation = await this.companyInformationRepository.findOne({
+      where: { applicationId: application.id },
+      relations: ['ntcCertificate'],
+    });
+
+    if (!companyInformation) {
+      return {
+        message: 'Company information not found',
+        data: null,
+      };
+    }
+
+    return {
+      message: 'Company information retrieved successfully',
+      data: {
+        id: companyInformation.id,
+        companyName: companyInformation.companyName,
+        secpRegistrationNumber: companyInformation.secpRegistrationNumber,
+        activeFilerStatus: companyInformation.activeFilerStatus,
+        dateOfIncorporation: companyInformation.dateOfIncorporation,
+        businessCommencementDate: companyInformation.businessCommencementDate,
+        registeredOfficeAddress: companyInformation.registeredOfficeAddress,
+        postalCode: companyInformation.postalCode,
+        nationalTaxNumber: companyInformation.nationalTaxNumber,
+        salesTaxRegistrationNumber: companyInformation.salesTaxRegistrationNumber,
+        ntcCertificate: companyInformation.ntcCertificate
+          ? {
+            documentId: companyInformation.ntcCertificate.id,
+            originalFileName: companyInformation.ntcCertificate.originalFileName ?? undefined,
+          }
+          : null,
+      },
+    };
+  }
+
+
+  async getCompanyInformationById(companyInformationId: string) {
+    const companyInformation = await this.companyInformationRepository.findOne({
+      where: { id: companyInformationId },
+      relations: ['ntcCertificate'],
+    });
+
+    if (!companyInformation) {
+      throw new NotFoundException('Company information not found');
+    }
+
+    return {
+      message: 'Company information retrieved successfully',
+      data: {
+        id: companyInformation.id,
+        companyName: companyInformation.companyName,
+        secpRegistrationNumber: companyInformation.secpRegistrationNumber,
+        activeFilerStatus: companyInformation.activeFilerStatus,
+        dateOfIncorporation: companyInformation.dateOfIncorporation,
+        businessCommencementDate: companyInformation.businessCommencementDate,
+        registeredOfficeAddress: companyInformation.registeredOfficeAddress,
+        postalCode: companyInformation.postalCode,
+        nationalTaxNumber: companyInformation.nationalTaxNumber,
+        salesTaxRegistrationNumber: companyInformation.salesTaxRegistrationNumber,
+        ntcCertificate: companyInformation.ntcCertificate
+          ? {
+            documentId: companyInformation.ntcCertificate.id,
+            originalFileName: companyInformation.ntcCertificate.originalFileName ?? undefined,
+          }
+          : null,
+      },
+    };
+  }
+
+  async getBankDetails(applicationId: string, userId: string) {
+    const application = await this.warehouseOperatorRepository.findOne({
+      where: { id: applicationId, userId },
+    });
+
+    if (!application) {
+      throw new NotFoundException('Warehouse operator application not found');
+    }
+
+    const bankDetails = await this.bankDetailsRepository.findOne({
+      where: { applicationId: application.id },
+    });
+
+    if (!bankDetails) {
+      return {
+        message: 'Bank details not found',
+        data: null,
+      };
+    }
+
+    return {
+      message: 'Bank details retrieved successfully',
+      data: {
+        id: bankDetails.id,
+        name: bankDetails.name,
+        accountTitle: bankDetails.accountTitle,
+        iban: bankDetails.iban,
+        accountType: bankDetails.accountType,
+        branchAddress: bankDetails.branchAddress,
+        status: bankDetails.status,
+      },
+    };
+  }
+
+  async getFinancialInformation(applicationId: string, userId: string) {
+    const application = await this.warehouseOperatorRepository.findOne({
+      where: { id: applicationId, userId },
+    });
+
+    if (!application) {
+      throw new NotFoundException('Warehouse operator application not found');
+    }
+
+    const financialInfo = await this.financialInformationRepository.findOne({
+      where: { applicationId: application.id },
+      relations: [
+        'auditReport',
+        'taxReturns',
+        'taxReturns.document',
+        'bankStatements',
+        'bankStatements.document',
+        'others',
+        'others.document',
+      ],
+    });
+
+    if (!financialInfo) {
+      return {
+        message: 'Financial information not found',
+        data: null,
+      };
+    }
+
+    return {
+      message: 'Financial information retrieved successfully',
+      data: this.mapFinancialInformationEntityToResponse(financialInfo),
+    };
+  }
+
+  async getApplicantChecklist(applicationId: string, userId: string) {
+    const application = await this.warehouseOperatorRepository.findOne({
+      where: { id: applicationId, userId },
+    });
+
+    if (!application) {
+      throw new NotFoundException('Warehouse operator application not found');
+    }
+
+    const checklist = await this.applicantChecklistRepository.findOne({
+      where: { applicationId: application.id },
+      relations: [
+        'humanResources',
+        'humanResources.qcPersonnelDocument',
+        'humanResources.warehouseSupervisorDocument',
+        'humanResources.dataEntryOperatorDocument',
+        'financialSoundness',
+        'financialSoundness.auditedFinancialStatementsDocument',
+        'financialSoundness.positiveNetWorthDocument',
+        'financialSoundness.noLoanDefaultsDocument',
+        'financialSoundness.cleanCreditHistoryDocument',
+        'financialSoundness.adequateWorkingCapitalDocument',
+        'financialSoundness.validInsuranceCoverageDocument',
+        'financialSoundness.noFinancialFraudDocument',
+        'registrationFee',
+        'registrationFee.bankPaymentSlipDocument',
+        'declaration',
+      ],
+    });
+
+    if (!checklist) {
+      return {
+        message: 'Applicant checklist not found',
+        data: null,
+      };
+    }
+
+    return {
+      message: 'Applicant checklist retrieved successfully',
+      data: this.mapApplicantChecklistEntityToResponse(checklist),
     };
   }
 
@@ -2141,6 +2478,62 @@ export class WarehouseService {
   }
 
   /**
+   * Save or update a single other document
+   * @deprecated Use FinancialInformationService.saveOther instead
+   */
+  async saveOther(
+    applicationId: string,
+    dto: OthersDto,
+    userId: string,
+    id?: string,
+    documentFile?: any,
+  ) {
+    return this.financialInformationService.saveOther(applicationId, dto, userId, id, documentFile);
+  }
+
+  /**
+   * Delete an other document
+   * @deprecated Use FinancialInformationService.deleteOther instead
+   */
+  async deleteOther(id: string, userId: string) {
+    return this.financialInformationService.deleteOther(id, userId);
+  }
+
+  /**
+   * Unified method to save or update a financial subsection
+   * @deprecated Use FinancialInformationService.saveFinancialSubsection instead
+   */
+  async saveFinancialSubsection(
+    sectionType: 'audit-report' | 'tax-return' | 'bank-statement' | 'other',
+    applicationId: string,
+    dto: any,
+    userId: string,
+    id?: string,
+    documentFile?: any,
+  ) {
+    return this.financialInformationService.saveFinancialSubsection(
+      sectionType,
+      applicationId,
+      dto,
+      userId,
+      id,
+      documentFile,
+    );
+  }
+
+  /**
+   * Unified method to delete a financial subsection
+   * @deprecated Use FinancialInformationService.deleteFinancialSubsection instead
+   */
+  async deleteFinancialSubsection(
+    sectionType: 'audit-report' | 'tax-return' | 'bank-statement' | 'other',
+    id: string,
+    userId: string,
+  ) {
+    return this.financialInformationService.deleteFinancialSubsection(sectionType, id, userId);
+  }
+
+  /**
    * Upload applicant checklist files and return document IDs
    */
   private async uploadApplicantChecklistFiles(
@@ -2303,6 +2696,7 @@ export class WarehouseService {
       noFinancialFraudFile?: any[];
       bankPaymentSlip?: any[];
     },
+    submit: boolean = false,
   ) {
     const application = await this.warehouseOperatorRepository.findOne({
       where: { id: applicationId, userId },
@@ -2312,6 +2706,7 @@ export class WarehouseService {
       throw new NotFoundException('Warehouse operator application not found. Please create an application first.');
     }
 
+    // only allow when status is DRAFT
     if (application.status !== WarehouseOperatorApplicationStatus.DRAFT) {
       throw new BadRequestException('Applicant checklist can only be added while application is in draft status.');
     }
@@ -2342,30 +2737,37 @@ export class WarehouseService {
         registrationFee: manager.getRepository(RegistrationFeeChecklistEntity),
         declaration: manager.getRepository(DeclarationChecklistEntity),
         document: manager.getRepository(WarehouseDocument),
+        application: manager.getRepository(WarehouseOperatorApplicationRequest),
       };
 
       const assignDocument = this.createAssignDocumentFunction(repos.document, userId);
       const assignDocuments = this.createBatchAssignDocumentsFunction(assignDocument);
 
+      let result;
       if (dto.id) {
-        return await this.updateApplicantChecklist(
+        result = await this.updateApplicantChecklist(
+          dto,
+          application,
+          repos,
+          assignDocuments,
+        );
+      } else {
+        result = await this.createNewApplicantChecklist(
           dto,
           application,
           repos,
           assignDocuments,
         );
       }
+      console.log('Hassan application', application);
+      if (submit) {
+        console.log('Hassan Updating application status to PENDING');
+        application.status = WarehouseOperatorApplicationStatus.PENDING;
+        await this.warehouseOperatorRepository.save(application);
+      }
 
-      return await this.createNewApplicantChecklist(
-        dto,
-        application,
-        repos,
-        assignDocuments,
-      );
+      return result;
     });
-
-    application.status = WarehouseOperatorApplicationStatus.PENDING;
-    await this.warehouseOperatorRepository.save(application);
 
     const hydratedApplicantChecklist = await this.applicantChecklistRepository.findOne({
       where: { id: savedApplicantChecklist.id },
@@ -2380,6 +2782,7 @@ export class WarehouseService {
 
   /**
    * Create assign document function for transaction
+   * Handles unlinking old documents when new ones are assigned
    */
   private createAssignDocumentFunction(documentRepo: Repository<WarehouseDocument>, userId: string) {
     return async (
@@ -2387,7 +2790,20 @@ export class WarehouseService {
       documentableType: string,
       documentType: string,
       documentableId: string,
+      oldDocumentId?: string | null,
     ) => {
+      // Unlink old document if it exists and is different from the new one
+      // Mark old document as inactive since fields are non-nullable
+      if (oldDocumentId && oldDocumentId !== documentId) {
+        const oldDocument = await documentRepo.findOne({ where: { id: oldDocumentId } });
+        if (oldDocument && oldDocument.documentableId === documentableId && oldDocument.documentType === documentType) {
+          // Mark old document as inactive (effectively unlinking it)
+          oldDocument.isActive = false;
+          await documentRepo.save(oldDocument);
+        }
+      }
+
+      // Assign new document if provided
       if (!documentId) return;
 
       const document = await documentRepo.findOne({ where: { id: documentId } });
@@ -2411,10 +2827,10 @@ export class WarehouseService {
    */
   private createBatchAssignDocumentsFunction(assignDocument: Function) {
     return async (
-      documents: Array<{ id: string | undefined | null; type: string; documentType: string; entityId: string }>,
+      documents: Array<{ id: string | undefined | null; type: string; documentType: string; entityId: string; oldId?: string | null }>,
     ) => {
       await Promise.all(
-        documents.map((doc) => assignDocument(doc.id, doc.type, doc.documentType, doc.entityId)),
+        documents.map((doc) => assignDocument(doc.id, doc.type, doc.documentType, doc.entityId, doc.oldId)),
       );
     };
   }
@@ -2447,26 +2863,45 @@ export class WarehouseService {
       existingApplicantChecklist.humanResourcesId = hrEntity.id;
     }
 
-    await assignDocuments([
-      {
+    // Get old document IDs before update for unlinking
+    const oldHrDocumentIds = existingApplicantChecklist.humanResources ? {
+      qcPersonnelFile: existingApplicantChecklist.humanResources.qcPersonnelFile,
+      warehouseSupervisorFile: existingApplicantChecklist.humanResources.warehouseSupervisorFile,
+      dataEntryOperatorFile: existingApplicantChecklist.humanResources.dataEntryOperatorFile,
+    } : { qcPersonnelFile: null, warehouseSupervisorFile: null, dataEntryOperatorFile: null };
+
+    // Only assign documents when checkbox is true (to preserve files when checkbox is false)
+    const hrDocumentsToAssign = [];
+    if (dto.humanResources.qcPersonnel) {
+      hrDocumentsToAssign.push({
         id: hrEntity.qcPersonnelFile ?? dto.humanResources.qcPersonnelFile ?? null,
         type: 'HumanResourcesChecklist',
         documentType: 'qcPersonnelFile',
         entityId: hrEntity.id,
-      },
-      {
+        oldId: oldHrDocumentIds.qcPersonnelFile,
+      });
+    }
+    if (dto.humanResources.warehouseSupervisor) {
+      hrDocumentsToAssign.push({
         id: hrEntity.warehouseSupervisorFile ?? dto.humanResources.warehouseSupervisorFile ?? null,
         type: 'HumanResourcesChecklist',
         documentType: 'warehouseSupervisorFile',
         entityId: hrEntity.id,
-      },
-      {
+        oldId: oldHrDocumentIds.warehouseSupervisorFile,
+      });
+    }
+    if (dto.humanResources.dataEntryOperator) {
+      hrDocumentsToAssign.push({
         id: hrEntity.dataEntryOperatorFile ?? dto.humanResources.dataEntryOperatorFile ?? null,
         type: 'HumanResourcesChecklist',
         documentType: 'dataEntryOperatorFile',
         entityId: hrEntity.id,
-      },
-    ]);
+        oldId: oldHrDocumentIds.dataEntryOperatorFile,
+      });
+    }
+    if (hrDocumentsToAssign.length > 0) {
+      await assignDocuments(hrDocumentsToAssign);
+    }
 
     // Update or create Financial Soundness
     const fsEntity = existingApplicantChecklist.financialSoundness
@@ -2482,50 +2917,93 @@ export class WarehouseService {
       existingApplicantChecklist.financialSoundnessId = fsEntity.id;
     }
 
-    await assignDocuments([
-      {
+    // Get old document IDs before update for unlinking
+    const oldFsDocumentIds = existingApplicantChecklist.financialSoundness ? {
+      auditedFinancialStatementsFile: existingApplicantChecklist.financialSoundness.auditedFinancialStatementsFile,
+      positiveNetWorthFile: existingApplicantChecklist.financialSoundness.positiveNetWorthFile,
+      noLoanDefaultsFile: existingApplicantChecklist.financialSoundness.noLoanDefaultsFile,
+      cleanCreditHistoryFile: existingApplicantChecklist.financialSoundness.cleanCreditHistoryFile,
+      adequateWorkingCapitalFile: existingApplicantChecklist.financialSoundness.adequateWorkingCapitalFile,
+      validInsuranceCoverageFile: existingApplicantChecklist.financialSoundness.validInsuranceCoverageFile,
+      noFinancialFraudFile: existingApplicantChecklist.financialSoundness.noFinancialFraudFile,
+    } : {
+      auditedFinancialStatementsFile: null,
+      positiveNetWorthFile: null,
+      noLoanDefaultsFile: null,
+      cleanCreditHistoryFile: null,
+      adequateWorkingCapitalFile: null,
+      validInsuranceCoverageFile: null,
+      noFinancialFraudFile: null,
+    };
+
+    // Only assign documents when checkbox is true (to preserve files when checkbox is false)
+    const fsDocumentsToAssign = [];
+    if (dto.financialSoundness.auditedFinancialStatements) {
+      fsDocumentsToAssign.push({
         id: fsEntity.auditedFinancialStatementsFile ?? dto.financialSoundness.auditedFinancialStatementsFile ?? null,
         type: 'FinancialSoundnessChecklist',
         documentType: 'auditedFinancialStatementsFile',
         entityId: fsEntity.id,
-      },
-      {
+        oldId: oldFsDocumentIds.auditedFinancialStatementsFile,
+      });
+    }
+    if (dto.financialSoundness.positiveNetWorth) {
+      fsDocumentsToAssign.push({
         id: fsEntity.positiveNetWorthFile ?? dto.financialSoundness.positiveNetWorthFile ?? null,
         type: 'FinancialSoundnessChecklist',
         documentType: 'positiveNetWorthFile',
         entityId: fsEntity.id,
-      },
-      {
+        oldId: oldFsDocumentIds.positiveNetWorthFile,
+      });
+    }
+    if (dto.financialSoundness.noLoanDefaults) {
+      fsDocumentsToAssign.push({
         id: fsEntity.noLoanDefaultsFile ?? dto.financialSoundness.noLoanDefaultsFile ?? null,
         type: 'FinancialSoundnessChecklist',
         documentType: 'noLoanDefaultsFile',
         entityId: fsEntity.id,
-      },
-      {
+        oldId: oldFsDocumentIds.noLoanDefaultsFile,
+      });
+    }
+    if (dto.financialSoundness.cleanCreditHistory) {
+      fsDocumentsToAssign.push({
         id: fsEntity.cleanCreditHistoryFile ?? dto.financialSoundness.cleanCreditHistoryFile ?? null,
         type: 'FinancialSoundnessChecklist',
         documentType: 'cleanCreditHistoryFile',
         entityId: fsEntity.id,
-      },
-      {
+        oldId: oldFsDocumentIds.cleanCreditHistoryFile,
+      });
+    }
+    if (dto.financialSoundness.adequateWorkingCapital) {
+      fsDocumentsToAssign.push({
         id: fsEntity.adequateWorkingCapitalFile ?? dto.financialSoundness.adequateWorkingCapitalFile ?? null,
         type: 'FinancialSoundnessChecklist',
         documentType: 'adequateWorkingCapitalFile',
         entityId: fsEntity.id,
-      },
-      {
+        oldId: oldFsDocumentIds.adequateWorkingCapitalFile,
+      });
+    }
+    if (dto.financialSoundness.validInsuranceCoverage) {
+      fsDocumentsToAssign.push({
         id: fsEntity.validInsuranceCoverageFile ?? dto.financialSoundness.validInsuranceCoverageFile ?? null,
         type: 'FinancialSoundnessChecklist',
         documentType: 'validInsuranceCoverageFile',
         entityId: fsEntity.id,
-      },
-      {
+        oldId: oldFsDocumentIds.validInsuranceCoverageFile,
+      });
+    }
+    if (dto.financialSoundness.noFinancialFraud) {
+      fsDocumentsToAssign.push({
         id: fsEntity.noFinancialFraudFile ?? dto.financialSoundness.noFinancialFraudFile ?? null,
         type: 'FinancialSoundnessChecklist',
         documentType: 'noFinancialFraudFile',
         entityId: fsEntity.id,
-      },
-    ]);
+        oldId: oldFsDocumentIds.noFinancialFraudFile,
+      });
+    }
+    if (fsDocumentsToAssign.length > 0) {
+      await assignDocuments(fsDocumentsToAssign);
+    }
 
     // Update or create Registration Fee
     const rfEntity = existingApplicantChecklist.registrationFee
@@ -2541,12 +3019,18 @@ export class WarehouseService {
       existingApplicantChecklist.registrationFeeId = rfEntity.id;
     }
 
+    // Get old document ID before update for unlinking
+    const oldRfDocumentId = existingApplicantChecklist.registrationFee
+      ? existingApplicantChecklist.registrationFee.bankPaymentSlip
+      : null;
+
     await assignDocuments([
       {
         id: rfEntity.bankPaymentSlip ?? dto.registrationFee.bankPaymentSlip ?? null,
         type: 'RegistrationFeeChecklist',
         documentType: 'bankPaymentSlip',
         entityId: rfEntity.id,
+        oldId: oldRfDocumentId,
       },
     ]);
 
@@ -2680,9 +3164,17 @@ export class WarehouseService {
       qcPersonnel: dto.qcPersonnel,
       warehouseSupervisor: dto.warehouseSupervisor,
       dataEntryOperator: dto.dataEntryOperator,
-      qcPersonnelFile: dto.qcPersonnelFile ?? existing.qcPersonnelFile,
-      warehouseSupervisorFile: dto.warehouseSupervisorFile ?? existing.warehouseSupervisorFile,
-      dataEntryOperatorFile: dto.dataEntryOperatorFile ?? existing.dataEntryOperatorFile,
+      // Only update file if checkbox is true or if a new file/document ID is explicitly provided
+      // If checkbox is false, preserve existing file
+      qcPersonnelFile: dto.qcPersonnel
+        ? (dto.qcPersonnelFile ?? existing.qcPersonnelFile)
+        : existing.qcPersonnelFile,
+      warehouseSupervisorFile: dto.warehouseSupervisor
+        ? (dto.warehouseSupervisorFile ?? existing.warehouseSupervisorFile)
+        : existing.warehouseSupervisorFile,
+      dataEntryOperatorFile: dto.dataEntryOperator
+        ? (dto.dataEntryOperatorFile ?? existing.dataEntryOperatorFile)
+        : existing.dataEntryOperatorFile,
     });
     return await repo.save(existing);
   }
@@ -2712,13 +3204,29 @@ export class WarehouseService {
       adequateWorkingCapital: dto.adequateWorkingCapital,
       validInsuranceCoverage: dto.validInsuranceCoverage,
       noFinancialFraud: dto.noFinancialFraud,
-      auditedFinancialStatementsFile: dto.auditedFinancialStatementsFile ?? existing.auditedFinancialStatementsFile,
-      positiveNetWorthFile: dto.positiveNetWorthFile ?? existing.positiveNetWorthFile,
-      noLoanDefaultsFile: dto.noLoanDefaultsFile ?? existing.noLoanDefaultsFile,
-      cleanCreditHistoryFile: dto.cleanCreditHistoryFile ?? existing.cleanCreditHistoryFile,
-      adequateWorkingCapitalFile: dto.adequateWorkingCapitalFile ?? existing.adequateWorkingCapitalFile,
-      validInsuranceCoverageFile: dto.validInsuranceCoverageFile ?? existing.validInsuranceCoverageFile,
-      noFinancialFraudFile: dto.noFinancialFraudFile ?? existing.noFinancialFraudFile,
+      // Only update file if checkbox is true or if a new file/document ID is explicitly provided
+      // If checkbox is false, preserve existing file
+      auditedFinancialStatementsFile: dto.auditedFinancialStatements
+        ? (dto.auditedFinancialStatementsFile ?? existing.auditedFinancialStatementsFile)
+        : existing.auditedFinancialStatementsFile,
+      positiveNetWorthFile: dto.positiveNetWorth
+        ? (dto.positiveNetWorthFile ?? existing.positiveNetWorthFile)
+        : existing.positiveNetWorthFile,
+      noLoanDefaultsFile: dto.noLoanDefaults
+        ? (dto.noLoanDefaultsFile ?? existing.noLoanDefaultsFile)
+        : existing.noLoanDefaultsFile,
+      cleanCreditHistoryFile: dto.cleanCreditHistory
+        ? (dto.cleanCreditHistoryFile ?? existing.cleanCreditHistoryFile)
+        : existing.cleanCreditHistoryFile,
+      adequateWorkingCapitalFile: dto.adequateWorkingCapital
+        ? (dto.adequateWorkingCapitalFile ?? existing.adequateWorkingCapitalFile)
+        : existing.adequateWorkingCapitalFile,
+      validInsuranceCoverageFile: dto.validInsuranceCoverage
+        ? (dto.validInsuranceCoverageFile ?? existing.validInsuranceCoverageFile)
+        : existing.validInsuranceCoverageFile,
+      noFinancialFraudFile: dto.noFinancialFraud
+        ? (dto.noFinancialFraudFile ?? existing.noFinancialFraudFile)
+        : existing.noFinancialFraudFile,
     });
     return await repo.save(existing);
   }
@@ -2906,7 +3414,7 @@ export class WarehouseService {
 
     const bankDetails = this.bankDetailsRepository.create({
       applicationId: application.id,
-      name: createBankDetailsDto.accountTitle,
+      name: createBankDetailsDto.name,
       accountTitle: createBankDetailsDto.accountTitle,
       iban: createBankDetailsDto.iban,
       accountType: createBankDetailsDto.accountType,
@@ -3038,8 +3546,12 @@ export class WarehouseService {
           mobileNumber: hr.personalDetails.mobileNumber,
           email: hr.personalDetails.email,
           nationalTaxNumber: hr.personalDetails.nationalTaxNumber ?? null,
-          photograph: hr.personalDetails.photograph ?? null,
-          photographDocumentName: hr.personalDetails.photographDocument?.originalFileName ?? null,
+          photograph: hr.personalDetails.photographDocument && hr.personalDetails.photograph
+            ? {
+              documentId: hr.personalDetails.photograph,
+              originalFileName: hr.personalDetails.photographDocument?.originalFileName ?? undefined,
+            }
+            : null,
         }
         : null,
       academicQualifications: hr.academicQualifications?.map((item) => ({
@@ -3050,8 +3562,12 @@ export class WarehouseService {
         country: item.country,
         yearOfPassing: item.yearOfPassing,
         grade: item.grade ?? null,
-        academicCertificate: item.academicCertificate ?? null,
-        academicCertificateDocumentName: item.academicCertificateDocument?.originalFileName ?? null,
+        academicCertificate: item.academicCertificateDocument
+          ? {
+            documentId: item.academicCertificate,
+            originalFileName: item.academicCertificateDocument.originalFileName ?? undefined,
+          }
+          : null,
       })) ?? [],
       professionalQualifications: hr.professionalQualifications?.map((item) => ({
         id: item.id,
@@ -3061,8 +3577,12 @@ export class WarehouseService {
         dateOfAward: item.dateOfAward,
         validity: item.validity ?? null,
         membershipNumber: item.membershipNumber ?? null,
-        professionalCertificate: item.professionalCertificate ?? null,
-        professionalCertificateDocumentName: item.professionalCertificateDocument?.originalFileName ?? null,
+        professionalCertificate: item.professionalCertificateDocument
+          ? {
+            documentId: item.professionalCertificate,
+            originalFileName: item.professionalCertificateDocument.originalFileName ?? undefined,
+          }
+          : null,
       })) ?? [],
       trainings: hr.trainings?.map((item) => ({
         id: item.id,
@@ -3072,8 +3592,12 @@ export class WarehouseService {
         durationStart: item.durationStart,
         durationEnd: item.durationEnd,
         dateOfCompletion: item.dateOfCompletion,
-        trainingCertificate: item.trainingCertificate ?? null,
-        trainingCertificateDocumentName: item.trainingCertificateDocument?.originalFileName ?? null,
+        trainingCertificate: item.trainingCertificateDocument
+          ? {
+            documentId: item.trainingCertificate,
+            originalFileName: item.trainingCertificateDocument.originalFileName ?? undefined,
+          }
+          : null,
       })) ?? [],
       experiences: hr.experiences?.map((item) => ({
         id: item.id,
@@ -3085,8 +3609,12 @@ export class WarehouseService {
         dateOfLeaving: item.dateOfLeaving ?? null,
         duration: item.duration ?? null,
         responsibilities: item.responsibilities ?? null,
-        experienceLetter: item.experienceLetter ?? null,
-        experienceLetterDocumentName: item.experienceLetterDocument?.originalFileName ?? null,
+        experienceLetter: item.experienceLetterDocument
+          ? {
+            documentId: item.experienceLetter,
+            originalFileName: item.experienceLetterDocument.originalFileName ?? undefined,
+          }
+          : null,
       })) ?? [],
       declaration: hr.declaration
         ? {
@@ -3125,6 +3653,12 @@ export class WarehouseService {
           periodStart: financialInfo.taxReturns[0].periodStart,
           periodEnd: financialInfo.taxReturns[0].periodEnd,
           remarks: financialInfo.taxReturns[0].remarks ?? null,
+          taxDocument: financialInfo.taxReturns[0].document && financialInfo.taxReturns[0].document.id
+            ? {
+              documentId: financialInfo.taxReturns[0].document.id,
+              originalFileName: financialInfo.taxReturns[0].document.originalFileName ?? undefined,
+            }
+            : null,
         }
         : null,
       bankStatement: financialInfo.bankStatements?.[0]
@@ -3135,18 +3669,30 @@ export class WarehouseService {
           periodStart: financialInfo.bankStatements[0].periodStart,
           periodEnd: financialInfo.bankStatements[0].periodEnd,
           remarks: financialInfo.bankStatements[0].remarks ?? null,
+          bankDocument: financialInfo.bankStatements[0].document && financialInfo.bankStatements[0].document.id
+            ? {
+              documentId: financialInfo.bankStatements[0].document.id,
+              originalFileName: financialInfo.bankStatements[0].document.originalFileName ?? undefined,
+            }
+            : null,
         }
         : null,
-      other: financialInfo.others?.[0]
-        ? {
-          id: financialInfo.others[0].id,
-          documentType: financialInfo.others[0].documentType,
-          documentName: financialInfo.others[0].documentName,
-          periodStart: financialInfo.others[0].periodStart,
-          periodEnd: financialInfo.others[0].periodEnd,
-          remarks: financialInfo.others[0].remarks ?? null,
-        }
-        : null,
+      other: financialInfo.others && financialInfo.others.length > 0
+        ? financialInfo.others.map((other) => ({
+          id: other.id,
+          documentType: other.documentType,
+          documentName: other.documentName,
+          periodStart: other.periodStart,
+          periodEnd: other.periodEnd,
+          remarks: other.remarks ?? null,
+          document: other.document && other.document.id
+            ? {
+              documentId: other.document.id,
+              originalFileName: other.document.originalFileName ?? undefined,
+            }
+            : null,
+        }))
+        : [],
     };
   }
 
@@ -3157,36 +3703,91 @@ export class WarehouseService {
         ? {
           id: checklist.humanResources.id,
           qcPersonnel: checklist.humanResources.qcPersonnel,
-          qcPersonnelFile: checklist.humanResources.qcPersonnelFile ?? null,
+          qcPersonnelFile: checklist.humanResources.qcPersonnelDocument
+            ? {
+              documentId: checklist.humanResources.qcPersonnelFile,
+              originalFileName: checklist.humanResources.qcPersonnelDocument.originalFileName ?? undefined,
+            }
+            : null,
           warehouseSupervisor: checklist.humanResources.warehouseSupervisor,
-          warehouseSupervisorFile: checklist.humanResources.warehouseSupervisorFile ?? null,
+          warehouseSupervisorFile: checklist.humanResources.warehouseSupervisorDocument
+            ? {
+              documentId: checklist.humanResources.warehouseSupervisorFile,
+              originalFileName: checklist.humanResources.warehouseSupervisorDocument.originalFileName ?? undefined,
+            }
+            : null,
           dataEntryOperator: checklist.humanResources.dataEntryOperator,
-          dataEntryOperatorFile: checklist.humanResources.dataEntryOperatorFile ?? null,
+          dataEntryOperatorFile: checklist.humanResources.dataEntryOperatorDocument
+            ? {
+              documentId: checklist.humanResources.dataEntryOperatorFile,
+              originalFileName: checklist.humanResources.dataEntryOperatorDocument.originalFileName ?? undefined,
+            }
+            : null,
         }
         : null,
       financialSoundness: checklist.financialSoundness
         ? {
           id: checklist.financialSoundness.id,
           auditedFinancialStatements: checklist.financialSoundness.auditedFinancialStatements,
-          auditedFinancialStatementsFile: checklist.financialSoundness.auditedFinancialStatementsFile ?? null,
+          auditedFinancialStatementsFile: checklist.financialSoundness.auditedFinancialStatementsDocument
+            ? {
+              documentId: checklist.financialSoundness.auditedFinancialStatementsFile,
+              originalFileName: checklist.financialSoundness.auditedFinancialStatementsDocument.originalFileName ?? undefined,
+            }
+            : null,
           positiveNetWorth: checklist.financialSoundness.positiveNetWorth,
-          positiveNetWorthFile: checklist.financialSoundness.positiveNetWorthFile ?? null,
+          positiveNetWorthFile: checklist.financialSoundness.positiveNetWorthDocument
+            ? {
+              documentId: checklist.financialSoundness.positiveNetWorthFile,
+              originalFileName: checklist.financialSoundness.positiveNetWorthDocument.originalFileName ?? undefined,
+            }
+            : null,
           noLoanDefaults: checklist.financialSoundness.noLoanDefaults,
-          noLoanDefaultsFile: checklist.financialSoundness.noLoanDefaultsFile ?? null,
+          noLoanDefaultsFile: checklist.financialSoundness.noLoanDefaultsDocument
+            ? {
+              documentId: checklist.financialSoundness.noLoanDefaultsFile,
+              originalFileName: checklist.financialSoundness.noLoanDefaultsDocument.originalFileName ?? undefined,
+            }
+            : null,
           cleanCreditHistory: checklist.financialSoundness.cleanCreditHistory,
-          cleanCreditHistoryFile: checklist.financialSoundness.cleanCreditHistoryFile ?? null,
+          cleanCreditHistoryFile: checklist.financialSoundness.cleanCreditHistoryDocument
+            ? {
+              documentId: checklist.financialSoundness.cleanCreditHistoryFile,
+              originalFileName: checklist.financialSoundness.cleanCreditHistoryDocument.originalFileName ?? undefined,
+            }
+            : null,
           adequateWorkingCapital: checklist.financialSoundness.adequateWorkingCapital,
-          adequateWorkingCapitalFile: checklist.financialSoundness.adequateWorkingCapitalFile ?? null,
+          adequateWorkingCapitalFile: checklist.financialSoundness.adequateWorkingCapitalDocument
+            ? {
+              documentId: checklist.financialSoundness.adequateWorkingCapitalFile,
+              originalFileName: checklist.financialSoundness.adequateWorkingCapitalDocument.originalFileName ?? undefined,
+            }
+            : null,
           validInsuranceCoverage: checklist.financialSoundness.validInsuranceCoverage,
-          validInsuranceCoverageFile: checklist.financialSoundness.validInsuranceCoverageFile ?? null,
+          validInsuranceCoverageFile: checklist.financialSoundness.validInsuranceCoverageDocument
+            ? {
+              documentId: checklist.financialSoundness.validInsuranceCoverageFile,
+              originalFileName: checklist.financialSoundness.validInsuranceCoverageDocument.originalFileName ?? undefined,
+            }
+            : null,
           noFinancialFraud: checklist.financialSoundness.noFinancialFraud,
-          noFinancialFraudFile: checklist.financialSoundness.noFinancialFraudFile ?? null,
+          noFinancialFraudFile: checklist.financialSoundness.noFinancialFraudDocument
+            ? {
+              documentId: checklist.financialSoundness.noFinancialFraudFile,
+              originalFileName: checklist.financialSoundness.noFinancialFraudDocument.originalFileName ?? undefined,
+            }
+            : null,
         }
         : null,
       registrationFee: checklist.registrationFee
         ? {
           id: checklist.registrationFee.id,
-          bankPaymentSlip: checklist.registrationFee.bankPaymentSlip ?? null,
+          bankPaymentSlip: checklist.registrationFee.bankPaymentSlipDocument
+            ? {
+              documentId: checklist.registrationFee.bankPaymentSlip,
+              originalFileName: checklist.registrationFee.bankPaymentSlipDocument.originalFileName ?? undefined,
+            }
+            : null,
         }
         : null,
       declaration: checklist.declaration

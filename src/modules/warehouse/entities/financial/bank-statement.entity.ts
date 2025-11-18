@@ -1,5 +1,6 @@
 import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { FinancialInformationEntity } from "../financial-information.entity";
+import { WarehouseDocument } from "../warehouse-document.entity";
 
 @Entity('bank_statement')
 export class BankStatementEntity {
@@ -27,6 +28,10 @@ export class BankStatementEntity {
     @ManyToOne(() => FinancialInformationEntity, (financialInformation) => financialInformation.bankStatements, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'financialInformationId' })
     financialInformation: FinancialInformationEntity;
+
+    @ManyToOne(() => WarehouseDocument, { onDelete: 'SET NULL', nullable: true })
+    @JoinColumn({ name: 'document' })
+    document?: WarehouseDocument;
 
     @Column({ default: true })
     isActive: boolean;
