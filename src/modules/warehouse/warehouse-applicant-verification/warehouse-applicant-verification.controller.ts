@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, HttpCode, HttpStatus, UnauthorizedException } from '@nestjs/common';
 import { WarehouseApplicantVerificationService } from './warehouse-applicant-verification.service';
 import { CreateWarehouseApplicantVerificationDto } from './dto/create-warehouse-applicant-verification.dto';
 import { UpdateWarehouseApplicantVerificationDto } from './dto/update-warehouse-applicant-verification.dto';
@@ -32,7 +32,7 @@ export class WarehouseApplicantVerificationController {
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
+  async remove(@Param('id') id: string) {
     return this.warehouseApplicantVerificationService.remove(+id);
   }
 
@@ -44,6 +44,9 @@ export class WarehouseApplicantVerificationController {
     @Request() request: any,
   ) {
     const userId = request.user?.sub || request.user?.id;
+    if (!userId) {
+      throw new UnauthorizedException('User ID not found in request');
+    }
     return this.warehouseApplicantVerificationService.approve(+id, approveDto, userId);
   }
 
@@ -55,6 +58,9 @@ export class WarehouseApplicantVerificationController {
     @Request() request: any,
   ) {
     const userId = request.user?.sub || request.user?.id;
+    if (!userId) {
+      throw new UnauthorizedException('User ID not found in request');
+    }
     return this.warehouseApplicantVerificationService.reject(+id, rejectDto, userId);
   }
 }

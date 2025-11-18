@@ -36,7 +36,8 @@ export class WarehouseApplicantVerificationService {
     return this.repo.save(updated);
   }
 
-  remove(id: number) {
+  async remove(id: number) {
+    await this.findOne(id); // This will throw NotFoundException if record doesn't exist
     return this.repo.delete(id);
   }
 

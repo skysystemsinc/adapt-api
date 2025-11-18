@@ -33,10 +33,10 @@ export class WarehouseApplicantVerification {
     remarks: string;
 
     @Column({ nullable: true })
-    approvedBy: number;
+    approvedBy: string;
 
     @Column({ nullable: true })
-    rejectedBy: number;
+    rejectedBy: string;
 
     @Column({ type: 'timestamp', nullable: true })
     approvedAt: Date;
