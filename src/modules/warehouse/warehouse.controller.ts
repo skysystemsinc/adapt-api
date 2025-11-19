@@ -324,6 +324,18 @@ export class WarehouseController {
     return this.warehouseService.getHrInformation(applicationId, user.id);
   }
 
+  @ApiOperation({ summary: 'Delete HR information' })
+  @ApiBearerAuth('JWT-auth')
+  @Delete('/operator/application/:applicationId/hr-information/:hrInformationId')
+  deleteHrInformation(
+    @Param('applicationId') applicationId: string,
+    @Param('hrInformationId') hrInformationId: string,
+    @Request() request: any,
+  ) {
+    const user = request.user as User;
+    return this.warehouseService.deleteHrInformation(applicationId, hrInformationId, user.id);
+  }
+
   @ApiOperation({ summary: 'Get warehouse application with authorized signatories' })
   @ApiBearerAuth('JWT-auth')
   @Get('/operator/application/:applicationId/warehouse-application')

@@ -1104,6 +1104,45 @@ export class WarehouseService {
     };
   }
 
+  /**
+   * Delete HR information
+   */
+  async deleteHrInformation(applicationId: string, hrInformationId: string, userId: string) {
+    const application = await this.warehouseOperatorRepository.findOne({
+      where: { id: applicationId, userId },
+    });
+
+    if (!application) {
+      throw new NotFoundException('Warehouse operator application not found');
+    }
+
+    // Load HR entity with all relations to ensure cascade deletion works properly
+    const hr = await this.hrRepository.findOne({
+      where: { id: hrInformationId, applicationId: application.id },
+      relations: [
+        'personalDetails',
+        'academicQualifications',
+        'professionalQualifications',
+        'trainings',
+        'experiences',
+        'declaration',
+      ],
+    });
+
+    if (!hr) {
+      throw new NotFoundException('HR information not found');
+    }
+
+    // Use remove() which will cascade delete all related entities
+    // The cascade: true in the entity definition ensures all children are deleted
+    await this.hrRepository.remove(hr);
+
+    return {
+      message: 'HR information deleted successfully',
+      success: true,
+    };
+  }
+
   async getWarehouseApplication(applicationId: string, userId: string) {
     const application = await this.warehouseOperatorRepository.findOne({
       where: { id: applicationId, userId },
