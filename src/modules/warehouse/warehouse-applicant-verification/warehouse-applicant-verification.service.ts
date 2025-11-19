@@ -5,6 +5,7 @@ import { ApproveVerificationDto } from './dto/approve-verification.dto';
 import { RejectVerificationDto } from './dto/reject-verification.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { WarehouseApplicantVerification } from './entities/warehouse-applicant-verification.entity';
+import { WarehouseOperatorApplicationRequest, WarehouseOperatorApplicationStatus } from '../entities/warehouse-operator-application-request.entity';
 import { Repository } from 'typeorm';
 import { ApprovalStatus } from '../../../common/enums/ApprovalStatus';
 
@@ -13,6 +14,8 @@ export class WarehouseApplicantVerificationService {
   constructor(
     @InjectRepository(WarehouseApplicantVerification)
     private readonly repo: Repository<WarehouseApplicantVerification>,
+    @InjectRepository(WarehouseOperatorApplicationRequest)
+    private readonly applicationRepo: Repository<WarehouseOperatorApplicationRequest>,
   ) { }
 
   create(createWarehouseApplicantVerificationDto: CreateWarehouseApplicantVerificationDto) {
@@ -28,7 +31,7 @@ export class WarehouseApplicantVerificationService {
     const record = await this.repo.findOne({
       where: { id },
       select: [
-        'id', 'fieldKey', 'fieldValue', 'status', 'remarks',
+        'id', 'fieldKey', 'fieldValue', 'status', 'remarks', 'applicationId',
       ]
     });
     if (!record) throw new NotFoundException('Verification record not found');
@@ -45,7 +48,7 @@ export class WarehouseApplicantVerificationService {
     if (!record) throw new NotFoundException('Verification record not found');
     return record;
   }
-  
+
   async findByEntityKey(id: string, key: string) {
     const record = await this.repo.find({
       where: { fieldKey: key, applicationId: id },
@@ -70,12 +73,26 @@ export class WarehouseApplicantVerificationService {
   async approve(id: string, approveDto: ApproveVerificationDto, userId: string) {
     const record = await this.findOne(id);
 
+    // Update verification record
     record.status = ApprovalStatus.APPROVED;
     record.approvedBy = userId;
     record.approvedAt = new Date();
     record.remarks = approveDto.remarks || record.remarks;
 
-    return this.repo.save(record);
+    const savedVerification = await this.repo.save(record);
+
+    if (record.applicationId) {
+      const application = await this.applicationRepo.findOne({
+        where: { id: record.applicationId }
+      });
+
+      if (application && application.status !== WarehouseOperatorApplicationStatus.IN_PROCESS) {
+        application.status = WarehouseOperatorApplicationStatus.IN_PROCESS;
+        await this.applicationRepo.save(application);
+      }
+    }
+
+    return savedVerification;
   }
 
   async reject(id: string, rejectDto: RejectVerificationDto, userId: string) {
@@ -85,9 +102,20 @@ export class WarehouseApplicantVerificationService {
     record.rejectedBy = userId;
     record.rejectedAt = new Date();
     record.remarks = rejectDto.remarks;
-    record.approvedBy = null;
-    record.approvedAt = null;
 
-    return this.repo.save(record);
+    const savedVerification = await this.repo.save(record);
+
+    if (record.applicationId) {
+      const application = await this.applicationRepo.findOne({
+        where: { id: record.applicationId }
+      });
+
+      if (application && application.status !== WarehouseOperatorApplicationStatus.SENT_TO_HOD) {
+        application.status = WarehouseOperatorApplicationStatus.SENT_TO_HOD;
+        await this.applicationRepo.save(application);
+      }
+    }
+
+    return savedVerification;
   }
 }

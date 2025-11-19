@@ -3,6 +3,7 @@ import { WarehouseApplicantVerificationService } from './warehouse-applicant-ver
 import { WarehouseApplicantVerificationController } from './warehouse-applicant-verification.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { WarehouseApplicantVerification } from './entities/warehouse-applicant-verification.entity';
+import { WarehouseOperatorApplicationRequest } from '../entities/warehouse-operator-application-request.entity';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 
@@ -10,7 +11,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
   controllers: [WarehouseApplicantVerificationController],
   providers: [WarehouseApplicantVerificationService],
   imports: [
-    TypeOrmModule.forFeature([WarehouseApplicantVerification]),
+    TypeOrmModule.forFeature([WarehouseApplicantVerification, WarehouseOperatorApplicationRequest]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
