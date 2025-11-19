@@ -470,6 +470,7 @@ export class WarehouseController {
     @Body('data') dataString: string,
     @UploadedFile() academicCertificate: any,
     @Request() request: any,
+    @Query('hrInformationId') hrInformationId?: string,
   ) {
     if (!dataString) {
       throw new BadRequestException('Data field is required');
@@ -489,6 +490,7 @@ export class WarehouseController {
       user.id,
       undefined,
       academicCertificate,
+      hrInformationId,
     );
   }
 
@@ -507,6 +509,7 @@ export class WarehouseController {
     @Body('data') dataString: string,
     @UploadedFile() academicCertificate: any,
     @Request() request: any,
+    @Query('hrInformationId') hrInformationId?: string,
   ) {
     if (!dataString) {
       throw new BadRequestException('Data field is required');
@@ -526,6 +529,7 @@ export class WarehouseController {
       user.id,
       id,
       academicCertificate,
+      hrInformationId,
     );
   }
 
@@ -554,6 +558,7 @@ export class WarehouseController {
     @Body('data') dataString: string,
     @UploadedFile() professionalCertificate: any,
     @Request() request: any,
+    @Query('hrInformationId') hrInformationId?: string,
   ) {
     if (!dataString) {
       throw new BadRequestException('Data field is required');
@@ -573,6 +578,7 @@ export class WarehouseController {
       user.id,
       undefined,
       professionalCertificate,
+      hrInformationId,
     );
   }
 
@@ -591,6 +597,7 @@ export class WarehouseController {
     @Body('data') dataString: string,
     @UploadedFile() professionalCertificate: any,
     @Request() request: any,
+    @Query('hrInformationId') hrInformationId?: string,
   ) {
     if (!dataString) {
       throw new BadRequestException('Data field is required');
@@ -610,6 +617,7 @@ export class WarehouseController {
       user.id,
       id,
       professionalCertificate,
+      hrInformationId,
     );
   }
 
@@ -638,6 +646,7 @@ export class WarehouseController {
     @Body('data') dataString: string,
     @UploadedFile() trainingCertificate: any,
     @Request() request: any,
+    @Query('hrInformationId') hrInformationId?: string,
   ) {
     if (!dataString) {
       throw new BadRequestException('Data field is required');
@@ -657,6 +666,7 @@ export class WarehouseController {
       user.id,
       undefined,
       trainingCertificate,
+      hrInformationId,
     );
   }
 
@@ -675,6 +685,7 @@ export class WarehouseController {
     @Body('data') dataString: string,
     @UploadedFile() trainingCertificate: any,
     @Request() request: any,
+    @Query('hrInformationId') hrInformationId?: string,
   ) {
     if (!dataString) {
       throw new BadRequestException('Data field is required');
@@ -694,6 +705,7 @@ export class WarehouseController {
       user.id,
       id,
       trainingCertificate,
+      hrInformationId,
     );
   }
 
@@ -722,6 +734,7 @@ export class WarehouseController {
     @Body('data') dataString: string,
     @UploadedFile() experienceLetter: any,
     @Request() request: any,
+    @Query('hrInformationId') hrInformationId?: string,
   ) {
     if (!dataString) {
       throw new BadRequestException('Data field is required');
@@ -741,6 +754,7 @@ export class WarehouseController {
       user.id,
       undefined,
       experienceLetter,
+      hrInformationId,
     );
   }
 
@@ -759,6 +773,7 @@ export class WarehouseController {
     @Body('data') dataString: string,
     @UploadedFile() experienceLetter: any,
     @Request() request: any,
+    @Query('hrInformationId') hrInformationId?: string,
   ) {
     if (!dataString) {
       throw new BadRequestException('Data field is required');
@@ -778,6 +793,7 @@ export class WarehouseController {
       user.id,
       id,
       experienceLetter,
+      hrInformationId,
     );
   }
 

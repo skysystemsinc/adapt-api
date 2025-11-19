@@ -1072,8 +1072,8 @@ export class WarehouseService {
       throw new NotFoundException('Warehouse operator application not found');
     }
 
-    // Find HR information for this application
-    const hr = await this.hrRepository.findOne({
+    // Find all HR information for this application
+    const hrEntities = await this.hrRepository.find({
       where: { applicationId: application.id },
       relations: [
         'personalDetails',
@@ -1091,7 +1091,7 @@ export class WarehouseService {
       ],
     });
 
-    if (!hr) {
+    if (!hrEntities || hrEntities.length === 0) {
       return {
         message: 'HR information not found',
         data: null,
@@ -1100,7 +1100,7 @@ export class WarehouseService {
 
     return {
       message: 'HR information retrieved successfully',
-      data: this.mapHrEntityToResponse(hr),
+      data: hrEntities.map(hr => this.mapHrEntityToResponse(hr)),
     };
   }
 
@@ -1380,12 +1380,20 @@ export class WarehouseService {
       throw new NotFoundException('Warehouse operator application not found. Please create an application first.');
     }
 
-    // Ensure HR context exists
-    let hr = await this.hrRepository.findOne({
-      where: { applicationId: application.id },
-    });
-
-    if (!hr) {
+    // Find or create HR context
+    let hr: HrEntity | null = null;
+    
+    if (hrInformationId) {
+      // If hrInformationId is provided, find that specific HR entity
+      hr = await this.hrRepository.findOne({
+        where: { id: hrInformationId, applicationId: application.id },
+      });
+      
+      if (!hr) {
+        throw new NotFoundException('HR information not found for the provided ID');
+      }
+    } else {
+      // If not provided, create new HR context (for new entries)
       const contextResult = await this.createHrContext(applicationId, userId);
       hr = await this.hrRepository.findOne({
         where: { id: contextResult.data.id },
@@ -1394,11 +1402,6 @@ export class WarehouseService {
 
     if (!hr) {
       throw new BadRequestException('Failed to create or find HR context');
-    }
-
-    // If hrInformationId is provided, ensure it matches
-    if (hrInformationId && hr.id !== hrInformationId) {
-      throw new BadRequestException('HR information ID mismatch');
     }
 
     const normalizeDate = (dateValue: string | undefined): Date => {
@@ -1587,12 +1590,20 @@ export class WarehouseService {
       throw new NotFoundException('Warehouse operator application not found. Please create an application first.');
     }
 
-    // Ensure HR context exists
-    let hr = await this.hrRepository.findOne({
-      where: { applicationId: application.id },
-    });
-
-    if (!hr) {
+    // Find or create HR context
+    let hr: HrEntity | null = null;
+    
+    if (hrInformationId) {
+      // If hrInformationId is provided, find that specific HR entity
+      hr = await this.hrRepository.findOne({
+        where: { id: hrInformationId, applicationId: application.id },
+      });
+      
+      if (!hr) {
+        throw new NotFoundException('HR information not found for the provided ID');
+      }
+    } else {
+      // If not provided, create new HR context (for new entries)
       const contextResult = await this.createHrContext(applicationId, userId);
       hr = await this.hrRepository.findOne({
         where: { id: contextResult.data.id },
@@ -1601,11 +1612,6 @@ export class WarehouseService {
 
     if (!hr) {
       throw new BadRequestException('Failed to create or find HR context');
-    }
-
-    // If hrInformationId is provided, ensure it matches
-    if (hrInformationId && hr.id !== hrInformationId) {
-      throw new BadRequestException('HR information ID mismatch');
     }
 
     const savedResult = await this.dataSource.transaction(async (manager) => {
@@ -1657,6 +1663,7 @@ export class WarehouseService {
     userId: string,
     id?: string,
     certificateFile?: any,
+    hrInformationId?: string,
   ) {
     const application = await this.warehouseOperatorRepository.findOne({
       where: { id: applicationId, userId },
@@ -1666,12 +1673,20 @@ export class WarehouseService {
       throw new NotFoundException('Warehouse operator application not found. Please create an application first.');
     }
 
-    // Ensure HR context exists
-    let hr = await this.hrRepository.findOne({
-      where: { applicationId: application.id },
-    });
-
-    if (!hr) {
+    // Find or create HR context
+    let hr: HrEntity | null = null;
+    
+    if (hrInformationId) {
+      // If hrInformationId is provided, find that specific HR entity
+      hr = await this.hrRepository.findOne({
+        where: { id: hrInformationId, applicationId: application.id },
+      });
+      
+      if (!hr) {
+        throw new NotFoundException('HR information not found for the provided ID');
+      }
+    } else {
+      // If not provided, create new HR context (for new entries)
       const contextResult = await this.createHrContext(applicationId, userId);
       hr = await this.hrRepository.findOne({
         where: { id: contextResult.data.id },
@@ -1824,6 +1839,7 @@ export class WarehouseService {
     userId: string,
     id?: string,
     certificateFile?: any,
+    hrInformationId?: string,
   ) {
     const application = await this.warehouseOperatorRepository.findOne({
       where: { id: applicationId, userId },
@@ -1833,12 +1849,20 @@ export class WarehouseService {
       throw new NotFoundException('Warehouse operator application not found. Please create an application first.');
     }
 
-    // Ensure HR context exists
-    let hr = await this.hrRepository.findOne({
-      where: { applicationId: application.id },
-    });
-
-    if (!hr) {
+    // Find or create HR context
+    let hr: HrEntity | null = null;
+    
+    if (hrInformationId) {
+      // If hrInformationId is provided, find that specific HR entity
+      hr = await this.hrRepository.findOne({
+        where: { id: hrInformationId, applicationId: application.id },
+      });
+      
+      if (!hr) {
+        throw new NotFoundException('HR information not found for the provided ID');
+      }
+    } else {
+      // If not provided, create new HR context (for new entries)
       const contextResult = await this.createHrContext(applicationId, userId);
       hr = await this.hrRepository.findOne({
         where: { id: contextResult.data.id },
@@ -1991,6 +2015,7 @@ export class WarehouseService {
     userId: string,
     id?: string,
     certificateFile?: any,
+    hrInformationId?: string,
   ) {
     const application = await this.warehouseOperatorRepository.findOne({
       where: { id: applicationId, userId },
@@ -2000,12 +2025,20 @@ export class WarehouseService {
       throw new NotFoundException('Warehouse operator application not found. Please create an application first.');
     }
 
-    // Ensure HR context exists
-    let hr = await this.hrRepository.findOne({
-      where: { applicationId: application.id },
-    });
-
-    if (!hr) {
+    // Find or create HR context
+    let hr: HrEntity | null = null;
+    
+    if (hrInformationId) {
+      // If hrInformationId is provided, find that specific HR entity
+      hr = await this.hrRepository.findOne({
+        where: { id: hrInformationId, applicationId: application.id },
+      });
+      
+      if (!hr) {
+        throw new NotFoundException('HR information not found for the provided ID');
+      }
+    } else {
+      // If not provided, create new HR context (for new entries)
       const contextResult = await this.createHrContext(applicationId, userId);
       hr = await this.hrRepository.findOne({
         where: { id: contextResult.data.id },
@@ -2158,6 +2191,7 @@ export class WarehouseService {
     userId: string,
     id?: string,
     experienceLetterFile?: any,
+    hrInformationId?: string,
   ) {
     const application = await this.warehouseOperatorRepository.findOne({
       where: { id: applicationId, userId },
@@ -2167,12 +2201,20 @@ export class WarehouseService {
       throw new NotFoundException('Warehouse operator application not found. Please create an application first.');
     }
 
-    // Ensure HR context exists
-    let hr = await this.hrRepository.findOne({
-      where: { applicationId: application.id },
-    });
-
-    if (!hr) {
+    // Find or create HR context
+    let hr: HrEntity | null = null;
+    
+    if (hrInformationId) {
+      // If hrInformationId is provided, find that specific HR entity
+      hr = await this.hrRepository.findOne({
+        where: { id: hrInformationId, applicationId: application.id },
+      });
+      
+      if (!hr) {
+        throw new NotFoundException('HR information not found for the provided ID');
+      }
+    } else {
+      // If not provided, create new HR context (for new entries)
       const contextResult = await this.createHrContext(applicationId, userId);
       hr = await this.hrRepository.findOne({
         where: { id: contextResult.data.id },
