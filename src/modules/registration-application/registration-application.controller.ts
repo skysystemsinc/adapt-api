@@ -78,5 +78,13 @@ export class RegistrationApplicationController {
   remove(@Param('id') id: string) {
     return this.registrationApplicationService.remove(id);
   }
+
+  @Get('registration-application/user/details')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async getRegistrationApplicationDetailsByUserId(@Req() request: any) {
+    const userId = request.user.sub;
+    return this.registrationApplicationService.getRegistrationApplicationDetailsByUserId(userId);
+  }
 }
 

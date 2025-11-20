@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Like } from 'typeorm';
+import { Repository, Like, In } from 'typeorm';
 import { plainToInstance, instanceToPlain } from 'class-transformer';
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -279,6 +279,93 @@ export class RegistrationApplicationService {
   async remove(id: string) {
     await this.registrationApplicationRepository.delete(id);
     return { deleted: true };
+  }
+
+  /**
+   * Get registration application details by userId
+   * Flow:
+   * 1. Get userId from token (passed as parameter)
+   * 2. Find registration_application by userId (through user relation)
+   * 3. Get formId from registration_application
+   * 4. Find form_fields with specific labels and get their field keys
+   * 5. Find registration_application_details using those field keys and applicationId
+   * 6. Return the values
+   */
+  async getRegistrationApplicationDetailsByUserId(userId: string): Promise<{
+    applicantType: string | null;
+    details: Record<string, string>;
+  }> {
+    try {
+      // Step 1: Find registration_application by userId through user relation
+      // Using QueryBuilder since userId is the actual column name (from JoinColumn)
+      const application = await this.registrationApplicationRepository
+        .createQueryBuilder('application')
+        .leftJoinAndSelect('application.applicationTypeId', 'applicationTypeId')
+        .leftJoinAndSelect('application.user', 'user')
+        .where('application.userId = :userId', { userId })
+        .getOne();
+
+      if (!application) {
+        return { applicantType: null, details: {} };
+      }
+
+      // Step 2: Get formId from registration_application
+      const formId = application.formId;
+      if (!formId) {
+        return { applicantType: application.applicationTypeId?.name || null, details: {} };
+      }
+
+      // Step 3: Find form_fields with specific labels and get their field keys
+      const targetLabels = [
+        "Please select your application types:",
+        "Name of Applicant Authorized Signatory",
+        "CNIC Number",
+        "Name of Applicant as per CNIC",
+        "Date of Issuance of CNIC of Applicant Authrotrized Signatory"
+      ];
+
+      // Get all form_fields for this formId
+      const allFormFields = await this.formFieldRepository.find({
+        where: { formId: formId },
+      });
+
+      // Filter for exact label matches and get field keys
+      const fieldKeys: string[] = [];
+      for (const label of targetLabels) {
+        const field = allFormFields.find(f => f.label === label);
+        if (field) {
+          fieldKeys.push(field.fieldKey);
+        }
+      }
+
+      // Step 4: Find registration_application_details using those field keys and applicationId
+      const applicationId = application.id;
+      const details: Record<string, string> = {};
+
+      if (fieldKeys.length > 0) {
+        // Get details for this application with the specific field keys
+        const applicationDetails = await this.registrationApplicationDetailsRepository.find({
+          where: {
+            application: { id: applicationId },
+            key: In(fieldKeys),
+          },
+        });
+
+        // Build the details object
+        for (const detail of applicationDetails) {
+          details[detail.key] = detail.value;
+        }
+      }
+
+      // Step 5: Return the values along with applicant type
+      return {
+        applicantType: application.applicationTypeId?.name || null,
+        details: details,
+      };
+    } catch (error) {
+      console.error('Error getting registration application details by userId:', error);
+      return { applicantType: null, details: {} };
+    }
   }
 
   // Admin methods
