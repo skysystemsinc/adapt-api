@@ -23,6 +23,11 @@ export class WarehouseAdminController {
     return this.warehouseAdminService.findOne(id);
   }
 
+  @Get('/application/roles')
+  findAllWareHouseRoles() {
+    return this.warehouseAdminService.findAllWareHouseRoles();
+  }
+
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateWarehouseAdminDto: UpdateWarehouseAdminDto) {
     return this.warehouseAdminService.update(+id, updateWarehouseAdminDto);

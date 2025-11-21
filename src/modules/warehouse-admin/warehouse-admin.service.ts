@@ -5,6 +5,8 @@ import { QueryOperatorApplicationDto } from './dto/query-operator-application.dt
 import { InjectRepository } from '@nestjs/typeorm';
 import { WarehouseOperatorApplicationRequest, WarehouseOperatorApplicationStatus } from '../warehouse/entities/warehouse-operator-application-request.entity';
 import { Repository } from 'typeorm';
+import { User } from '../users/entities/user.entity';
+import { DataSource } from 'typeorm';
 
 @Injectable()
 export class WarehouseAdminService {
@@ -12,6 +14,9 @@ export class WarehouseAdminService {
   constructor(
     @InjectRepository(WarehouseOperatorApplicationRequest)
     private warehouseOperatorApplicationRequestRepository: Repository<WarehouseOperatorApplicationRequest>,
+    @InjectRepository(User)
+    private usersRepository: Repository<User>,
+    private dataSource: DataSource,
   ) { }
 
   async findAllWareHouseOperatorsPaginated(query: QueryOperatorApplicationDto) {
@@ -193,5 +198,41 @@ export class WarehouseAdminService {
 
   remove(id: number) {
     return `This action removes a #${id} warehouseAdmin`;
+  }
+
+  /**
+   * 
+   * @returns All users grouped by role
+   */
+  async findAllWareHouseRoles() {
+    const users = await this.dataSource
+      .getRepository(User)
+      .createQueryBuilder('user')
+      .innerJoin('user.userRoles', 'ur')
+      .innerJoin('ur.role', 'role')
+      .select(`
+    role.name AS role,
+    json_agg(
+      json_build_object(
+        'id', "user"."id",
+        'firstName', "user"."firstName",
+        'lastName', "user"."lastName",
+        'email', "user"."email"
+      )
+    ) AS users
+  `)
+      .where(`role.name ILIKE '%hod%'`)
+      .groupBy('role.id')
+      .getRawMany();
+
+
+    // Convert to object keyed by role
+    const grouped: Record<string, any[]> = {};
+    for (const row of users) {
+      grouped[row.role] = row.users;
+    }
+
+    return grouped;
+
   }
 }
