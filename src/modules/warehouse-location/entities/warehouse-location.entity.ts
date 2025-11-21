@@ -6,7 +6,7 @@ import { Security } from "../security/entities/security.entity";
 import { FireSafety } from "../fire-safety/entities/fire-safety.entity";
 import { Weighing } from "../weighings/entities/weighing.entity";
 import { HumanResource } from "../human-resource/entities/human-resource.entity";
-import { User } from "src/modules/users/entities/user.entity";
+import { User } from "../../users/entities/user.entity";
 
 @Entity('warehouse_location')
 export class WarehouseLocation {

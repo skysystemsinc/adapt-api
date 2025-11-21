@@ -10,12 +10,12 @@ export class Security {
     warehouseLocationId: string;
 
     @Column({ type: 'varchar', length: 50 })
-    guardsDeployed: number;
+    guardsDeployed: string;
 
     @Column({ type: 'varchar', length: 50 })
-    NumberOfCameras: number;
+    NumberOfCameras: string;
 
-    @Column({ type: 'string' })
+    @Column({ type: 'varchar', length: 100 })
     otherSecurityMeasures: string;
 
     @Column({ type: 'boolean', default: true })
