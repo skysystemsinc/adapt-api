@@ -1,7 +1,7 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { Column, CreateDateColumn, Entity, JoinColumn, OneToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { WarehouseLocation } from "../../entities/warehouse-location.entity";
 
-@Entity('jurisdictions')
+@Entity('jurisdiction')
 export class Jurisdiction {
     @PrimaryGeneratedColumn('uuid')
     id: string;
@@ -21,6 +21,21 @@ export class Jurisdiction {
     @Column({ type: 'varchar', length: 50 })
     fireStationDistance: string;
 
+    @Column({ type: 'varchar', length: 50 })
+    numberOfEntryAndExit: string;
+
+    @Column({ type: 'boolean', default: false })
+    compoundWallFencing: boolean;
+
+    @Column({ type: 'varchar', length: 50, nullable: true })
+    heightOfCompoundWall?: string;
+
+    @Column({ type: 'boolean', default: false })
+    compoundWallBarbedFencing?: boolean;
+
+    @Column({ type: 'boolean', default: false })
+    damageOnCompoundWall: boolean;
+
     @Column({ type: 'boolean', default: true })
     isActive: boolean;
 
@@ -30,7 +45,7 @@ export class Jurisdiction {
     @UpdateDateColumn()
     updatedAt: Date;
 
-    @ManyToOne(() => WarehouseLocation, (warehouse) => warehouse.jurisdictions)
+    @OneToOne(() => WarehouseLocation, (warehouse) => warehouse.jurisdiction)
     @JoinColumn({ name: 'warehouseLocationId' })
     warehouseLocation: WarehouseLocation;
 }

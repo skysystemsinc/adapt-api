@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, OneToMany, OneToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { Facility } from "../facility/entities/facility.entity";
 import { Contact } from "../contacts/entities/contact.entity";
 import { Jurisdiction } from "../jurisdiction/entities/jurisdiction.entity";
@@ -6,37 +6,46 @@ import { Security } from "../security/entities/security.entity";
 import { FireSafety } from "../fire-safety/entities/fire-safety.entity";
 import { Weighing } from "../weighings/entities/weighing.entity";
 import { HumanResource } from "../human-resource/entities/human-resource.entity";
+import { User } from "src/modules/users/entities/user.entity";
 
 @Entity('warehouse_location')
 export class WarehouseLocation {
     @PrimaryGeneratedColumn('uuid')
     id: string;
 
-    @Column({ type: 'varchar', length: 100 })
-    applicantLegalStatus: string;
+    @Column({ type: 'uuid' })
+    userId: string;
 
-    @Column({ type: 'varchar', length: 100 })
-    applicantAuthorizedSignatory: string;
+    @ManyToOne(() => User, (user) => user.warehouseLocations)
+    @JoinColumn({ name: 'userId' })
+    user: User;
 
-    @OneToMany(() => Facility, (facility) => facility.warehouseLocation)
-    facilities: Facility[];
+    @OneToOne(() => Facility, (facility) => facility.warehouseLocation)
+    @JoinColumn({ name: 'facilityId' })
+    facility: Facility;
 
-    @OneToMany(() => Contact, (contact) => contact.warehouseLocation)
-    contacts: Contact[];
+    @OneToOne(() => Contact, (contact) => contact.warehouseLocation)
+    @JoinColumn({ name: 'contactId' })
+    contact: Contact;
 
-    @OneToMany(() => Jurisdiction, (jurisdiction) => jurisdiction.warehouseLocation)
-    jurisdictions: Jurisdiction[];
+    @OneToOne(() => Jurisdiction, (jurisdiction) => jurisdiction.warehouseLocation)
+    @JoinColumn({ name: 'jurisdictionId' })
+    jurisdiction: Jurisdiction;
 
-    @OneToMany(() => Security, (security) => security.warehouseLocation)
-    securities: Security[];
+    @OneToOne(() => Security, (security) => security.warehouseLocation)
+    @JoinColumn({ name: 'securityId' })
+    security: Security;
 
-    @OneToMany(() => FireSafety, (fireSafety) => fireSafety.warehouseLocation)
-    fireSafeties: FireSafety[];
+    @OneToOne(() => FireSafety, (fireSafety) => fireSafety.warehouseLocation)
+    @JoinColumn({ name: 'fireSafetyId' })
+    fireSafety: FireSafety;
 
-    @OneToMany(() => Weighing, (weighing) => weighing.warehouseLocation)
-    weighings: Weighing[];
+    @OneToOne(() => Weighing, (weighing) => weighing.warehouseLocation)
+    @JoinColumn({ name: 'weighingId' })
+    weighing: Weighing;
 
     @OneToMany(() => HumanResource, (hr) => hr.warehouseLocation)
+    @JoinColumn({ name: 'humanResourcesId' })
     humanResources: HumanResource[];
 
     @Column({ type: 'boolean', default: true })

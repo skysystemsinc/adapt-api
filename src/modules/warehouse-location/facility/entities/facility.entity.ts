@@ -1,9 +1,9 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { Column, CreateDateColumn, Entity, JoinColumn, OneToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { WarehouseLocation } from "../../entities/warehouse-location.entity";
 
-@Entity('facilities')
+@Entity('facility')
 export class Facility {
-    @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn('uuid')
   id: string;
 
   @Column({ type: 'uuid' })
@@ -30,7 +30,7 @@ export class Facility {
   @Column({ type: 'varchar', length: 100 })
   storageFacilitiesAppliedFor: string;
 
-  @Column({ type: 'json', nullable: true })
+  @Column({ type: 'json' })
   produceForAccreditation: string[];
 
   @Column({ type: 'varchar', length: 50 })
@@ -51,8 +51,11 @@ export class Facility {
   @Column({ type: 'varchar', length: 100 })
   ownership: string;
 
-  @Column({ type: 'int', nullable: true })
-  leaseDuration: number;
+  @Column({ type: 'varchar', length: 50 })
+  leaseDuration: string;
+
+  @Column({ type: 'varchar', length: 100 })
+  borrowerCodeOfPropertyOwner: string;
 
   @Column({ type: 'boolean', default: true })
   isActive: boolean;
@@ -63,7 +66,7 @@ export class Facility {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  @ManyToOne(() => WarehouseLocation, (warehouse) => warehouse.facilities)
+  @OneToOne(() => WarehouseLocation, (warehouse) => warehouse.facility)
   @JoinColumn({ name: 'warehouseLocationId' })
   warehouseLocation: WarehouseLocation;
 }

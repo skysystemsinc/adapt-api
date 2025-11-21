@@ -1,7 +1,7 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { Column, CreateDateColumn, Entity, JoinColumn, OneToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { WarehouseLocation } from "../../entities/warehouse-location.entity";
 
-@Entity('fire_safeties')
+@Entity('fire_safety')
 export class FireSafety {
     @PrimaryGeneratedColumn('uuid')
     id: string;
@@ -15,11 +15,11 @@ export class FireSafety {
     @Column({ type: 'varchar', length: 50 })
     fireBuckets: string;
 
-    @Column({ type: 'varchar', length: 100 })
-    waterArrangements: string;
+    @Column({ type: 'boolean', default: false })
+    waterArrangements: boolean;
 
-    @Column({ type: 'varchar', length: 100 })
-    fireSafetyAlarms: string;
+    @Column({ type: 'boolean', default: false })
+    fireSafetyAlarms: boolean;
 
     @Column({ type: 'text', nullable: true })
     otherFireSafetyMeasures: string;
@@ -33,7 +33,7 @@ export class FireSafety {
     @UpdateDateColumn()
     updatedAt: Date;
 
-    @ManyToOne(() => WarehouseLocation, (warehouse) => warehouse.fireSafeties)
+    @OneToOne(() => WarehouseLocation, (warehouse) => warehouse.fireSafety)
     @JoinColumn({ name: 'warehouseLocationId' })
     warehouseLocation: WarehouseLocation;
 }

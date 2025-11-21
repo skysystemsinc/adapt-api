@@ -1,7 +1,7 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { Column, CreateDateColumn, Entity, JoinColumn, OneToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { WarehouseLocation } from "../../entities/warehouse-location.entity";
 
-@Entity('securities')
+@Entity('security')
 export class Security {
     @PrimaryGeneratedColumn('uuid')
     id: string;
@@ -10,18 +10,12 @@ export class Security {
     warehouseLocationId: string;
 
     @Column({ type: 'varchar', length: 50 })
-    numberOfEntryAndExit: string;
-
-    @Column({ type: 'boolean', default: false })
-    compoundWallFencing: boolean;
+    guardsDeployed: number;
 
     @Column({ type: 'varchar', length: 50 })
-    guardsDeployed: string;
+    NumberOfCameras: number;
 
-    @Column({ type: 'varchar', length: 50 })
-    NumberOfCameras: string;
-
-    @Column({ type: 'text', nullable: true })
+    @Column({ type: 'string' })
     otherSecurityMeasures: string;
 
     @Column({ type: 'boolean', default: true })
@@ -33,7 +27,7 @@ export class Security {
     @UpdateDateColumn()
     updatedAt: Date;
 
-    @ManyToOne(() => WarehouseLocation, (warehouse) => warehouse.securities)
+    @OneToOne(() => WarehouseLocation, (warehouse) => warehouse.security)
     @JoinColumn({ name: 'warehouseLocationId' })
     warehouseLocation: WarehouseLocation;
 }

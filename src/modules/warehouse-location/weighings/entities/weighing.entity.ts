@@ -1,7 +1,7 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { Column, CreateDateColumn, Entity, JoinColumn, OneToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { WarehouseLocation } from "../../entities/warehouse-location.entity";
 
-@Entity('weighings')
+@Entity('weighing')
 export class Weighing {
     @PrimaryGeneratedColumn('uuid')
     id: string;
@@ -24,7 +24,7 @@ export class Weighing {
     @UpdateDateColumn()
     updatedAt: Date;
 
-    @ManyToOne(() => WarehouseLocation, (warehouse) => warehouse.weighings)
+    @OneToOne(() => WarehouseLocation, (warehouse) => warehouse.weighing)
     @JoinColumn({ name: 'warehouseLocationId' })
     warehouseLocation: WarehouseLocation;
 }

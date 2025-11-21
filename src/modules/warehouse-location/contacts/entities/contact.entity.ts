@@ -1,7 +1,7 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { Column, CreateDateColumn, Entity, JoinColumn, OneToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { WarehouseLocation } from "../../entities/warehouse-location.entity";
 
-@Entity('contacts')
+@Entity('contact')
 export class Contact {
     @PrimaryGeneratedColumn('uuid')
     id: string;
@@ -10,19 +10,16 @@ export class Contact {
     warehouseLocationId: string;
 
     @Column({ type: 'varchar', length: 200 })
-    nameOfAuthorizedContact: string;
+    name: string;
 
     @Column({ type: 'varchar', length: 200 })
-    contactEmail: string;
+    email: string;
 
-    @Column({ type: 'varchar', length: 100 })
-    uniqueBorrowerCode: string;
-
-    @Column({ type: 'varchar', length: 50 })
-    landlineContact: string;
+    @Column({ type: 'varchar', length: 50, nullable: true })
+    phoneNumber?: string;
 
     @Column({ type: 'varchar', length: 50 })
-    primaryContact: string;
+    mobileNumber: string;
 
     @Column({ type: 'boolean', default: true })
     isActive: boolean;
@@ -33,7 +30,7 @@ export class Contact {
     @UpdateDateColumn()
     updatedAt: Date;
 
-    @ManyToOne(() => WarehouseLocation, (warehouse) => warehouse.contacts)
+    @OneToOne(() => WarehouseLocation, (warehouse) => warehouse.contact)
     @JoinColumn({ name: 'warehouseLocationId' })
     warehouseLocation: WarehouseLocation;
 }
