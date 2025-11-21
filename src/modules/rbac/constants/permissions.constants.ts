@@ -39,5 +39,10 @@ export enum Permissions {
   // Finance
   VIEW_FINANCE_REPORTS = 'view_finance_reports',
   APPROVE_FINANCE = 'approve_finance',
+
+
+  // P8
+  VIEW_WAREHOUSE_APPLICATION_ASSIGNMENT = 'view_warehouse_application_assignment',
+  WAREHOUSE_APPLICATION_ASSIGNMENT = 'warehouse_application_assignment',
 }
 
