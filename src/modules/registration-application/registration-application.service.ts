@@ -289,10 +289,9 @@ export class RegistrationApplicationService {
    * 3. Get formId from registration_application
    * 4. Find form_fields with specific labels and get their field keys
    * 5. Find registration_application_details using those field keys and applicationId
-   * 6. Return the values
+   * 6. Return the values with readable property names
    */
   async getRegistrationApplicationDetailsByUserId(userId: string): Promise<{
-    applicantType: string | null;
     details: Record<string, string>;
   }> {
     try {
@@ -306,35 +305,39 @@ export class RegistrationApplicationService {
         .getOne();
 
       if (!application) {
-        return { applicantType: null, details: {} };
+        return { details: {} };
       }
 
       // Step 2: Get formId from registration_application
       const formId = application.formId;
       if (!formId) {
-        return { applicantType: application.applicationTypeId?.name || null, details: {} };
+        return { details: {} };
       }
 
       // Step 3: Find form_fields with specific labels and get their field keys
-      const targetLabels = [
-        "Please select your application types:",
-        "Name of Applicant Authorized Signatory",
-        "CNIC Number",
-        "Name of Applicant as per CNIC",
-        "Date of Issuance of CNIC of Applicant Authrotrized Signatory"
-      ];
+      // Mapping from labels to readable property names
+      const labelToPropertyMap: Record<string, string> = {
+        "Please select your application types:": "applicationType",
+        "CNIC Number": "cnicNumber",
+        "Name of Applicant as per CNIC": "nameAsPerCNIC",
+        "Date of Issuance of CNIC of Applicant Authrotrized Signatory": "cnicIssuanceDate",
+        "Registered Mobile No. of Applicant Authorized Signatory": "mobileNumber",
+        "Valid Email ID of Applicant Authorized Signatory": "email",
+      };
+
+      const targetLabels = Object.keys(labelToPropertyMap);
 
       // Get all form_fields for this formId
       const allFormFields = await this.formFieldRepository.find({
         where: { formId: formId },
       });
 
-      // Filter for exact label matches and get field keys
-      const fieldKeys: string[] = [];
+      // Create a map from fieldKey to property name
+      const fieldKeyToPropertyMap: Record<string, string> = {};
       for (const label of targetLabels) {
         const field = allFormFields.find(f => f.label === label);
         if (field) {
-          fieldKeys.push(field.fieldKey);
+          fieldKeyToPropertyMap[field.fieldKey] = labelToPropertyMap[label];
         }
       }
 
@@ -342,6 +345,7 @@ export class RegistrationApplicationService {
       const applicationId = application.id;
       const details: Record<string, string> = {};
 
+      const fieldKeys = Object.keys(fieldKeyToPropertyMap);
       if (fieldKeys.length > 0) {
         // Get details for this application with the specific field keys
         const applicationDetails = await this.registrationApplicationDetailsRepository.find({
@@ -351,20 +355,22 @@ export class RegistrationApplicationService {
           },
         });
 
-        // Build the details object
+        // Build the details object with readable property names
         for (const detail of applicationDetails) {
-          details[detail.key] = detail.value;
+          const propertyName = fieldKeyToPropertyMap[detail.key];
+          if (propertyName) {
+            details[propertyName] = detail.value;
+          }
         }
       }
 
-      // Step 5: Return the values along with applicant type
+      // Step 5: Return the values with readable property names
       return {
-        applicantType: application.applicationTypeId?.name || null,
         details: details,
       };
     } catch (error) {
       console.error('Error getting registration application details by userId:', error);
-      return { applicantType: null, details: {} };
+      return { details: {} };
     }
   }
 
