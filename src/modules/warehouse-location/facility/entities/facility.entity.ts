@@ -51,11 +51,11 @@ export class Facility {
   @Column({ type: 'varchar', length: 100 })
   ownership: string;
 
-  @Column({ type: 'varchar', length: 50 })
-  leaseDuration: string;
+  @Column({ type: 'date', nullable: true })
+  leaseDuration: Date | null;
 
-  @Column({ type: 'varchar', length: 100 })
-  borrowerCodeOfPropertyOwner: string;
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  borrowerCodeOfPropertyOwner: string | null;
 
   @Column({ type: 'boolean', default: true })
   isActive: boolean;

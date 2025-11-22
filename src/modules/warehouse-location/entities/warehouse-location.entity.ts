@@ -8,6 +8,15 @@ import { Weighing } from "../weighings/entities/weighing.entity";
 import { HumanResource } from "../human-resource/entities/human-resource.entity";
 import { User } from "../../users/entities/user.entity";
 
+export enum WarehouseLocationStatus {
+    PENDING = 'PENDING',
+    IN_PROCESS = 'IN_PROCESS',
+    APPROVED = 'APPROVED',
+    REJECTED = 'REJECTED',
+    DRAFT = 'DRAFT',
+    SUBMITTED = 'SUBMITTED',
+}
+
 @Entity('warehouse_location')
 export class WarehouseLocation {
     @PrimaryGeneratedColumn('uuid')
@@ -20,27 +29,27 @@ export class WarehouseLocation {
     @JoinColumn({ name: 'userId' })
     user: User;
 
-    @OneToOne(() => Facility, (facility) => facility.warehouseLocation)
+    @OneToOne(() => Facility, (facility) => facility.warehouseLocation, {onDelete: 'CASCADE'})
     @JoinColumn({ name: 'facilityId' })
     facility: Facility;
 
-    @OneToOne(() => Contact, (contact) => contact.warehouseLocation)
+    @OneToOne(() => Contact, (contact) => contact.warehouseLocation, {onDelete: 'CASCADE'})
     @JoinColumn({ name: 'contactId' })
     contact: Contact;
 
-    @OneToOne(() => Jurisdiction, (jurisdiction) => jurisdiction.warehouseLocation)
+    @OneToOne(() => Jurisdiction, (jurisdiction) => jurisdiction.warehouseLocation, {onDelete: 'CASCADE'})
     @JoinColumn({ name: 'jurisdictionId' })
     jurisdiction: Jurisdiction;
 
-    @OneToOne(() => Security, (security) => security.warehouseLocation)
+    @OneToOne(() => Security, (security) => security.warehouseLocation, {onDelete: 'CASCADE'})
     @JoinColumn({ name: 'securityId' })
     security: Security;
 
-    @OneToOne(() => FireSafety, (fireSafety) => fireSafety.warehouseLocation)
+    @OneToOne(() => FireSafety, (fireSafety) => fireSafety.warehouseLocation, {onDelete: 'CASCADE'})
     @JoinColumn({ name: 'fireSafetyId' })
     fireSafety: FireSafety;
 
-    @OneToOne(() => Weighing, (weighing) => weighing.warehouseLocation)
+    @OneToOne(() => Weighing, (weighing) => weighing.warehouseLocation, {onDelete: 'CASCADE'})
     @JoinColumn({ name: 'weighingId' })
     weighing: Weighing;
 
@@ -50,6 +59,13 @@ export class WarehouseLocation {
 
     @Column({ type: 'boolean', default: true })
     isActive: boolean;
+
+    @Column({
+        type: 'enum',
+        enum: WarehouseLocationStatus,
+        default: WarehouseLocationStatus.DRAFT,
+    })
+    status: WarehouseLocationStatus;
 
     @CreateDateColumn()
     createdAt: Date;

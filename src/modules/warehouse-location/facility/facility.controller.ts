@@ -9,7 +9,9 @@ export class FacilityController {
 
   @Post()
   create(@Body() createFacilityDto: CreateFacilityDto) {
-    return this.facilityService.create(createFacilityDto);
+    // This endpoint is kept for backward compatibility
+    // Use POST /warehouse-location/:id/facility instead
+    return 'This endpoint is deprecated. Use POST /warehouse-location/:id/facility';
   }
 
   @Get()
