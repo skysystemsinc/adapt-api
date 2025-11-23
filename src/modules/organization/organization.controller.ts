@@ -33,4 +33,23 @@ export class OrganizationController {
   ): Promise<ListOrganizationResponseDto> {
     return await this.organizationService.findAll(query);
   }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get an organization by ID' })
+  async findOne(
+    @Param('id') id: string,
+  ): Promise<Organization> {
+    return await this.organizationService.findOne(id);
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Update an organization by ID' })
+  async update(
+    @Param('id') id: string,
+    @Body() updateOrganizationDto: UpdateOrganizationDto,
+    @Request() req: any,
+  ): Promise<Organization> {
+    const user = req.user as User;
+    return await this.organizationService.update(id, updateOrganizationDto, user.id);
+  }
 }

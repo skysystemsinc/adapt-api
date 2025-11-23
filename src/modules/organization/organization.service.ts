@@ -99,7 +99,6 @@ export class OrganizationService {
   async findOne(id: string): Promise<Organization> {
     const organization = await this.organizationRepository.findOne({
       where: { id },
-      relations: ['createdByUser'],
     });
 
     if (!organization) {
@@ -109,7 +108,7 @@ export class OrganizationService {
     return organization;
   }
 
-  async update(id: string, updateOrganizationDto: UpdateOrganizationDto): Promise<Organization> {
+  async update(id: string, updateOrganizationDto: UpdateOrganizationDto, userId: string): Promise<Organization> {
     const organization = await this.findOne(id);
 
     if (updateOrganizationDto.name) {
