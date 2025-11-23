@@ -8,6 +8,7 @@ import {
 } from 'typeorm';
 import { UserRole } from '../../rbac/entities/user-role.entity';
 import { WarehouseOperatorApplicationRequest } from '../../warehouse/entities/warehouse-operator-application-request.entity';
+import { Assignment } from '../../warehouse/operator/assignment/entities/assignment.entity';
 
 @Entity('users')
 export class User {
@@ -49,6 +50,12 @@ export class User {
 
   @OneToMany(() => WarehouseOperatorApplicationRequest, (request) => request.user)
   operatorApplicationRequests: WarehouseOperatorApplicationRequest[];
+
+  @OneToMany(() => Assignment, (assignment) => assignment.assignedByUser)
+  officerAssignments: Assignment[];
+
+  @OneToMany(() => Assignment, (assignment) => assignment.assignedToUser)
+  assignedToUser: Assignment[];
 
   @CreateDateColumn()
   createdAt: Date;
