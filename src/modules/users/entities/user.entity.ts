@@ -5,10 +5,13 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
 import { UserRole } from '../../rbac/entities/user-role.entity';
 import { WarehouseOperatorApplicationRequest } from '../../warehouse/entities/warehouse-operator-application-request.entity';
 import { WarehouseLocation } from '../../warehouse-location/entities/warehouse-location.entity';
+import { Organization } from '../../organization/entities/organization.entity';
 
 @Entity('users')
 export class User {
@@ -44,6 +47,10 @@ export class User {
 
   @Column({ nullable: true })
   otpExpires: Date;
+
+  @ManyToOne(() => Organization, { onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'organizationId' })
+  organization: Organization;
 
   @OneToMany(() => UserRole, (userRole) => userRole.user)
   userRoles: UserRole[];
