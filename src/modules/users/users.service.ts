@@ -1,4 +1,4 @@
-import { Injectable, ConflictException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Not, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
@@ -8,6 +8,7 @@ import { RBACService } from '../rbac/services/rbac.service';
 import { QueryUsersDto, UserTypeFilter } from './dto/query-users.dto';
 import { ApplicantUserResponseDto, InternalUserResponseDto } from './dto/user-response.dto';
 import { RegistrationApplicationDetails } from '../registration-application/entities/registration-application-details.entity';
+import { Organization } from '../organization/entities/organization.entity';
 
 @Injectable()
 export class UsersService {
@@ -17,7 +18,7 @@ export class UsersService {
     @InjectRepository(RegistrationApplicationDetails)
     private registrationApplicationDetailsRepository: Repository<RegistrationApplicationDetails>,
     private rbacService: RBACService,
-  ) {}
+  ) { }
 
   async create(createUserDto: CreateUserDto): Promise<User> {
     // Check if user already exists
@@ -40,8 +41,9 @@ export class UsersService {
     const user = this.userRepository.create({
       ...userData,
       password: hashedPassword,
+      organization: createUserDto.organizationId ? { id: createUserDto.organizationId } : undefined,
     });
-    
+
     const savedUser = await this.userRepository.save(user);
 
     // Assign role to the user
@@ -70,9 +72,9 @@ export class UsersService {
     });
   }
 
-  async findAllInternal(): Promise<User[]> {
-    return this.userRepository.find({
-      relations: ['userRoles', 'userRoles.role'],
+  async findAllInternal(): Promise<any> {
+    const users = await this.userRepository.find({
+      relations: ['userRoles', 'userRoles.role', 'organization'],
       where: {
         userRoles: {
           role: {
@@ -80,11 +82,56 @@ export class UsersService {
           },
         },
       },
+      order: {
+        createdAt: 'DESC',
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        organization: {
+          name: true,
+        },
+        userRoles: {
+          id: true,
+          role: {
+            name: true,
+          },
+        },
+      }
     });
+    return users;
   }
 
   async findOne(id: string): Promise<User | null> {
-    return this.userRepository.findOne({ where: { id } });
+    const user = await this.userRepository.findOne({
+      where: { id },
+      relations: ['userRoles', 'userRoles.role', 'organization'],
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        organization: {
+          id: true,
+          name: true,
+        },
+        userRoles: {
+          id: true,
+          role: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    
+    return user;
   }
 
   async findByEmail(email: string): Promise<User | null> {
@@ -120,6 +167,7 @@ export class UsersService {
       .createQueryBuilder('user')
       .leftJoinAndSelect('user.userRoles', 'userRoles')
       .leftJoinAndSelect('userRoles.role', 'role')
+      .leftJoinAndSelect('user.organization', 'organization')
       .skip(skip)
       .take(limit)
       .orderBy('user.createdAt', 'DESC');
@@ -162,13 +210,13 @@ export class UsersService {
             // Step 2: Get ALL application details for this applicationId
             const allDetails = await this.registrationApplicationDetailsRepository
               .createQueryBuilder('detail')
-              .where('detail.application.id = :applicationId', { 
-                applicationId: emailDetail.application.id 
+              .where('detail.application.id = :applicationId', {
+                applicationId: emailDetail.application.id
               })
               .getMany();
 
             // Step 3: Filter details in memory by label and get the name
-            const nameDetail = allDetails.find(detail => 
+            const nameDetail = allDetails.find(detail =>
               detail.label && businessNameLabels.includes(detail.label)
             );
 
@@ -191,6 +239,8 @@ export class UsersService {
         id: user.id,
         name: `${user.firstName} ${user.lastName}`,
         email: user.email,
+        type: user?.organization?.type || 'N/A',
+        organization: user.organization?.name || 'N/A',
         role: user.userRoles?.[0]?.role?.name || 'N/A',
       }));
     }

@@ -10,16 +10,12 @@ export class JwtAuthGuard {
     const request = context.switchToHttp().getRequest();
     const token = this.extractTokenFromHeader(request);
     
-    console.log('Authorization header:', request.headers.authorization);
-    console.log('Extracted token:', token);
-    
     if (!token) {
       throw new UnauthorizedException('Access token is required');
     }
 
     try {
       const payload = await this.jwtService.verifyAsync(token);
-      console.log('Token payload:', payload);
       request['user'] = payload;
     } catch (error) {
       console.log('Token verification error:', error.message);

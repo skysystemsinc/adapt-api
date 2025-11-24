@@ -6,7 +6,7 @@ import { RBACSeeder } from './rbac.seeder';
 import { DocumentTypeSeeder } from './document-type.seeder';
 import { SettingsSeeder } from './settings.seeder';
 import { DesignationSeeder } from './designation.seeder';
-
+import { OrganisationSeeder } from './organisation.seeder';
 // Load environment variables
 config();
 
@@ -47,6 +47,9 @@ async function runSeeders() {
 
     // const designationSeeder = new DesignationSeeder();
     // await designationSeeder.run(AppDataSource);
+
+    const organisationSeeder = new OrganisationSeeder();
+    await organisationSeeder.run(AppDataSource);
 
     console.log('\n✅ Seeding completed successfully!');
     process.exit(0);

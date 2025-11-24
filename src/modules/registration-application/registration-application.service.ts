@@ -466,6 +466,7 @@ export class RegistrationApplicationService {
         firstName: businessNameDetail?.value || 'N/A',
         lastName: 'N/A',
         roleId: applicantRole.id,
+        organizationId: null,
       });
 
       return createdUser.id;

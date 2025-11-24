@@ -1,0 +1,39 @@
+import { Column, CreateDateColumn, Entity, JoinColumn, OneToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { WarehouseLocation } from "../../entities/warehouse-location.entity";
+
+@Entity('fire_safety')
+export class FireSafety {
+    @PrimaryGeneratedColumn('uuid')
+    id: string;
+
+    @Column({ type: 'uuid' })
+    warehouseLocationId: string;
+
+    @Column({ type: 'varchar', length: 50 })
+    fireExtinguishers: string;
+
+    @Column({ type: 'varchar', length: 50 })
+    fireBuckets: string;
+
+    @Column({ type: 'boolean', default: false })
+    waterArrangements: boolean;
+
+    @Column({ type: 'boolean', default: false })
+    fireSafetyAlarms: boolean;
+
+    @Column({ type: 'text', nullable: true })
+    otherFireSafetyMeasures: string;
+
+    @Column({ type: 'boolean', default: true })
+    isActive: boolean;
+
+    @CreateDateColumn()
+    createdAt: Date;
+
+    @UpdateDateColumn()
+    updatedAt: Date;
+
+    @OneToOne(() => WarehouseLocation, (warehouse) => warehouse.fireSafety)
+    @JoinColumn({ name: 'warehouseLocationId' })
+    warehouseLocation: WarehouseLocation;
+}
