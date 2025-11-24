@@ -1,4 +1,6 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiConsumes, ApiBody, ApiOperation } from '@nestjs/swagger';
 import { WeighingsService } from './weighings.service';
 import { CreateWeighingDto } from './dto/create-weighing.dto';
 import { UpdateWeighingDto } from './dto/update-weighing.dto';
@@ -21,30 +23,59 @@ export class WeighingsController {
 
   @Post(':id/weighing')
   @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Create or update weighing information' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    type: CreateWeighingDto,
+    description: 'Weighing data with required calibration certificate file'
+  })
+  @UseInterceptors(
+    FileInterceptor('weighbridgeCalibrationCertificate', {
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB max
+      },
+    }),
+  )
   async createWeighing(
     @Param('id') id: string,
     @Body() createWeighingDto: CreateWeighingDto,
+    @UploadedFile() weighbridgeCalibrationCertificateFile: any,
     @Request() req: any
   ) {
     const userId = req.user.sub;
-    return this.weighingsService.create(id, createWeighingDto, userId);
+    return this.weighingsService.create(id, createWeighingDto, userId, weighbridgeCalibrationCertificateFile);
   }
 
   @Patch(':id/weighing')
   @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Update weighing information' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    type: CreateWeighingDto,
+    description: 'Weighing data with optional calibration certificate file'
+  })
+  @UseInterceptors(
+    FileInterceptor('weighbridgeCalibrationCertificate', {
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB max
+      },
+    }),
+  )
   async updateWeighing(
     @Param('id') id: string,
     @Body() updateWeighingDto: CreateWeighingDto,
+    @UploadedFile() weighbridgeCalibrationCertificateFile: any,
     @Request() req: any
   ) {
     const userId = req.user.sub;
-    return this.weighingsService.updateByWarehouseLocationId(id, updateWeighingDto, userId);
+    return this.weighingsService.updateByWarehouseLocationId(id, updateWeighingDto, userId, weighbridgeCalibrationCertificateFile);
   }
 
   // Legacy endpoints (kept for backward compatibility)
   @Post('weighings')
   create(@Body() createWeighingDto: CreateWeighingDto) {
-    return this.weighingsService.create('', createWeighingDto, '');
+    // Legacy endpoint - file is required, will throw validation error if not provided
+    return this.weighingsService.create('', createWeighingDto, '', null);
   }
 
   @Get('weighings')
