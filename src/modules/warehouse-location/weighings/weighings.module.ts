@@ -6,12 +6,13 @@ import { WeighingsService } from './weighings.service';
 import { WeighingsController } from './weighings.controller';
 import { Weighing } from './entities/weighing.entity';
 import { WarehouseLocation } from '../entities/warehouse-location.entity';
+import { WarehouseDocument } from '../../warehouse/entities/warehouse-document.entity';
 
 @Module({
   controllers: [WeighingsController],
   providers: [WeighingsService],
   imports: [
-    TypeOrmModule.forFeature([Weighing, WarehouseLocation]),
+    TypeOrmModule.forFeature([Weighing, WarehouseLocation, WarehouseDocument]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
