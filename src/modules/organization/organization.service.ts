@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { Organization, OrganizationType, OrganizationStatus } from './entities/organization.entity';
@@ -15,19 +15,35 @@ export class OrganizationService {
   }
 
   async create(createOrganizationDto: CreateOrganizationDto, userId: string): Promise<Organization> {
-    const slug = await this.generateSlug(createOrganizationDto.name);
-    const code = await this.generateCode();
+    try {
+      const slug = await this.generateSlug(createOrganizationDto.name);
+      const code = await this.generateCode();
 
-    const organization = this.organizationRepository.create({
-      code,
-      name: createOrganizationDto.name,
-      slug,
-      status: OrganizationStatus.ACTIVE,
-      type: createOrganizationDto.type,
-      createdByUser: { id: userId } as Organization['createdByUser'],
-    });
+      // HANDLE UNIQUE NAME
+      const existingOrganization = await this.organizationRepository.findOne({
+        where: { name: createOrganizationDto.name },
+      });
 
-    return this.organizationRepository.save(organization);
+      if (existingOrganization) {
+        throw new BadRequestException('Organization with this name already exists');
+      }
+  
+      const organization = this.organizationRepository.create({
+        code,
+        name: createOrganizationDto.name,
+        slug,
+        status: OrganizationStatus.ACTIVE,
+        type: createOrganizationDto.type,
+        createdByUser: { id: userId } as Organization['createdByUser'],
+      });
+  
+      return this.organizationRepository.save(organization);
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to create organization');
+    }
   }
 
   async findAll(query?: ListOrganizationDto): Promise<ListOrganizationResponseDto> {

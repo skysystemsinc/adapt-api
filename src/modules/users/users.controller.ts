@@ -31,8 +31,9 @@ export class UsersController {
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @RequirePermissions(Permissions.VIEW_USERS)
   @HttpCode(HttpStatus.OK)
-  async findAllInternal(): Promise<User[]> {
-    return this.usersService.findAllInternal();
+  async findAllInternal(): Promise<any> {
+    const users = await this.usersService.findAllInternal();
+    return users;
   }
 
   @Get(':id')

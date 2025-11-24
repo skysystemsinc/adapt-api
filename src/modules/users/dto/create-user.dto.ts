@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsEmail, IsNotEmpty, IsString, MinLength, IsStrongPassword, IsUUID } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString, MinLength, IsStrongPassword, IsUUID, IsOptional } from 'class-validator';
 
 export class CreateUserDto {
   @IsEmail()
@@ -33,4 +33,8 @@ export class CreateUserDto {
   @IsUUID()
   @IsNotEmpty()
   roleId: string;
+
+  @IsUUID()
+  @IsOptional()
+  organizationId: string | null;
 }
