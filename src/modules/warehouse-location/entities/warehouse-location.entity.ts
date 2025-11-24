@@ -7,6 +7,7 @@ import { FireSafety } from "../fire-safety/entities/fire-safety.entity";
 import { Weighing } from "../weighings/entities/weighing.entity";
 import { HumanResource } from "../human-resource/entities/human-resource.entity";
 import { User } from "../../users/entities/user.entity";
+import { AssessmentSubmission } from "../../expert-assessment/assessment-submission/entities/assessment-submission.entity";
 
 export enum WarehouseLocationStatus {
     PENDING = 'PENDING',
@@ -56,6 +57,9 @@ export class WarehouseLocation {
     @OneToMany(() => HumanResource, (hr) => hr.warehouseLocation)
     @JoinColumn({ name: 'humanResourcesId' })
     humanResources: HumanResource[];
+
+    @OneToMany(() => AssessmentSubmission, (submission) => submission.warehouseLocation)
+    assessmentSubmissions: AssessmentSubmission[];
 
     @Column({ type: 'boolean', default: true })
     isActive: boolean;

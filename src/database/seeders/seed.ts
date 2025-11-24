@@ -7,6 +7,7 @@ import { DocumentTypeSeeder } from './document-type.seeder';
 import { SettingsSeeder } from './settings.seeder';
 import { DesignationSeeder } from './designation.seeder';
 import { OrganisationSeeder } from './organisation.seeder';
+import { ExpertAssessmentSeeder } from './expert-assessment.seeder';
 // Load environment variables
 config();
 
@@ -48,8 +49,11 @@ async function runSeeders() {
     // const designationSeeder = new DesignationSeeder();
     // await designationSeeder.run(AppDataSource);
 
-    const organisationSeeder = new OrganisationSeeder();
-    await organisationSeeder.run(AppDataSource);
+    // const organisationSeeder = new OrganisationSeeder();
+    // await organisationSeeder.run(AppDataSource);
+
+    const expertAssessmentSeeder = new ExpertAssessmentSeeder();
+    await expertAssessmentSeeder.run(AppDataSource);    
 
     console.log('\n✅ Seeding completed successfully!');
     process.exit(0);
