@@ -1,5 +1,6 @@
 import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { HumanResource } from "../../entities/human-resource.entity";
+import { WarehouseDocument } from "../../../../warehouse/entities/warehouse-document.entity";
 
 @Entity('academic_qualifications')
 export class AcademicQualification {
@@ -27,8 +28,9 @@ export class AcademicQualification {
     @Column({ type: 'varchar', length: 50 })
     grade: string;
 
-    @Column({ type: 'varchar', length: 500, nullable: true })
-    academicCertificate: string;
+    @ManyToOne(() => WarehouseDocument, { onDelete: 'SET NULL', nullable:true })
+    @JoinColumn({ name: 'academicCertificate' })
+    academicCertificate: WarehouseDocument;
 
     @Column({ type: 'boolean', default: true })
     isActive: boolean;
