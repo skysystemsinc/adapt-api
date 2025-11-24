@@ -1,0 +1,104 @@
+import { IsArray, IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID, ValidateNested } from "class-validator";
+import { AssignmentLevel } from "../entities/assignment.entity";
+import { Transform, Type } from "class-transformer";
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+
+export class CreateAssignmentDto {
+    @ApiProperty({
+        description: 'The ID of the user to assign the assignment to',
+        example: '123e4567-e89b-12d3-a456-426614174000',
+    })
+    @IsNotEmpty()
+    @IsUUID()
+    assignedTo: string;
+
+    @ApiProperty({
+        description: 'The level of the assignment',
+        example: AssignmentLevel.OFFICER_TO_HOD,
+    })
+    @IsEnum(AssignmentLevel)
+    @IsNotEmpty()
+    level: AssignmentLevel;
+
+    @ApiProperty({
+        description: 'The sections of the assignment',
+        example: [
+            {
+                sectionType: 'bank_details',
+                fields: [
+                    {
+                        fieldName: 'iban',
+                        remarks: 'The IBAN of the company',
+                    },
+                    {
+                        fieldName: 'swift_code',
+                        remarks: 'The SWIFT code of the company',
+                    },
+                ],
+            },
+        ],
+    })
+    @IsArray()
+    @IsNotEmpty()
+    @ValidateNested({ each: true })
+    @Type(() => AssignmentSectionDto)
+    sections: AssignmentSectionDto[];
+
+    @ApiPropertyOptional({
+        description: 'The remarks of the assignment',
+        example: 'The remarks of the assignment',
+    })
+    @IsString()
+    @IsOptional()
+    remarks?: string;
+}
+
+
+export class AssignmentSectionDto {
+    @ApiProperty({
+        description: 'The type of the section',
+        example: 'bank_details',
+    })
+    @IsString()
+    @IsNotEmpty()
+    @Transform(({ value }: { value: string }) => value.toLowerCase())
+    @Transform(({ value }: { value: string }) => value.replace(/ /g, '-'))
+    @Transform(({ value }: { value: string }) => value.replace(/[^a-z0-9-]/g, ''))
+    @Transform(({ value }: { value: string }) => value.replace(/^-+|-+$/g, ''))
+    @Transform(({ value }: { value: string }) => value.replace(/-+/g, '-'))
+    @Transform(({ value }: { value: string }) => value.replace(/^-+|-+$/g, ''))
+    sectionType: string;
+
+    @ApiProperty({
+        description: 'The fields of the section',
+        example: [
+            {
+                fieldName: 'iban',
+                remarks: 'The IBAN of the company',
+            },
+        ],
+    })
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => AssignmentFieldDto)
+    fields: AssignmentFieldDto[];
+}
+
+
+export class AssignmentFieldDto {
+    @ApiProperty({
+        description: 'The name of the field',
+        example: 'iban',
+    })
+    @IsString()
+    @IsNotEmpty()
+    fieldName: string;
+
+    @ApiPropertyOptional({
+        description: 'The remarks of the field',
+        example: 'The IBAN of the company',
+    })
+    @IsString()
+    @IsOptional()
+    remarks?: string;
+}

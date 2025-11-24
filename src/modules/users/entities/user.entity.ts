@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { UserRole } from '../../rbac/entities/user-role.entity';
 import { WarehouseOperatorApplicationRequest } from '../../warehouse/entities/warehouse-operator-application-request.entity';
+import { Assignment } from '../../warehouse/operator/assignment/entities/assignment.entity';
 import { WarehouseLocation } from '../../warehouse-location/entities/warehouse-location.entity';
 import { Organization } from '../../organization/entities/organization.entity';
 
@@ -58,6 +59,11 @@ export class User {
   @OneToMany(() => WarehouseOperatorApplicationRequest, (request) => request.user)
   operatorApplicationRequests: WarehouseOperatorApplicationRequest[];
 
+  @OneToMany(() => Assignment, (assignment) => assignment.assignedByUser)
+  officerAssignments: Assignment[];
+
+  @OneToMany(() => Assignment, (assignment) => assignment.assignedToUser)
+  assignedToUser: Assignment[];
   @OneToMany(() => WarehouseLocation, (warehouseLocation) => warehouseLocation.user)
   warehouseLocations: WarehouseLocation[];
 

@@ -31,6 +31,7 @@ import { FinancialSoundnessChecklistEntity } from './entities/checklist/financia
 import { RegistrationFeeChecklistEntity } from './entities/checklist/registration-fee.entity';
 import { DeclarationChecklistEntity } from './entities/checklist/declaration.entity';
 import { WarehouseApplicantVerificationModule } from './warehouse-applicant-verification/warehouse-applicant-verification.module';
+import { AssignmentModule } from './operator/assignment/assignment.module';
 
 @Module({
   controllers: [WarehouseController],
@@ -72,6 +73,7 @@ import { WarehouseApplicantVerificationModule } from './warehouse-applicant-veri
       inject: [ConfigService],
     }),
     WarehouseApplicantVerificationModule,
+    AssignmentModule,
   ],
   exports: [WarehouseService],
 })
