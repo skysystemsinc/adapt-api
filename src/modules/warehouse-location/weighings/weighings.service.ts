@@ -90,6 +90,33 @@ export class WeighingsService {
   }
 
   /**
+   * Delete warehouse document (file from disk and database record)
+   */
+  private async deleteWarehouseDocument(documentId: string): Promise<void> {
+    const document = await this.warehouseDocumentRepository.findOne({
+      where: { id: documentId }
+    });
+
+    if (document) {
+      // Delete file from disk
+      try {
+        // Remove leading slash if present and construct full path
+        const filePath = document.filePath.startsWith('/')
+          ? path.join(process.cwd(), document.filePath.substring(1))
+          : path.join(process.cwd(), document.filePath);
+        
+        await fs.unlink(filePath);
+      } catch (error) {
+        // File might not exist, log but don't fail
+        console.error(`Error deleting file ${document.filePath}:`, error);
+      }
+
+      // Delete document record from database
+      await this.warehouseDocumentRepository.remove(document);
+    }
+  }
+
+  /**
    * Get weighing by warehouse location ID
    */
   async findByWarehouseLocationId(warehouseLocationId: string, userId: string) {
@@ -146,6 +173,11 @@ export class WeighingsService {
     if (existingWeighing) {
       Object.assign(existingWeighing, weighingData);
       const savedWeighing = await this.weighingRepository.save(existingWeighing);
+
+      // Delete old file if it exists
+      if (existingWeighing.weighbridgeCalibrationCertificate) {
+        await this.deleteWarehouseDocument(existingWeighing.weighbridgeCalibrationCertificate.id);
+      }
 
       // Upload and link the certificate file
       const documentResult = await this.uploadWarehouseDocument(
@@ -236,8 +268,13 @@ export class WeighingsService {
     Object.assign(weighing, weighingData);
     const savedWeighing = await this.weighingRepository.save(weighing);
 
-    // Handle file upload if provided
+    // Handle file upload/update
     if (weighbridgeCalibrationCertificateFile) {
+      // New file provided - delete old file and upload new one
+      if (weighing.weighbridgeCalibrationCertificate) {
+        await this.deleteWarehouseDocument(weighing.weighbridgeCalibrationCertificate.id);
+      }
+
       const documentResult = await this.uploadWarehouseDocument(
         weighbridgeCalibrationCertificateFile,
         userId,
@@ -255,13 +292,34 @@ export class WeighingsService {
         await this.weighingRepository.save(savedWeighing);
       }
     } else {
-      // Ensure existing certificate is preserved (required field)
-      if (!weighing.weighbridgeCalibrationCertificate) {
-        throw new BadRequestException('Weighbridge calibration certificate is required');
+      // No new file provided - handle string (document ID) in DTO or keep existing
+      if (weighbridgeCalibrationCertificate && typeof weighbridgeCalibrationCertificate === 'string') {
+        // User sent document ID as string - validate it exists and belongs to this weighing
+        const existingDocument = await this.warehouseDocumentRepository.findOne({
+          where: { 
+            id: weighbridgeCalibrationCertificate,
+            documentableType: 'Weighing',
+            documentableId: savedWeighing.id,
+            documentType: 'weighbridgeCalibrationCertificate'
+          }
+        });
+
+        if (!existingDocument) {
+          throw new BadRequestException('Invalid document ID provided or document does not belong to this weighing');
+        }
+
+        // Keep the existing document
+        savedWeighing.weighbridgeCalibrationCertificate = existingDocument;
+        await this.weighingRepository.save(savedWeighing);
+      } else {
+        // No file and no document ID in DTO - ensure existing certificate is preserved
+        if (!weighing.weighbridgeCalibrationCertificate) {
+          throw new BadRequestException('Weighbridge calibration certificate is required');
+        }
+        // Keep existing certificate
+        savedWeighing.weighbridgeCalibrationCertificate = weighing.weighbridgeCalibrationCertificate;
+        await this.weighingRepository.save(savedWeighing);
       }
-      // Keep existing certificate if no new file is provided
-      savedWeighing.weighbridgeCalibrationCertificate = weighing.weighbridgeCalibrationCertificate;
-      await this.weighingRepository.save(savedWeighing);
     }
 
     return savedWeighing;
