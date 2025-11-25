@@ -8,6 +8,7 @@ import { WarehouseDocument } from '../../../warehouse/entities/warehouse-documen
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import dayjs from 'dayjs';
 
 @Injectable()
 export class ProfessionalExperienceService {
@@ -101,6 +102,39 @@ export class ProfessionalExperienceService {
     }
   }
 
+  /**
+   * Calculate duration in "X years Y months Z days" format from appointment and leaving dates
+   */
+  private calculateDuration(dateOfAppointment: Date | null, dateOfLeaving: Date | null): string {
+    if (!dateOfAppointment) {
+      return '';
+    }
+
+    const startDate = dayjs(dateOfAppointment);
+    const endDate = dateOfLeaving ? dayjs(dateOfLeaving) : dayjs(); // Use current date if leaving date is not provided
+
+    if (endDate.isBefore(startDate)) {
+      return '';
+    }
+
+    const years = endDate.diff(startDate, 'year');
+    const months = endDate.diff(startDate.add(years, 'year'), 'month');
+    const days = endDate.diff(startDate.add(years, 'year').add(months, 'month'), 'day');
+
+    const parts: string[] = [];
+    if (years > 0) {
+      parts.push(`${years} ${years === 1 ? 'year' : 'years'}`);
+    }
+    if (months > 0) {
+      parts.push(`${months} ${months === 1 ? 'month' : 'months'}`);
+    }
+    if (days > 0) {
+      parts.push(`${days} ${days === 1 ? 'day' : 'days'}`);
+    }
+
+    return parts.length > 0 ? parts.join(' ') : '0 days';
+  }
+
   async create(
     hrId: string,
     createProfessionalExperienceDto: CreateProfessionalExperienceDto,
@@ -117,13 +151,30 @@ export class ProfessionalExperienceService {
 
     const { experienceLetter, ...experienceData } = createProfessionalExperienceDto;
 
+    // Validate that date of appointment is not after date of leaving
+    if (experienceData.dateOfAppointment && experienceData.dateOfLeaving) {
+      const appointmentDate = new Date(experienceData.dateOfAppointment);
+      const leavingDate = new Date(experienceData.dateOfLeaving);
+      if (appointmentDate > leavingDate) {
+        throw new BadRequestException('Date of Appointment must be before or equal to Date of Leaving');
+      }
+    }
+
     // Convert null to undefined for date fields to satisfy TypeORM's DeepPartial type
-    const { dateOfAppointment, dateOfLeaving, ...restExperienceData } = experienceData;
+    const { dateOfAppointment, dateOfLeaving, duration, ...restExperienceData } = experienceData;
+    
+    // Auto-calculate duration if not provided
+    const calculatedDuration = duration || this.calculateDuration(
+      dateOfAppointment ?? null,
+      dateOfLeaving ?? null
+    );
+
     const experience = this.professionalExperienceRepository.create({
       humanResourceId: hrId,
       ...restExperienceData,
       dateOfAppointment: dateOfAppointment ?? undefined,
       dateOfLeaving: dateOfLeaving ?? undefined,
+      duration: calculatedDuration,
     });
 
     const savedExperience = await this.professionalExperienceRepository.save(experience);
@@ -166,9 +217,29 @@ export class ProfessionalExperienceService {
       throw new NotFoundException('Professional experience not found');
     }
 
-    const { experienceLetter, ...experienceData } = updateProfessionalExperienceDto;
+    const { experienceLetter, duration, ...experienceData } = updateProfessionalExperienceDto;
 
-    Object.assign(experience, experienceData);
+    // Validate that date of appointment is not after date of leaving
+    const finalAppointmentDate = experienceData.dateOfAppointment ?? experience.dateOfAppointment;
+    const finalLeavingDate = experienceData.dateOfLeaving ?? experience.dateOfLeaving;
+    if (finalAppointmentDate && finalLeavingDate) {
+      const appointmentDate = new Date(finalAppointmentDate);
+      const leavingDate = new Date(finalLeavingDate);
+      if (appointmentDate > leavingDate) {
+        throw new BadRequestException('Date of Appointment must be before or equal to Date of Leaving');
+      }
+    }
+
+    // Auto-calculate duration if not provided
+    const calculatedDuration = duration || this.calculateDuration(
+      finalAppointmentDate ?? null,
+      finalLeavingDate ?? null
+    );
+
+    Object.assign(experience, {
+      ...experienceData,
+      duration: calculatedDuration,
+    });
     const savedExperience = await this.professionalExperienceRepository.save(experience);
 
     if (experienceLetterFile) {
