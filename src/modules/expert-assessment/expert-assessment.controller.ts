@@ -26,10 +26,10 @@ export class ExpertAssessmentController {
     return this.expertAssessmentService.create(createExpertAssessmentDto, userId);
   }
 
-  @Get()
+  @Get('all')
   @ApiOperation({ summary: 'Get all expert assessments with pagination' })
   @ApiResponse({ status: 200, description: 'List of expert assessments' })
-  async findAll(@Query() query: QueryExpertAssessmentDto) {
+  async findAllExpertAssessments(@Query() query: QueryExpertAssessmentDto) {
     return this.expertAssessmentService.findAll(query);
   }
 
