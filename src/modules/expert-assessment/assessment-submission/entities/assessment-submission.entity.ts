@@ -3,6 +3,7 @@ import { ExpertAssessment } from "../../entities/expert-assessment.entity";
 import { AssessmentDocument } from "../../assessment-documents/entities/assessment-document.entity";
 import { WarehouseOperatorApplicationRequest } from "../../../warehouse/entities/warehouse-operator-application-request.entity";
 import { WarehouseLocation } from "../../../warehouse-location/entities/warehouse-location.entity";
+import { InspectionReport } from "../../../inspection-reports/entities/inspection-report.entity";
 
 export enum ExpertAssessmentSubmissionStatus {
     PENDING = 'pending',
@@ -49,6 +50,13 @@ export class AssessmentSubmission {
     @ManyToOne(() => WarehouseLocation, { onDelete: 'CASCADE', nullable: true })
     @JoinColumn({ name: 'warehouseLocationId' })
     warehouseLocation?: WarehouseLocation;
+
+    @Column({ type: 'uuid', nullable: true })
+    inspectionReportId?: string;
+
+    @ManyToOne(() => InspectionReport, { onDelete: 'CASCADE', nullable: true })
+    @JoinColumn({ name: 'inspectionReportId' })
+    inspectionReport?: InspectionReport;
 
     @CreateDateColumn()
     createdAt: Date;

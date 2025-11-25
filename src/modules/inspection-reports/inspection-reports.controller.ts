@@ -1,0 +1,118 @@
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, UploadedFiles, UseInterceptors, BadRequestException } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
+import { InspectionReportsService } from './inspection-reports.service';
+import { CreateInspectionReportDto } from './dto/create-inspection-report.dto';
+import { UpdateInspectionReportDto } from './dto/update-inspection-report.dto';
+import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
+import { FilesInterceptor } from '@nestjs/platform-express';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
+
+@ApiTags('Inspection Reports')
+@ApiBearerAuth('JWT-auth')
+@Controller('inspection-reports')
+@UseGuards(JwtAuthGuard)
+export class InspectionReportsController {
+  constructor(private readonly inspectionReportsService: InspectionReportsService) {}
+
+  @Post()
+  @ApiOperation({ summary: 'Create a new inspection report with all assessments and documents' })
+  @ApiConsumes('multipart/form-data')
+  @ApiResponse({ status: 201, description: 'Inspection report created successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @UseInterceptors(
+    FilesInterceptor('files', 100, { // Allow up to 100 files
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB per file
+      },
+    }),
+  )
+  async create(
+    @Body() body: any,
+    @UploadedFiles() files: any[],
+    @Request() req: any,
+  ) {
+    const userId = req.user?.sub || req.user?.id;
+
+    // Parse FormData - all values come as strings
+    const parsedData: any = {
+      maximumScore: body.maximumScore,
+      obtainedScore: body.obtainedScore,
+      percentage: body.percentage,
+      grade: body.grade,
+      selectedGrade: body.selectedGrade ? parseInt(body.selectedGrade, 10) : undefined,
+      assessmentGradingRemarks: body.assessmentGradingRemarks,
+      overallComments: body.overallComments,
+      warehouseOperatorApplicationId: body.warehouseOperatorApplicationId,
+      warehouseLocationId: body.warehouseLocationId,
+    };
+
+    // Parse assessments JSON string
+    if (body.assessments) {
+      try {
+        parsedData.assessments = typeof body.assessments === 'string' 
+          ? JSON.parse(body.assessments) 
+          : body.assessments;
+        
+        // Transform score in each assessment from string to number
+        if (Array.isArray(parsedData.assessments)) {
+          parsedData.assessments = parsedData.assessments.map((assessment: any) => ({
+            ...assessment,
+            score: typeof assessment.score === 'string' 
+              ? parseFloat(assessment.score) 
+              : assessment.score,
+          }));
+        }
+      } catch (error) {
+        throw new BadRequestException('Invalid assessments JSON format');
+      }
+    }
+
+    // Transform and validate the DTO
+    const createInspectionReportDto = plainToInstance(CreateInspectionReportDto, parsedData);
+    const errors = await validate(createInspectionReportDto);
+
+    if (errors.length > 0) {
+      const errorMessages = errors.map(error => 
+        Object.values(error.constraints || {}).join(', ')
+      ).flat();
+      throw new BadRequestException(errorMessages);
+    }
+
+    return this.inspectionReportsService.create(createInspectionReportDto, files || [], userId);
+  }
+
+  @Get()
+  @ApiOperation({ summary: 'Get all inspection reports' })
+  @ApiResponse({ status: 200, description: 'List of inspection reports' })
+  findAll() {
+    return this.inspectionReportsService.findAll();
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get an inspection report by ID' })
+  @ApiResponse({ status: 200, description: 'Inspection report found' })
+  @ApiResponse({ status: 404, description: 'Inspection report not found' })
+  findOne(@Param('id') id: string) {
+    return this.inspectionReportsService.findOne(id);
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Update an inspection report' })
+  @ApiResponse({ status: 200, description: 'Inspection report updated successfully' })
+  @ApiResponse({ status: 404, description: 'Inspection report not found' })
+  update(
+    @Param('id') id: string,
+    @Body() updateInspectionReportDto: UpdateInspectionReportDto,
+  ) {
+    return this.inspectionReportsService.update(id, updateInspectionReportDto);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete an inspection report' })
+  @ApiResponse({ status: 200, description: 'Inspection report deleted successfully' })
+  @ApiResponse({ status: 404, description: 'Inspection report not found' })
+  remove(@Param('id') id: string) {
+    return this.inspectionReportsService.remove(id);
+  }
+}
