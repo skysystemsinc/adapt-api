@@ -17,6 +17,7 @@ import { FinancialInformationEntity } from './financial-information.entity';
 import { BankDetails } from './bank-details.entity';
 import { ApplicantChecklistEntity } from './applicant-checklist.entity';
 import { WarehouseApplicantVerification } from '../warehouse-applicant-verification/entities/warehouse-applicant-verification.entity';
+import { AssessmentSubmission } from '../../expert-assessment/assessment-submission/entities/assessment-submission.entity';
 
 export enum WarehouseOperatorApplicationStatus {
   PENDING = 'PENDING',
@@ -67,6 +68,9 @@ export class WarehouseOperatorApplicationRequest {
 
   @OneToMany(() => WarehouseApplicantVerification, (verification) => verification.application)
   verifications: WarehouseApplicantVerification[];
+
+  @OneToMany(() => AssessmentSubmission, (submission) => submission.warehouseOperatorApplication)
+  assessmentSubmissions: AssessmentSubmission[];
   
   @Column({
     type: 'enum',
