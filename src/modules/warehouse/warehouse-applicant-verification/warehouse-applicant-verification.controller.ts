@@ -4,8 +4,6 @@ import { CreateWarehouseApplicantVerificationDto } from './dto/create-warehouse-
 import { UpdateWarehouseApplicantVerificationDto } from './dto/update-warehouse-applicant-verification.dto';
 import { ApproveVerificationDto } from './dto/approve-verification.dto';
 import { RejectVerificationDto } from './dto/reject-verification.dto';
-import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
-import { ApiBearerAuth } from '@nestjs/swagger';
 
 @Controller('warehouse-applicant-verification')
 // @UseGuards(JwtAuthGuard)

@@ -1,5 +1,6 @@
 import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { HumanResource } from "../../entities/human-resource.entity";
+import { WarehouseDocument } from "../../../../warehouse/entities/warehouse-document.entity";
 
 @Entity('professional_experiences')
 export class ProfessionalExperience {
@@ -32,9 +33,10 @@ export class ProfessionalExperience {
 
     @Column({ type: 'text' })
     responsibilities: string;
-
-    @Column({ type: 'varchar', length: 500, nullable: true })
-    experienceLetter: string;
+    
+    @ManyToOne(() => WarehouseDocument, { onDelete: 'SET NULL', nullable: true })
+    @JoinColumn({ name: 'experienceLetter' })
+    experienceLetter: WarehouseDocument;
 
     @Column({ type: 'boolean', default: true })
     isActive: boolean;

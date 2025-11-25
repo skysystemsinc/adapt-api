@@ -1,6 +1,14 @@
 import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsDateString } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+import { Exclude, Transform } from 'class-transformer';
 
+const transformToBoolean = (value: any): boolean => {
+  if (value === 'true' || value === true) return true;
+  if (value === 'false' || value === false) return false;
+  return value;
+} 
 export class CreateWeighingDto {
+  @Transform(({ value }) => transformToBoolean(value))
   @IsBoolean()
   weighbridgeAvailable: boolean;
 
@@ -40,38 +48,19 @@ export class CreateWeighingDto {
   @IsString()
   weighbridgeDistanceFromFacility?: string;
 
-  // Note: File uploads will be handled separately
-  // weighbridgeCalibrationCertificate will be handled via file upload endpoint
-
-  // Step 6: WeighingMore fields
-  @IsBoolean()
-  laboratoryFacility: boolean;
-
-  @IsBoolean()
-  minimumLabEquipmentExist: boolean;
-
-  @IsBoolean()
-  equipmentCalibrated: boolean;
-
-  @IsBoolean()
-  washroomsExist: boolean;
-
-  @IsBoolean()
-  waterAvailability: boolean;
-
-  @IsBoolean()
-  officeInternetFacility: boolean;
-
-  @IsBoolean()
-  electricityAvailable: boolean;
-
-  @IsBoolean()
-  gasAvailable: boolean;
-
-  @IsBoolean()
-  generatorAvailable: boolean;
-
+  @ApiProperty({
+    type: 'string',
+    format: 'binary',
+    description: 'Weighbridge calibration certificate file (PDF, PNG, JPG, JPEG, DOC, DOCX). Max size: 10MB',
+    required: true,
+  })
+  @Transform(({ value }) => {
+    // Transform empty strings to undefined to avoid validation errors
+    // The actual file is handled by FileInterceptor, not the DTO
+    if (value === '' || value === null) return undefined;
+    return value;
+  })
   @IsOptional()
-  @IsString()
-  otherUtilitiesFacilities?: string;
+  @Exclude()
+  weighbridgeCalibrationCertificate?: any;
 }

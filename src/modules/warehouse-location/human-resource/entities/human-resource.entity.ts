@@ -1,9 +1,11 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, OneToMany, OneToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { WarehouseLocation } from "../../entities/warehouse-location.entity";
 import { AcademicQualification } from "../academic-qualification/entities/academic-qualification.entity";
 import { ProfessionalQualification } from "../professional-qualification/entities/professional-qualification.entity";
 import { Training } from "../training/entities/training.entity";
 import { ProfessionalExperience } from "../professional-experience/entities/professional-experience.entity";
+import { WarehouseDocument } from "../../../warehouse/entities/warehouse-document.entity";
+import { Declaration } from "../declaration/entities/declaration.entity";
 
 @Entity('human_resources')
 export class HumanResource {
@@ -22,8 +24,9 @@ export class HumanResource {
     @Column({ type: 'varchar', length: 50 })
     cnicPassport: string;
 
-    @Column({ type: 'varchar', length: 500, nullable: true })
-    photograph: string;
+    @ManyToOne(() => WarehouseDocument, { onDelete: 'SET NULL', nullable:true })
+    @JoinColumn({ name: 'photograph' })
+    photograph: WarehouseDocument;
 
     @Column({ type: 'varchar', length: 100 })
     nationality: string;
@@ -73,4 +76,7 @@ export class HumanResource {
 
     @OneToMany(() => ProfessionalExperience, (exp) => exp.humanResource)
     professionalExperiences: ProfessionalExperience[];
+
+    @OneToOne(() => Declaration, (declaration) => declaration.humanResource, { nullable: true })
+    declaration: Declaration;
 }

@@ -1,5 +1,6 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, OneToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, OneToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { WarehouseLocation } from "../../entities/warehouse-location.entity";
+import { WarehouseDocument } from "../../../warehouse/entities/warehouse-document.entity";
 
 @Entity('weighing')
 export class Weighing {
@@ -40,39 +41,12 @@ export class Weighing {
     weighbridgeDistanceFromFacility?: string;
 
     // File path will be stored as string
-    @Column({ type: 'varchar', length: 500, nullable: true })
-    weighbridgeCalibrationCertificate?: string;
+    // @Column({ type: 'varchar', length: 500, nullable: true })
+    // weighbridgeCalibrationCertificate?: string;
 
-    // Step 6: WeighingMore fields
-    @Column({ type: 'boolean', default: false })
-    laboratoryFacility: boolean;
-
-    @Column({ type: 'boolean', default: false })
-    minimumLabEquipmentExist: boolean;
-
-    @Column({ type: 'boolean', default: false })
-    equipmentCalibrated: boolean;
-
-    @Column({ type: 'boolean', default: false })
-    washroomsExist: boolean;
-
-    @Column({ type: 'boolean', default: false })
-    waterAvailability: boolean;
-
-    @Column({ type: 'boolean', default: false })
-    officeInternetFacility: boolean;
-
-    @Column({ type: 'boolean', default: false })
-    electricityAvailable: boolean;
-
-    @Column({ type: 'boolean', default: false })
-    gasAvailable: boolean;
-
-    @Column({ type: 'boolean', default: false })
-    generatorAvailable: boolean;
-
-    @Column({ type: 'text', nullable: true })
-    otherUtilitiesFacilities?: string;
+    @ManyToOne(() => WarehouseDocument, { onDelete: 'SET NULL', nullable: true })
+    @JoinColumn({ name: 'weighbridgeCalibrationCertificate' })
+    weighbridgeCalibrationCertificate?: WarehouseDocument;
 
     @Column({ type: 'boolean', default: true })
     isActive: boolean;
