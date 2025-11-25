@@ -1,6 +1,7 @@
 import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { AssessmentSubmission } from "../assessment-submission/entities/assessment-submission.entity";
 import { User } from "../../users/entities/user.entity";
+import { AssessmentSubSection } from "../assessment-sub-section/entities/assessment-sub-section.entity";
 
 export enum AssessmentCategory {
     FINANCIAL = 'financial',
@@ -43,4 +44,7 @@ export class ExpertAssessment {
 
     @OneToMany(() => AssessmentSubmission, (submission) => submission.assessment)
     submissions: AssessmentSubmission[];
+
+    @OneToMany(() => AssessmentSubSection, (subSection) => subSection.assessment)
+    subSections: AssessmentSubSection[];
 }

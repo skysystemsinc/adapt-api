@@ -8,6 +8,7 @@ import { ExpertAssessment } from './entities/expert-assessment.entity';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthModule } from '../auth/auth.module';
 import { JwtModule } from '@nestjs/jwt';
+import { AssessmentSubSectionModule } from './assessment-sub-section/assessment-sub-section.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { JwtModule } from '@nestjs/jwt';
       }),
       inject: [ConfigService],
     }),
+    AssessmentSubSectionModule,
   ],
   controllers: [ExpertAssessmentController],
   providers: [ExpertAssessmentService],
