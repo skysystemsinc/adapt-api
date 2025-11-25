@@ -160,6 +160,11 @@ export class ProfessionalExperienceService {
       }
     }
 
+    // Validate that experience letter is required when date of leaving is provided
+    if (experienceData.dateOfLeaving && !experienceLetterFile && !experienceLetter) {
+      throw new BadRequestException('Experience Letter is required when Date of Leaving is provided');
+    }
+
     // Convert null to undefined for date fields to satisfy TypeORM's DeepPartial type
     const { dateOfAppointment, dateOfLeaving, duration, ...restExperienceData } = experienceData;
     
@@ -228,6 +233,13 @@ export class ProfessionalExperienceService {
       if (appointmentDate > leavingDate) {
         throw new BadRequestException('Date of Appointment must be before or equal to Date of Leaving');
       }
+    }
+
+    // Validate that experience letter is required when date of leaving is provided
+    const finalLeavingDateForValidation = experienceData.dateOfLeaving ?? experience.dateOfLeaving;
+    const hasExperienceLetter = experienceLetterFile || experienceLetter || experience.experienceLetter;
+    if (finalLeavingDateForValidation && !hasExperienceLetter) {
+      throw new BadRequestException('Experience Letter is required when Date of Leaving is provided');
     }
 
     // Auto-calculate duration if not provided
