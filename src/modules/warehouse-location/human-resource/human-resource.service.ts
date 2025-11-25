@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
-import { CreatePersonalDetailsDto } from './dto/create-personal-details.dto';
+import { CreateHumanResourceDto } from './dto/create-human-resource.dto';
 import { CreateDeclarationDto } from './declaration/dto/create-declaration.dto';
 import { HumanResource } from './entities/human-resource.entity';
 import { WarehouseLocation, WarehouseLocationStatus } from '../entities/warehouse-location.entity';
@@ -171,7 +171,7 @@ export class HumanResourceService {
    */
   async createPersonalDetails(
     warehouseLocationId: string,
-    createPersonalDetailsDto: CreatePersonalDetailsDto,
+    CreateHumanResourceDto: CreateHumanResourceDto,
     userId: string,
     photographFile?: any,
     hrId?: string
@@ -189,7 +189,7 @@ export class HumanResourceService {
     }
 
     // Remove file field from DTO before saving
-    const { photograph, ...personalDetailsData } = createPersonalDetailsDto;
+    const { photograph, ...personalDetailsData } = CreateHumanResourceDto;
 
     if (hrId) {
       // Update existing HR entry

@@ -3,7 +3,7 @@ import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiConsumes, ApiBody, ApiOperation, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { HumanResourceService } from './human-resource.service';
-import { CreatePersonalDetailsDto } from './dto/create-personal-details.dto';
+import { CreateHumanResourceDto } from './dto/create-human-resource.dto';
 import { CreateDeclarationDto } from './declaration/dto/create-declaration.dto';
 import { AcademicQualificationService } from './academic-qualification/academic-qualification.service';
 import { CreateAcademicQualificationDto } from './academic-qualification/dto/create-academic-qualification.dto';
@@ -41,7 +41,7 @@ export class HumanResourceController {
   @ApiOperation({ summary: 'Create HR entry with personal details' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
-    type: CreatePersonalDetailsDto,
+    type: CreateHumanResourceDto,
     description: 'Personal details data with optional photograph file'
   })
   @UseInterceptors(
@@ -53,19 +53,19 @@ export class HumanResourceController {
   )
   async createPersonalDetails(
     @Param('id') id: string,
-    @Body() createPersonalDetailsDto: CreatePersonalDetailsDto,
+    @Body() CreateHumanResourceDto: CreateHumanResourceDto,
     @UploadedFile() photographFile: any,
     @Request() req: any
   ) {
     const userId = req.user.sub;
-    return this.humanResourceService.createPersonalDetails(id, createPersonalDetailsDto, userId, photographFile);
+    return this.humanResourceService.createPersonalDetails(id, CreateHumanResourceDto, userId, photographFile);
   }
 
   @Patch(':id/human-resources/:hrId/personal-details')
   @ApiOperation({ summary: 'Update personal details for HR entry' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
-    type: CreatePersonalDetailsDto,
+    type: CreateHumanResourceDto,
     description: 'Personal details data with optional photograph file'
   })
   @UseInterceptors(
@@ -78,12 +78,12 @@ export class HumanResourceController {
   async updatePersonalDetails(
     @Param('id') id: string,
     @Param('hrId') hrId: string,
-    @Body() createPersonalDetailsDto: CreatePersonalDetailsDto,
+    @Body() CreateHumanResourceDto: CreateHumanResourceDto,
     @UploadedFile() photographFile: any,
     @Request() req: any
   ) {
     const userId = req.user.sub;
-    return this.humanResourceService.createPersonalDetails(id, createPersonalDetailsDto, userId, photographFile, hrId);
+    return this.humanResourceService.createPersonalDetails(id, CreateHumanResourceDto, userId, photographFile, hrId);
   }
 
   @Post(':id/human-resources/:hrId/declaration')
