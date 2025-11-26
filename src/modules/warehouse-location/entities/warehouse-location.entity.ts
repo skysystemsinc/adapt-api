@@ -5,8 +5,10 @@ import { Jurisdiction } from "../jurisdiction/entities/jurisdiction.entity";
 import { Security } from "../security/entities/security.entity";
 import { FireSafety } from "../fire-safety/entities/fire-safety.entity";
 import { Weighing } from "../weighings/entities/weighing.entity";
+import { TechnicalQualitative } from "../technical-qualitative/entities/technical-qualitative.entity";
 import { HumanResource } from "../human-resource/entities/human-resource.entity";
 import { User } from "../../users/entities/user.entity";
+import { AssessmentSubmission } from "../../expert-assessment/assessment-submission/entities/assessment-submission.entity";
 
 export enum WarehouseLocationStatus {
     PENDING = 'PENDING',
@@ -53,9 +55,16 @@ export class WarehouseLocation {
     @JoinColumn({ name: 'weighingId' })
     weighing: Weighing;
 
+    @OneToOne(() => TechnicalQualitative, (technicalQualitative) => technicalQualitative.warehouseLocation, {onDelete: 'CASCADE'})
+    @JoinColumn({ name: 'technicalQualitativeId' })
+    technicalQualitative: TechnicalQualitative;
+
     @OneToMany(() => HumanResource, (hr) => hr.warehouseLocation)
     @JoinColumn({ name: 'humanResourcesId' })
     humanResources: HumanResource[];
+
+    @OneToMany(() => AssessmentSubmission, (submission) => submission.warehouseLocation)
+    assessmentSubmissions: AssessmentSubmission[];
 
     @Column({ type: 'boolean', default: true })
     isActive: boolean;

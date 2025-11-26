@@ -20,6 +20,8 @@ import { CommonModule } from './modules/common/common.module';
 import { WarehouseAdminModule } from './modules/warehouse-admin/warehouse-admin.module';
 import { WarehouseLocationModule } from './modules/warehouse-location/warehouse-location.module';
 import { OrganizationModule } from './modules/organization/organization.module';
+import { ExpertAssessmentModule } from './modules/expert-assessment/expert-assessment.module';
+import { InspectionReportsModule } from './modules/inspection-reports/inspection-reports.module';
 import databaseConfig from './config/database.config';
 
 @Module({
@@ -56,6 +58,8 @@ import databaseConfig from './config/database.config';
     WarehouseAdminModule,
     WarehouseLocationModule,
     OrganizationModule,
+    ExpertAssessmentModule,
+    InspectionReportsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
