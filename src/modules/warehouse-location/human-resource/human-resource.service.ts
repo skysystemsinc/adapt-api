@@ -424,7 +424,35 @@ export class HumanResourceService {
       }
     }
 
-    // Delete the HR entry (cascade will handle related records)
+    // Delete all related records before deleting the human resource
+    // This is necessary because foreign key constraints prevent deletion if related records exist
+    
+    // Delete academic qualifications
+    if (humanResource.academicQualifications && humanResource.academicQualifications.length > 0) {
+      await this.academicQualificationRepository.remove(humanResource.academicQualifications);
+    }
+
+    // Delete professional qualifications
+    if (humanResource.professionalQualifications && humanResource.professionalQualifications.length > 0) {
+      await this.professionalQualificationRepository.remove(humanResource.professionalQualifications);
+    }
+
+    // Delete trainings
+    if (humanResource.trainings && humanResource.trainings.length > 0) {
+      await this.trainingRepository.remove(humanResource.trainings);
+    }
+
+    // Delete professional experiences
+    if (humanResource.professionalExperiences && humanResource.professionalExperiences.length > 0) {
+      await this.professionalExperienceRepository.remove(humanResource.professionalExperiences);
+    }
+
+    // Delete declaration if it exists
+    if (humanResource.declaration) {
+      await this.declarationRepository.remove(humanResource.declaration);
+    }
+
+    // Now delete the HR entry (all related records have been removed)
     await this.humanResourceRepository.remove(humanResource);
 
     return { message: 'HR entry deleted successfully' };

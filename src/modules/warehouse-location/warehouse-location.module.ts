@@ -13,12 +13,36 @@ import { FireSafetyModule } from './fire-safety/fire-safety.module';
 import { WeighingsModule } from './weighings/weighings.module';
 import { TechnicalQualitativeModule } from './technical-qualitative/technical-qualitative.module';
 import { HumanResourceModule } from './human-resource/human-resource.module';
+import { WarehouseLocationChecklistService } from './warehouse-location-checklist/warehouse-location-checklist.service';
+import { WarehouseLocationChecklistController } from './warehouse-location-checklist/warehouse-location-checklist.controller';
+import { WarehouseLocationChecklistEntity } from './entities/warehouse-location-checklist.entity';
+import { OwnershipLegalDocumentsEntity } from './entities/checklist/ownership-legal-documents.entity';
+import { HumanResourcesKeyEntity } from './entities/checklist/human-resources-key.entity';
+import { LocationRiskEntity } from './entities/checklist/location-risk.entity';
+import { SecurityPerimeterEntity } from './entities/checklist/security-perimeter.entity';
+import { InfrastructureUtilitiesEntity } from './entities/checklist/infrastructure-utilities.entity';
+import { StorageFacilitiesEntity } from './entities/checklist/storage-facilities.entity';
+import { RegistrationFeeChecklistEntity } from '../warehouse/entities/checklist/registration-fee.entity';
+import { DeclarationChecklistEntity } from '../warehouse/entities/checklist/declaration.entity';
+import { WarehouseDocument } from '../warehouse/entities/warehouse-document.entity';
 
 @Module({
-  controllers: [WarehouseLocationController],
-  providers: [WarehouseLocationService],
+  controllers: [WarehouseLocationController, WarehouseLocationChecklistController],
+  providers: [WarehouseLocationService, WarehouseLocationChecklistService],
   imports: [
-    TypeOrmModule.forFeature([WarehouseLocation]),
+    TypeOrmModule.forFeature([
+      WarehouseLocation,
+      WarehouseLocationChecklistEntity,
+      OwnershipLegalDocumentsEntity,
+      HumanResourcesKeyEntity,
+      LocationRiskEntity,
+      SecurityPerimeterEntity,
+      InfrastructureUtilitiesEntity,
+      StorageFacilitiesEntity,
+      RegistrationFeeChecklistEntity,
+      DeclarationChecklistEntity,
+      WarehouseDocument,
+    ]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({

@@ -31,8 +31,8 @@ export class ProfessionalExperience {
     @Column({ type: 'varchar', length: 50 })
     duration: string;
 
-    @Column({ type: 'text' })
-    responsibilities: string;
+    @Column({ type: 'text', nullable: true })
+    responsibilities: string | null;
     
     @ManyToOne(() => WarehouseDocument, { onDelete: 'SET NULL', nullable: true })
     @JoinColumn({ name: 'experienceLetter' })
