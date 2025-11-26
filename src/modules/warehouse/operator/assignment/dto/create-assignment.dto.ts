@@ -69,6 +69,30 @@ export class AssignmentSectionDto {
     @Transform(({ value }: { value: string }) => value.replace(/^-+|-+$/g, ''))
     sectionType: string;
 
+    @ApiPropertyOptional({
+        description: 'The original section identifier from the source application (e.g. KYC section ID)',
+        example: '1',
+    })
+    @IsString()
+    @IsOptional()
+    sectionId?: string;
+
+    @ApiProperty({
+        description: 'The ID of the resource',
+        example: '123e4567-e89b-12d3-a456-426614174000',
+    })
+    @IsUUID()
+    @IsNotEmpty()
+    resourceId: string;
+
+    @ApiProperty({
+        description: 'The type of the resource',
+        example: 'warehouse',
+    })
+    @IsString()
+    @IsOptional()
+    resourceType?: string;
+
     @ApiProperty({
         description: 'The fields of the section',
         example: [
@@ -101,4 +125,12 @@ export class AssignmentFieldDto {
     @IsString()
     @IsOptional()
     remarks?: string;
+
+    @ApiPropertyOptional({
+        description: 'The original field identifier from the source application (e.g. KYC field ID)',
+        example: 'bank-details-iban',
+    })
+    @IsString()
+    @IsOptional()
+    fieldId?: string;
 }

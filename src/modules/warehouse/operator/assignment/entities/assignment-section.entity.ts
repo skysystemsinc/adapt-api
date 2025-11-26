@@ -27,6 +27,12 @@ export class AssignmentSection {
     @Column({ type: 'varchar' })
     sectionType: string;
 
+    @Column({type: 'uuid', nullable: true})
+    resourceId?: string | null;
+
+    @Column({type: 'varchar', nullable: true})
+    resourceType?: string | null;
+
     @OneToMany(() => AssignmentSectionField, (f) => f.assignmentSection, { cascade: true })
     fields: AssignmentSectionField[];
 

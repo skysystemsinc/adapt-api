@@ -13,6 +13,11 @@ import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
 export class AssignmentController {
   constructor(private readonly assignmentService: AssignmentService) { }
 
+  @Get('data/:applicationId')
+  async getData(@Param('applicationId') applicationId: string) {
+    return await this.assignmentService.getData(applicationId);
+  }
+
   @ApiOperation({ summary: 'Assign an assignment to a user' })
   @ApiBody({ type: CreateAssignmentDto })
   @Post('/application/:applicationId')

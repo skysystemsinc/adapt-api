@@ -95,6 +95,8 @@ export class AssignmentService {
           const sectionEntity = transactionalEntityManager.create(AssignmentSection, {
             assignmentId: savedAssignment.id,
             sectionType: sectionDto.sectionType,
+            resourceId: sectionDto.resourceId,
+            resourceType: sectionDto.resourceType,
           });
 
           const savedSection = await transactionalEntityManager.save(AssignmentSection, sectionEntity);
@@ -138,5 +140,22 @@ export class AssignmentService {
 
   remove(id: number) {
     return `This action removes a #${id} assignment`;
+  }
+
+  async getData(applicationId: string) {
+    const assignment = await this.dataSource.getRepository(Assignment).findOne({
+      where: { applicationId: applicationId },
+      relations: [
+        'application',
+        'application.authorizedSignatories',
+        'assignedByUser',
+        'assignedToUser',
+        'sections',
+        'sections.fields',
+        'parentAssignment',
+        'childAssignments',
+      ],
+    });
+    return assignment;
   }
 }
