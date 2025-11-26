@@ -7,6 +7,8 @@ import { WarehouseOperatorApplicationRequest, WarehouseOperatorApplicationStatus
 import { Repository } from 'typeorm';
 import { User } from '../users/entities/user.entity';
 import { DataSource } from 'typeorm';
+import { Permissions } from '../rbac/constants/permissions.constants';
+import { hasPermission } from 'src/common/utils/helper.utils';
 
 @Injectable()
 export class WarehouseAdminService {
@@ -204,12 +206,32 @@ export class WarehouseAdminService {
    * 
    * @returns All users grouped by role
    */
-  async findAllWareHouseRoles() {
-    const users = await this.dataSource
+  async findAllWareHouseRoles(userId: string) {
+
+    const user = await this.usersRepository.findOne({
+      where: { id: userId },
+      relations: {
+        userRoles: {
+          role: {
+            rolePermissions: {
+              permission: true,
+            },
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const usersQuery = await this.dataSource
       .getRepository(User)
       .createQueryBuilder('user')
       .innerJoin('user.userRoles', 'ur')
       .innerJoin('ur.role', 'role')
+      .innerJoin('role.rolePermissions', 'rolePermissions')
+      .innerJoin('rolePermissions.permission', 'permission')
       .select(`
     role.name AS role,
     json_agg(
@@ -220,10 +242,16 @@ export class WarehouseAdminService {
         'email', "user"."email"
       )
     ) AS users
-  `)
-      .where(`role.name ILIKE '%hod%'`)
-      .groupBy('role.id')
-      .getRawMany();
+  `);
+
+    if (hasPermission(user, Permissions.IS_HOD)) {
+      usersQuery.where(`permission.name = :name`, { name: Permissions.IS_EXPERT })
+    } else if (hasPermission(user, Permissions.MANAGE_WAREHOUSE_APPLICATION_ASSIGNMENT)) {
+      usersQuery.where(`permission.name = :name`, { name: Permissions.IS_HOD })
+    }
+
+    usersQuery.groupBy('role.id');
+    const users = await usersQuery.getRawMany();
 
 
     // Convert to object keyed by role

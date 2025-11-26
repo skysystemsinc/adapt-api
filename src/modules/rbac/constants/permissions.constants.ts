@@ -43,6 +43,12 @@ export enum Permissions {
 
   // P8
   VIEW_WAREHOUSE_APPLICATION_ASSIGNMENT = 'view_warehouse_application_assignment',
-  WAREHOUSE_APPLICATION_ASSIGNMENT = 'warehouse_application_assignment',
+  MANAGE_WAREHOUSE_APPLICATION_ASSIGNMENT = 'manage_warehouse_application_assignment',
+
+  //HOD
+  IS_HOD = 'is_hod',
+
+  //Expert
+  IS_EXPERT = 'is_expert',
 }
 
