@@ -31,3 +31,4 @@ export class LocationRiskEntity {
     updatedAt: Date;
 }
 
+

@@ -487,3 +487,4 @@ export class CreateWarehouseLocationChecklistDto {
   declaration!: DeclarationChecklistDto;
 }
 
+

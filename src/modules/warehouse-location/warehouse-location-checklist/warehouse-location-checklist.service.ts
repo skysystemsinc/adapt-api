@@ -442,6 +442,26 @@ export class WarehouseLocationChecklistService {
     }
   }
 
+  private async deleteWarehouseDocument(documentId: string): Promise<void> {
+    const document = await this.warehouseDocumentRepository.findOne({
+      where: { id: documentId }
+    });
+
+    if (document) {
+      try {
+        const filePath = document.filePath.startsWith('/')
+          ? path.join(process.cwd(), document.filePath.substring(1))
+          : path.join(process.cwd(), document.filePath);
+        
+        await fs.unlink(filePath);
+      } catch (error) {
+        console.error(`Error deleting file ${document.filePath}:`, error);
+      }
+
+      await this.warehouseDocumentRepository.remove(document);
+    }
+  }
+
   private createAssignDocumentFunction(documentRepo: Repository<WarehouseDocument>, userId: string) {
     return async (
       documentId: string | undefined | null,
@@ -453,8 +473,8 @@ export class WarehouseLocationChecklistService {
       if (oldDocumentId && oldDocumentId !== documentId) {
         const oldDocument = await documentRepo.findOne({ where: { id: oldDocumentId } });
         if (oldDocument && oldDocument.documentableId === documentableId && oldDocument.documentType === documentType) {
-          oldDocument.isActive = false;
-          await documentRepo.save(oldDocument);
+          // Delete the old document instead of deactivating it
+          await this.deleteWarehouseDocument(oldDocumentId);
         }
       }
 
@@ -568,6 +588,90 @@ export class WarehouseLocationChecklistService {
 
     return {
       message: 'Warehouse location checklist saved successfully',
+      data: this.mapChecklistEntityToResponse(hydratedChecklist!),
+    };
+  }
+
+  async updateWarehouseLocationChecklist(
+    warehouseLocationId: string,
+    dto: CreateWarehouseLocationChecklistDto,
+    userId: string,
+    files?: any,
+    submit: boolean = false,
+  ) {
+    const warehouseLocation = await this.warehouseLocationRepository.findOne({
+      where: { id: warehouseLocationId, userId },
+    });
+
+    if (!warehouseLocation) {
+      throw new NotFoundException('Warehouse location not found. Please create a warehouse location first.');
+    }
+
+    if (warehouseLocation.status !== WarehouseLocationStatus.DRAFT) {
+      throw new BadRequestException('Checklist can only be updated while warehouse location is in draft status.');
+    }
+
+    // Find existing checklist by warehouseLocationId (not by dto.id)
+    const existingChecklist = await this.warehouseLocationChecklistRepository.findOne({
+      where: { warehouseLocationId: warehouseLocation.id },
+    });
+
+    if (!existingChecklist) {
+      throw new NotFoundException('Checklist not found for this warehouse location. Please create it first.');
+    }
+
+    // Set dto.id to the existing checklist's id so updateChecklist can use it
+    dto.id = existingChecklist.id;
+
+    const uploadedDocumentIds = files ? await this.uploadChecklistFiles(files, userId, warehouseLocationId) : {};
+    this.mapUploadedDocumentsToDto(dto, uploadedDocumentIds);
+    this.validateChecklistFiles(dto);
+
+    const savedChecklist = await this.dataSource.transaction(async (manager) => {
+      const repos = {
+        checklist: manager.getRepository(WarehouseLocationChecklistEntity),
+        ownershipLegal: manager.getRepository(OwnershipLegalDocumentsEntity),
+        humanResourcesKey: manager.getRepository(HumanResourcesKeyEntity),
+        locationRisk: manager.getRepository(LocationRiskEntity),
+        securityPerimeter: manager.getRepository(SecurityPerimeterEntity),
+        infrastructureUtilities: manager.getRepository(InfrastructureUtilitiesEntity),
+        storageFacilities: manager.getRepository(StorageFacilitiesEntity),
+        registrationFee: manager.getRepository(RegistrationFeeChecklistEntity),
+        declaration: manager.getRepository(DeclarationChecklistEntity),
+        document: manager.getRepository(WarehouseDocument),
+        warehouseLocation: manager.getRepository(WarehouseLocation),
+      };
+
+      const assignDocument = this.createAssignDocumentFunction(repos.document, userId);
+      const assignDocuments = this.createBatchAssignDocumentsFunction(assignDocument);
+
+      // Always call updateChecklist since checklist exists
+      const result = await this.updateChecklist(dto, warehouseLocation, repos, assignDocuments);
+
+      if (submit) {
+        warehouseLocation.status = WarehouseLocationStatus.PENDING;
+        await repos.warehouseLocation.save(warehouseLocation);
+      }
+
+      return result;
+    });
+
+    const hydratedChecklist = await this.warehouseLocationChecklistRepository.findOne({
+      where: { id: savedChecklist.id },
+      relations: [
+        'ownershipLegalDocuments',
+        'humanResourcesKey',
+        'locationRisk',
+        'securityPerimeter',
+        'infrastructureUtilities',
+        'storageFacilities',
+        'registrationFee',
+        'declaration',
+      ],
+    });
+
+    return {
+      message: 'Warehouse location checklist updated successfully',
       data: this.mapChecklistEntityToResponse(hydratedChecklist!),
     };
   }
@@ -1744,4 +1848,5 @@ export class WarehouseLocationChecklistService {
     };
   }
 }
+
 
