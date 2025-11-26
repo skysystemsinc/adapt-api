@@ -63,49 +63,4 @@ export class CreateWeighingDto {
   @IsOptional()
   @Exclude()
   weighbridgeCalibrationCertificate?: any;
-
-  // Step 6: WeighingMore fields
-  @Transform(({ value }) => transformToBoolean(value))
-  @IsBoolean()
-  laboratoryFacility: boolean;
-
-  @Transform(({ value }) => transformToBoolean(value))
-  @IsBoolean()
-  minimumLabEquipmentExist: boolean;
-
-  @Transform(({ value }) => transformToBoolean(value))
-  @IsBoolean()
-  equipmentCalibrated: boolean;
-
-  @Transform(({ value }) => transformToBoolean(value))
-  @IsBoolean()
-  washroomsExist: boolean;
-
-  @Transform(({ value }) => transformToBoolean(value))
-  @IsBoolean()
-  waterAvailability: boolean;
-
-  @Transform(({ value }) => transformToBoolean(value))
-  @IsBoolean()
-  officeInternetFacility: boolean;
-
-  @Transform(({ value }) => transformToBoolean(value))
-  @IsBoolean()
-  electricityAvailable: boolean;
-
-  @Transform(({ value }) => {
-    if (value === 'true' || value === true) return true;
-    if (value === 'false' || value === false) return false;
-    return value;
-  })
-  @IsBoolean()
-  gasAvailable: boolean;
-
-  @Transform(({ value }) => transformToBoolean(value))
-  @IsBoolean()
-  generatorAvailable: boolean;
-
-  @IsOptional()
-  @IsString()
-  otherUtilitiesFacilities?: string;
 }

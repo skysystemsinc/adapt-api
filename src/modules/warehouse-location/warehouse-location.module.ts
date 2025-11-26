@@ -11,6 +11,7 @@ import { JurisdictionModule } from './jurisdiction/jurisdiction.module';
 import { SecurityModule } from './security/security.module';
 import { FireSafetyModule } from './fire-safety/fire-safety.module';
 import { WeighingsModule } from './weighings/weighings.module';
+import { TechnicalQualitativeModule } from './technical-qualitative/technical-qualitative.module';
 import { HumanResourceModule } from './human-resource/human-resource.module';
 import { WarehouseLocationChecklistService } from './warehouse-location-checklist/warehouse-location-checklist.service';
 import { WarehouseLocationChecklistController } from './warehouse-location-checklist/warehouse-location-checklist.controller';
@@ -56,6 +57,7 @@ import { WarehouseDocument } from '../warehouse/entities/warehouse-document.enti
     SecurityModule,
     FireSafetyModule,
     WeighingsModule,
+    TechnicalQualitativeModule,
     HumanResourceModule,
   ],
 })

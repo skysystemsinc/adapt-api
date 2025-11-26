@@ -48,37 +48,6 @@ export class Weighing {
     @JoinColumn({ name: 'weighbridgeCalibrationCertificate' })
     weighbridgeCalibrationCertificate?: WarehouseDocument;
 
-    // Step 6: WeighingMore fields
-    @Column({ type: 'boolean', default: false })
-    laboratoryFacility: boolean;
-
-    @Column({ type: 'boolean', default: false })
-    minimumLabEquipmentExist: boolean;
-
-    @Column({ type: 'boolean', default: false })
-    equipmentCalibrated: boolean;
-
-    @Column({ type: 'boolean', default: false })
-    washroomsExist: boolean;
-
-    @Column({ type: 'boolean', default: false })
-    waterAvailability: boolean;
-
-    @Column({ type: 'boolean', default: false })
-    officeInternetFacility: boolean;
-
-    @Column({ type: 'boolean', default: false })
-    electricityAvailable: boolean;
-
-    @Column({ type: 'boolean', default: false })
-    gasAvailable: boolean;
-
-    @Column({ type: 'boolean', default: false })
-    generatorAvailable: boolean;
-
-    @Column({ type: 'text', nullable: true })
-    otherUtilitiesFacilities?: string;
-
     @Column({ type: 'boolean', default: true })
     isActive: boolean;
 

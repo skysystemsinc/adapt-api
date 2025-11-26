@@ -1,8 +1,10 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Req } from '@nestjs/common';
 import { WarehouseAdminService } from './warehouse-admin.service';
 import { CreateWarehouseAdminDto } from './dto/create-warehouse-admin.dto';
 import { UpdateWarehouseAdminDto } from './dto/update-warehouse-admin.dto';
 import { QueryOperatorApplicationDto } from './dto/query-operator-application.dto';
+import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
+import { ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 
 @Controller('warehouse-admin')
 export class WarehouseAdminController {
@@ -24,8 +26,14 @@ export class WarehouseAdminController {
   }
 
   @Get('/application/roles')
-  findAllWareHouseRoles() {
-    return this.warehouseAdminService.findAllWareHouseRoles();
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get all warehouse roles' })
+  findAllWareHouseRoles(
+    @Req() req: any,
+  ) {
+    const userId = req.user.id;
+    return this.warehouseAdminService.findAllWareHouseRoles(userId);
   }
 
   @Patch(':id')
