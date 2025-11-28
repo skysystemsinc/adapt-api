@@ -26,9 +26,9 @@ export class AuthService {
 
   async login(loginDto: LoginDto) {
     // Verify reCAPTCHA token first (if provided)
-    if (loginDto.recaptchaToken) {
-      await this.recaptchaService.verifyToken(loginDto.recaptchaToken, 'signin');
-    }
+    // if (loginDto.recaptchaToken) {
+    //   await this.recaptchaService.verifyToken(loginDto.recaptchaToken, 'signin');
+    // }
 
     const user = await this.usersService.findByEmailWithRoles(loginDto.email);
     
