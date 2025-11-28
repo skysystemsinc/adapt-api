@@ -131,6 +131,13 @@ export class WarehouseAdminService {
             periodStart: true,
             periodEnd: true,
           },
+          others: {
+            id: true,
+            documentType: true,
+            documentName: true,
+            periodStart: true,
+            periodEnd: true,
+          },
         },
         bankDetails: {
           id: true,
@@ -146,7 +153,30 @@ export class WarehouseAdminService {
             id: true,
             name: true,
             email: true
-          }
+          },
+          academicQualifications: {
+            id: true,
+            degree: true,
+          },
+          professionalQualifications: {
+            id: true,
+            certificationTitle: true,
+          },
+          trainings: {
+            id: true,
+            trainingTitle: true
+          },
+          experiences: {
+            id: true,
+            positionHeld: true,
+          },
+          declaration: {
+            id: true,
+            writeOffAvailed: true,
+            defaultOfFinance: true,
+            placementOnECL: true,
+            convictionPleaBargain: true,
+          },
         },
         applicantChecklist: {
           id: true,
@@ -154,6 +184,20 @@ export class WarehouseAdminService {
             id: true,
             qcPersonnel: true,
             qcPersonnelFile: true,
+          },
+          financialSoundness: {
+            id: true,
+            auditedFinancialStatements: true,
+            positiveNetWorth: true
+          },
+          registrationFee: {
+            id: true,
+            bankPaymentSlip: true,
+          },
+          declaration: {
+            id: true,
+            informationTrueComplete: true,
+            authorizeVerification: true,
           },
         },
       },
@@ -163,14 +207,25 @@ export class WarehouseAdminService {
         companyInformation: true,
         bankDetails: true,
         hrs: {
-          personalDetails: true
+          personalDetails: true,
+          academicQualifications: true,
+          professionalQualifications: true,
+          trainings: true,
+          experiences: true,
+          declaration: true,
         },
         financialInformation: {
           auditReport: true,
           taxReturns: true,
           bankStatements: true,
+          others: true,
         },
-        applicantChecklist: true,
+        applicantChecklist: {
+          humanResources: true,
+          financialSoundness: true,
+          registrationFee: true,
+          declaration: true,
+        },
       }
     });
 
@@ -182,11 +237,15 @@ export class WarehouseAdminService {
       (warehouseOperatorApplication.authorizedSignatories?.length || 0) +
       (warehouseOperatorApplication.hrs?.length || 0) +
       (warehouseOperatorApplication.financialInformation?.auditReport ? 1 : 0) +
-      (warehouseOperatorApplication.financialInformation?.taxReturns ? 1 : 0) +
-      (warehouseOperatorApplication.financialInformation?.bankStatements ? 1 : 0) +
+      (warehouseOperatorApplication.financialInformation?.taxReturns?.length || 0) +
+      (warehouseOperatorApplication.financialInformation?.bankStatements?.length || 0) +
+      (warehouseOperatorApplication.financialInformation?.others?.length || 0) +
       (warehouseOperatorApplication.companyInformation ? 1 : 0) +
       (warehouseOperatorApplication.bankDetails ? 1 : 0) +
-      (warehouseOperatorApplication.applicantChecklist ? 1 : 0);
+      (warehouseOperatorApplication.applicantChecklist?.humanResources ? 1 : 0) +
+      (warehouseOperatorApplication.applicantChecklist?.financialSoundness ? 1 : 0) +
+      (warehouseOperatorApplication.applicantChecklist?.registrationFee ? 1 : 0) +
+      (warehouseOperatorApplication.applicantChecklist?.declaration ? 1 : 0);
 
     return {
       ...warehouseOperatorApplication,
