@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards, HttpCode, HttpStatus, Param } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards, HttpCode, HttpStatus, Param, Patch, Body } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { QueryUsersDto, UserTypeFilter } from './dto/query-users.dto';
@@ -8,12 +8,13 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import { Permissions } from '../rbac/constants/permissions.constants';
 import { User } from './entities/user.entity';
+import { UpdateUserDto } from './dto/update-user.dto';
 
 @ApiTags('Admin - Users')
 @Controller('admin/users')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class UsersAdminController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(private readonly usersService: UsersService) { }
 
   @Get()
   @RequirePermissions(Permissions.VIEW_USERS)
@@ -57,6 +58,22 @@ export class UsersAdminController {
   })
   async findOne(@Param('id') id: string): Promise<User | null> {
     return await this.usersService.findOne(id);
+  }
+
+  @Patch(':id')
+  @RequirePermissions(Permissions.UPDATE_USERS)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update a user by id' })
+  @ApiResponse({
+    status: 200,
+    description: 'User updated successfully',
+    type: User,
+  })
+  async update(
+    @Param('id') id: string,
+    @Body() updateUserDto: UpdateUserDto
+  ): Promise<User> {
+    return await this.usersService.update(id, updateUserDto);
   }
 }
 

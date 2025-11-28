@@ -9,6 +9,8 @@ import { QueryUsersDto, UserTypeFilter } from './dto/query-users.dto';
 import { ApplicantUserResponseDto, InternalUserResponseDto } from './dto/user-response.dto';
 import { RegistrationApplicationDetails } from '../registration-application/entities/registration-application-details.entity';
 import { Organization } from '../organization/entities/organization.entity';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { UserRole } from '../rbac/entities/user-role.entity';
 
 @Injectable()
 export class UsersService {
@@ -130,7 +132,7 @@ export class UsersService {
     if (!user) {
       throw new NotFoundException('User not found');
     }
-    
+
     return user;
   }
 
@@ -254,5 +256,79 @@ export class UsersService {
         totalPages: Math.ceil(total / limit),
       },
     };
+  }
+
+  async update(id: string, updateUserDto: UpdateUserDto): Promise<User> {
+    const user = await this.userRepository.findOne({
+      where: { id },
+      relations: ['userRoles', 'userRoles.role'],
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Check if email is being updated and if it conflicts with another user
+    if (updateUserDto.email && updateUserDto.email !== user.email) {
+      const existingUser = await this.userRepository.findOne({
+        where: { email: updateUserDto.email },
+      });
+
+      if (existingUser) {
+        throw new ConflictException('User with this email already exists');
+      }
+    }
+
+    // Update user fields
+    if (updateUserDto.firstName !== undefined) {
+      user.firstName = updateUserDto.firstName;
+    }
+    if (updateUserDto.lastName !== undefined) {
+      user.lastName = updateUserDto.lastName;
+    }
+    if (updateUserDto.email !== undefined) {
+      user.email = updateUserDto.email;
+    }
+    if (updateUserDto.organizationId !== undefined) {
+      if (updateUserDto.organizationId) {
+        user.organization = { id: updateUserDto.organizationId } as Organization;
+      }
+    }
+
+    const savedUser = await this.userRepository.save(user);
+
+    // Update role if provided
+    if (updateUserDto.roleId !== undefined) {
+      if (updateUserDto.roleId) {
+        await this.rbacService.assignRolesToUser(savedUser.id, [updateUserDto.roleId]);
+      } else {
+        await this.userRepository.manager.getRepository(UserRole).delete({ userId: savedUser.id });
+      }
+    }
+
+    // Return updated user with relations
+    const updatedUser = await this.userRepository.findOne({
+      where: { id: savedUser.id },
+      relations: ['userRoles', 'userRoles.role', 'organization'],
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        organization: {
+          id: true,
+          name: true,
+        },
+        userRoles: {
+          id: true,
+          role: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    return updatedUser || savedUser;
   }
 }
