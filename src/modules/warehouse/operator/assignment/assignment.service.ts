@@ -158,4 +158,33 @@ export class AssignmentService {
     });
     return assignment;
   }
+
+  async getMyAssignments(userId: string) {
+    const assignments = await this.dataSource.getRepository(Assignment).find({
+      where: { assignedTo: userId },
+      relations: [
+        'application',
+        'application.user',
+        'sections',
+        'sections.fields',
+        'assignedByUser',
+      ],
+      order: { createdAt: 'DESC' },
+    });
+    return assignments;
+  }
+
+  async getAssignmentByApplicationId(applicationId: string, userId: string) {
+    const assignment = await this.dataSource.getRepository(Assignment).findOne({
+      where: { 
+        applicationId: applicationId,
+        assignedTo: userId 
+      },
+      relations: [
+        'sections',
+        'sections.fields',
+      ],
+    });
+    return assignment;
+  }
 }

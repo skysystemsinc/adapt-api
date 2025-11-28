@@ -38,9 +38,8 @@ export class WarehouseAdminService {
 
       // Check if user has both required permissions
       const hasViewPermission = hasPermission(user, Permissions.VIEW_WAREHOUSE_APPLICATION_ASSIGNMENT);
-      const hasManagePermission = hasPermission(user, Permissions.MANAGE_WAREHOUSE_APPLICATION_ASSIGNMENT);
 
-      if (!hasViewPermission || !hasManagePermission) {
+      if (!hasViewPermission) {
         throw new ForbiddenException('You do not have permission to view warehouse applications');
       }
     }
@@ -65,7 +64,7 @@ export class WarehouseAdminService {
     queryBuilder.andWhere('application.status != :draftStatus', { draftStatus: WarehouseOperatorApplicationStatus.DRAFT });
 
 
-    if (user && hasPermission(user, Permissions.IS_HOD)) {
+    if (user && (hasPermission(user, Permissions.IS_HOD) || hasPermission(user, Permissions.IS_EXPERT))) {
       queryBuilder
         .innerJoin('assignment', 'assignment', 'assignment.applicationId = application.id')
         .andWhere('assignment.assignedTo = :assignedToUserId', { assignedToUserId: userId });
@@ -412,7 +411,7 @@ export class WarehouseAdminService {
       throw new NotFoundException('Warehouse operator application not found');
     }
 
-    if (user && hasPermission(user, Permissions.IS_HOD)) {
+    if (user && (hasPermission(user, Permissions.IS_HOD) || hasPermission(user, Permissions.IS_EXPERT))) {
       // Fetch assignment for this user and application
       const assignment = await this.dataSource.getRepository(Assignment).findOne({
         where: {
@@ -421,7 +420,6 @@ export class WarehouseAdminService {
         },
         relations: ['sections', 'sections.fields'],
       });
-      console.log('assignment found for user: ', userId, 'and application: ', id, 'is: ', assignment);
 
       if (assignment && assignment.sections) {
         this.filterApplicationByAssignment(warehouseOperatorApplication, assignment);
@@ -484,8 +482,11 @@ export class WarehouseAdminService {
             },
           },
         },
+        organization: true,
       },
     });
+
+    console.log('user has roles: ', user?.organization?.id);
 
     if (!user) {
       throw new NotFoundException('User not found');
@@ -511,14 +512,21 @@ export class WarehouseAdminService {
   `);
 
     if (hasPermission(user, Permissions.IS_HOD)) {
-      usersQuery.where(`permission.name = :name`, { name: Permissions.IS_EXPERT })
+      if (user.organization) {
+        usersQuery.where(`permission.name = :name AND user.organizationId = :organizationId`, {
+          name: Permissions.IS_EXPERT,
+          organizationId: user.organization.id
+        });
+      }
+      else {
+        throw new ForbiddenException('User does not have an organization');
+      }
     } else if (hasPermission(user, Permissions.MANAGE_WAREHOUSE_APPLICATION_ASSIGNMENT)) {
       usersQuery.where(`permission.name = :name`, { name: Permissions.IS_HOD })
     }
 
     usersQuery.groupBy('role.id');
     const users = await usersQuery.getRawMany();
-
 
     // Convert to object keyed by role
     const grouped: Record<string, any[]> = {};
