@@ -4,7 +4,9 @@ export class AddSentToHodStatus1768000000000 implements MigrationInterface {
   name = 'AddSentToHodStatus1768000000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    // Add SENT_TO_HOD to the registration_application_status_enum
+    // SENT_TO_HOD is now included in the initial enum creation (1758000000000-CreatePrerequisites.ts)
+    // This migration is kept for backwards compatibility with existing databases
+    // The IF NOT EXISTS clause ensures this won't fail if the value already exists
     await queryRunner.query(`
       ALTER TYPE "public"."registration_application_status_enum" 
       ADD VALUE IF NOT EXISTS 'SENT_TO_HOD'
@@ -13,10 +15,6 @@ export class AddSentToHodStatus1768000000000 implements MigrationInterface {
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     // Note: PostgreSQL doesn't support removing enum values directly
-    // To rollback, you would need to recreate the enum type without SENT_TO_HOD
-    // This is a simplified rollback that doesn't actually remove the enum value
-    // In production, consider a more complex migration if rollback is critical
     console.log('Warning: Cannot remove enum value SENT_TO_HOD. Manual intervention required for rollback.');
   }
 }
-

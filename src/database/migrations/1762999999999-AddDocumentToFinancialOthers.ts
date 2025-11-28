@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner } from "typeorm";
 
-export class AddDocumentToFinancialOthers1763000000000 implements MigrationInterface {
-    name = 'AddDocumentToFinancialOthers1763000000000'
+export class AddDocumentToFinancialOthers1762999999999 implements MigrationInterface {
+    name = 'AddDocumentToFinancialOthers1762999999999'
 
     public async up(queryRunner: QueryRunner): Promise<void> {
         await queryRunner.query(`ALTER TABLE "financial_others" ADD "document" uuid`);
@@ -12,6 +12,5 @@ export class AddDocumentToFinancialOthers1763000000000 implements MigrationInter
         await queryRunner.query(`ALTER TABLE "financial_others" DROP CONSTRAINT "FK_financial_others_document"`);
         await queryRunner.query(`ALTER TABLE "financial_others" DROP COLUMN "document"`);
     }
-
 }
 

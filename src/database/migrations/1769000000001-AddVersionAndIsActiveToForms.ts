@@ -1,9 +1,9 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddVersionAndIsActiveToForms1769000000000
+export class AddVersionAndIsActiveToForms1769000000001
   implements MigrationInterface
 {
-  name = 'AddVersionAndIsActiveToForms1769000000000';
+  name = 'AddVersionAndIsActiveToForms1769000000001';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Add version column (nullable for existing records)

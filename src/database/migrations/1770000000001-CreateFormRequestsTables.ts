@@ -1,9 +1,9 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateFormRequestsTables1770000000000
+export class CreateFormRequestsTables1770000000001
   implements MigrationInterface
 {
-  name = 'CreateFormRequestsTables1770000000000';
+  name = 'CreateFormRequestsTables1770000000001';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Create enum for request status
