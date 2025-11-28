@@ -6,12 +6,13 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from '../users/entities/user.entity';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { Assignment } from '../warehouse/operator/assignment/entities/assignment.entity';
 
 @Module({
   controllers: [WarehouseAdminController],
   providers: [WarehouseAdminService],
   imports: [
-    TypeOrmModule.forFeature([WarehouseOperatorApplicationRequest, User]),
+    TypeOrmModule.forFeature([WarehouseOperatorApplicationRequest, User, Assignment]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({

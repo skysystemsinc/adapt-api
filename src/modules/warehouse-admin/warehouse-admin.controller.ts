@@ -8,7 +8,7 @@ import { ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 
 @Controller('warehouse-admin')
 export class WarehouseAdminController {
-  constructor(private readonly warehouseAdminService: WarehouseAdminService) {}
+  constructor(private readonly warehouseAdminService: WarehouseAdminService) { }
 
   @Post()
   create(@Body() createWarehouseAdminDto: CreateWarehouseAdminDto) {
@@ -16,13 +16,27 @@ export class WarehouseAdminController {
   }
 
   @Get('/application/operators')
-  findAllWareHouseOperators(@Query() query: QueryOperatorApplicationDto) {
-    return this.warehouseAdminService.findAllWareHouseOperatorsPaginated(query);
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get all warehouse operators' })
+  findAllWareHouseOperators(
+    @Query() query: QueryOperatorApplicationDto,
+    @Req() req: any,
+  ) {
+    const userId = req.user.id;
+    return this.warehouseAdminService.findAllWareHouseOperatorsPaginated(query, userId);
   }
 
   @Get('/application/:id/operators')
-  findOneWareHouseOperator(@Param('id') id: string) {
-    return this.warehouseAdminService.findOne(id);
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get warehouse operator application by ID' })
+  findOneWareHouseOperator(
+    @Param('id') id: string,
+    @Req() req: any
+  ) {
+    const userId = req.user.id;
+    return this.warehouseAdminService.findOne(id, userId);
   }
 
   @Get('/application/roles')
