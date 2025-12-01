@@ -38,8 +38,11 @@ export class WarehouseAdminService {
 
       // Check if user has both required permissions
       const hasViewPermission = hasPermission(user, Permissions.VIEW_WAREHOUSE_APPLICATION_ASSIGNMENT);
+      const hasManagePermission = hasPermission(user, Permissions.MANAGE_WAREHOUSE_APPLICATION_ASSIGNMENT);
+      const is_hod = hasPermission(user, Permissions.IS_HOD);
+      const is_expert = hasPermission(user, Permissions.IS_EXPERT);
 
-      if (!hasViewPermission) {
+      if (!hasViewPermission && !hasManagePermission && !is_hod && !is_expert) {
         throw new ForbiddenException('You do not have permission to view warehouse applications');
       }
     }

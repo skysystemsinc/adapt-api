@@ -6,31 +6,52 @@ export class AddVersionAndIsActiveToForms1769000000001
   name = 'AddVersionAndIsActiveToForms1769000000001';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    // Add version column (nullable for existing records)
+    // Add version column IF NOT EXISTS
     await queryRunner.query(`
-      ALTER TABLE "forms"
-      ADD COLUMN "version" character varying
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 
+          FROM information_schema.columns
+          WHERE table_name='forms'
+          AND column_name='version'
+        ) THEN
+          ALTER TABLE "forms" ADD COLUMN "version" character varying;
+        END IF;
+      END
+      $$;
     `);
 
-    // Add isActive column (default true for existing records)
+    // Add isActive column IF NOT EXISTS
     await queryRunner.query(`
-      ALTER TABLE "forms"
-      ADD COLUMN "isActive" boolean NOT NULL DEFAULT true
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 
+          FROM information_schema.columns
+          WHERE table_name='forms'
+          AND column_name='isActive'
+        ) THEN
+          ALTER TABLE "forms" ADD COLUMN "isActive" boolean NOT NULL DEFAULT true;
+        END IF;
+      END
+      $$;
     `);
 
-    // Create index on isActive for better query performance
+    // Create index IF NOT EXISTS (Postgres 9.5+)
     await queryRunner.query(`
-      CREATE INDEX "IDX_forms_isActive" ON "forms" ("isActive")
+      CREATE INDEX IF NOT EXISTS "IDX_forms_isActive" ON "forms" ("isActive");
     `);
 
-    // Create index on version for better query performance
     await queryRunner.query(`
-      CREATE INDEX "IDX_forms_version" ON "forms" ("version")
+      CREATE INDEX IF NOT EXISTS "IDX_forms_version" ON "forms" ("version");
     `);
 
-    // Handle existing registration forms
-    // First, change slugs of older registration forms to avoid conflicts
-    // Keep the most recent one with slug 'registration-form'
+    // -------------------------
+    // Business Logic (Safe)
+    // -------------------------
+
+    // Update older registration-form slugs
     await queryRunner.query(`
       UPDATE "forms"
       SET "slug" = 'registration-form-v1-' || SUBSTRING("id"::text, 1, 8)
@@ -41,29 +62,55 @@ export class AddVersionAndIsActiveToForms1769000000001
         WHERE "slug" = 'registration-form' 
         ORDER BY "createdAt" DESC 
         LIMIT 1
-      )
+      );
     `);
-    
-    // Set all registration forms to version v1 and inactive initially
+
+    // Set version + isActive flags
     await queryRunner.query(`
       UPDATE "forms"
       SET "version" = 'v1', "isActive" = false
-      WHERE "slug" = 'registration-form' OR "slug" LIKE 'registration-form-v1-%'
+      WHERE "slug" = 'registration-form'
+         OR "slug" LIKE 'registration-form-v1-%';
     `);
-    
-    // Set the most recent registration form (still with slug 'registration-form') as active
+
+    // Activate the latest form
     await queryRunner.query(`
       UPDATE "forms"
       SET "isActive" = true
-      WHERE "slug" = 'registration-form'
+      WHERE "slug" = 'registration-form';
     `);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP INDEX "IDX_forms_version"`);
-    await queryRunner.query(`DROP INDEX "IDX_forms_isActive"`);
-    await queryRunner.query(`ALTER TABLE "forms" DROP COLUMN "isActive"`);
-    await queryRunner.query(`ALTER TABLE "forms" DROP COLUMN "version"`);
+    // Drop indexes safely
+    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_forms_version";`);
+    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_forms_isActive";`);
+
+    // Drop columns safely
+    await queryRunner.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name='forms' AND column_name='isActive'
+        ) THEN
+          ALTER TABLE "forms" DROP COLUMN "isActive";
+        END IF;
+      END
+      $$;
+    `);
+
+    await queryRunner.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name='forms' AND column_name='version'
+        ) THEN
+          ALTER TABLE "forms" DROP COLUMN "version";
+        END IF;
+      END
+      $$;
+    `);
   }
 }
-
