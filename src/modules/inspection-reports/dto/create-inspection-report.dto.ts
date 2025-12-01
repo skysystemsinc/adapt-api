@@ -6,20 +6,27 @@ import { CreateAssessmentSubmissionDto } from "../../expert-assessment/assessmen
 
 
 export class CreateInspectionReportDto {
-    @ApiProperty({ description: 'Maximum score', example: '260' })
-    @IsString()
+    @ApiProperty({ description: 'Maximum score', example: 260, type: Number })
+    @Transform(({ value }) => parseFloat(value) || 0)
+    @IsNumber()
     @IsNotEmpty()
-    maximumScore: string;
+    @Min(0)
+    maximumScore: number;
 
-    @ApiProperty({ description: 'Obtained score', example: '235' })
-    @IsString()
+    @ApiProperty({ description: 'Obtained score', example: 235, type: Number })
+    @Transform(({ value }) => parseFloat(value) || 0)
+    @IsNumber()
     @IsNotEmpty()
-    obtainedScore: string;
+    @Min(0)
+    obtainedScore: number;
 
-    @ApiProperty({ description: 'Percentage', example: '90.38' })
-    @IsString()
+    @ApiProperty({ description: 'Percentage', example: 90.38, type: Number })
+    @Transform(({ value }) => parseFloat(value) || 0)
+    @IsNumber()
     @IsNotEmpty()
-    percentage: string;
+    @Min(0)
+    @Max(100)
+    percentage: number;
 
     @ApiProperty({ description: 'Grade', example: 'A+' })
     @IsString()
