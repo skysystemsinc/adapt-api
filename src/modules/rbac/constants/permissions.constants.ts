@@ -50,5 +50,6 @@ export enum Permissions {
 
   //Expert
   IS_EXPERT = 'is_expert',
+  IS_HR_EXPERT = 'is_hr_expert',
 }
 
