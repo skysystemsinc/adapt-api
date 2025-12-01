@@ -34,20 +34,19 @@ export class InspectionReportsController {
   ) {
     const userId = req.user?.sub || req.user?.id;
 
-    // Parse FormData - all values come as strings
+    // Parse FormData
     const parsedData: any = {
       maximumScore: body.maximumScore,
       obtainedScore: body.obtainedScore,
       percentage: body.percentage,
       grade: body.grade,
-      selectedGrade: body.selectedGrade ? parseInt(body.selectedGrade, 10) : undefined,
+      selectedGrade: body.selectedGrade,
       assessmentGradingRemarks: body.assessmentGradingRemarks,
       overallComments: body.overallComments,
       warehouseOperatorApplicationId: body.warehouseOperatorApplicationId,
       warehouseLocationId: body.warehouseLocationId,
     };
 
-    // Parse assessments JSON string
     if (body.assessments) {
       try {
         parsedData.assessments = typeof body.assessments === 'string' 
