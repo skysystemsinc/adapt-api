@@ -10,14 +10,14 @@ export class InspectionReport {
     id: string;
 
     // Overall Inspection Findings
-    @Column({ type: 'varchar', length: 50 })
-    maximumScore: string;
+    @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+    maximumScore: number;
 
-    @Column({ type: 'varchar', length: 50 })
-    obtainedScore: string;
+    @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+    obtainedScore: number;
 
-    @Column({ type: 'varchar', length: 50 })
-    percentage: string;
+    @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })
+    percentage: number;
 
     @Column({ type: 'varchar', length: 10 })
     grade: string;
