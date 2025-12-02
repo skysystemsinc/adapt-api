@@ -11,7 +11,7 @@ export class ExpertAssessmentService {
   constructor(
     @InjectRepository(ExpertAssessment)
     private readonly expertAssessmentRepository: Repository<ExpertAssessment>,
-  ) {}
+  ) { }
 
   async create(createExpertAssessmentDto: CreateExpertAssessmentDto, userId?: string): Promise<ExpertAssessment> {
     // Check if assessment with this name already exists
@@ -108,6 +108,52 @@ export class ExpertAssessmentService {
       queryBuilder.andWhere('assessment.name ILIKE :search', { search: `%${search}%` });
     }
 
+    const [data, total] = await queryBuilder.getManyAndCount();
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async findByCategoryWithSubSections(
+    category: string,
+    includeSubSections: boolean = true,
+    limit: number = 100,
+    page: number = 1,
+  ): Promise<{
+    data: ExpertAssessment[];
+    meta: { total: number; page: number; limit: number; totalPages: number };
+  }> {
+    const skip = (page - 1) * limit;
+
+    // Build optimized query with single database call
+    const queryBuilder = this.expertAssessmentRepository
+      .createQueryBuilder('assessment')
+      .where('assessment.category = :category', { category })
+      .andWhere('assessment.isActive = :isActive', { isActive: true })
+      .skip(skip)
+      .take(limit)
+      .orderBy('assessment.createdAt', 'DESC');
+
+    // If sub-sections are requested, join them in the same query
+    // This is highly optimized - all data fetched in one database round trip
+    // Using leftJoinAndSelect with condition to only load active sub-sections
+    if (includeSubSections) {
+      queryBuilder.leftJoinAndSelect(
+        'assessment.subSections',
+        'subSection',
+        'subSection.isActive = :subSectionActive',
+        { subSectionActive: true },
+      );
+    }
+
+    // Execute single optimized query
     const [data, total] = await queryBuilder.getManyAndCount();
 
     return {
