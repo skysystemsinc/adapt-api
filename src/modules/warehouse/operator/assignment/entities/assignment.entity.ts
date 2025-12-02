@@ -12,6 +12,7 @@ import {
 import { User } from '../../../../users/entities/user.entity';
 import { WarehouseOperatorApplicationRequest } from '../../../../warehouse/entities/warehouse-operator-application-request.entity';
 import { AssignmentSection } from './assignment-section.entity';
+import { WarehouseLocation } from '../../../../warehouse-location/entities/warehouse-location.entity';
 
 export enum AssignmentStatus {
     ASSIGNED = 'ASSIGNED',
@@ -44,6 +45,13 @@ export class Assignment {
 
     @Column({ nullable: true })
     applicationId: string;
+
+    @Column({ nullable: true })
+    applicationLocationId: string;
+
+    @ManyToOne(() => WarehouseLocation, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'applicationLocationId' })
+    applicationLocation: WarehouseLocation;
 
     @ManyToOne(() => User, { onDelete: 'SET NULL' })
     @JoinColumn({ name: 'assignedBy' })
