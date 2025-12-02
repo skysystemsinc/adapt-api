@@ -10,8 +10,8 @@ import { validate } from 'class-validator';
 import { AssessmentCategory } from '../expert-assessment/entities/expert-assessment.entity';
 
 @ApiTags('Inspection Reports')
-@ApiBearerAuth('JWT-auth')
 @Controller('inspection-reports')
+@ApiBearerAuth('JWT-auth')
 @UseGuards(JwtAuthGuard)
 export class InspectionReportsController {
   constructor(private readonly inspectionReportsService: InspectionReportsService) {}
@@ -124,5 +124,24 @@ export class InspectionReportsController {
   @ApiResponse({ status: 404, description: 'Inspection report not found' })
   remove(@Param('id') id: string) {
     return this.inspectionReportsService.remove(id);
+  }
+
+  @Get('/application/:applicationId')
+  @ApiOperation({ summary: 'Get an inspection report by application ID' })
+  @ApiResponse({ status: 200, description: 'Inspection report found' })
+  @ApiResponse({ status: 404, description: 'Inspection report not found' })
+  findByApplicationId(@Param('applicationId') applicationId: string) {
+    return this.inspectionReportsService.findByApplicationId(applicationId);
+  }
+
+  @Get('/application/:applicationId/assessment')
+  @ApiOperation({ summary: 'Get an inspection report by application ID and user ID' })
+  @ApiResponse({ status: 200, description: 'Inspection report found' })
+  @ApiResponse({ status: 404, description: 'Inspection report not found' })
+  findByApplicationIdAssessment(@Param('applicationId') applicationId: string,
+    @Request() req: any,
+  ) {
+    const userId = req.user?.sub || req.user?.id;
+    return this.inspectionReportsService.findByApplicationIdAssessment(applicationId, userId);
   }
 }

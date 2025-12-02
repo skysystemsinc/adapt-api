@@ -222,4 +222,44 @@ export class InspectionReportsService {
     const report = await this.findOne(id);
     await this.inspectionReportRepository.remove(report);
   }
+
+  async findByApplicationId(applicationId: string): Promise<InspectionReport[]> {
+    const report = await this.inspectionReportRepository.find({
+      where: { warehouseOperatorApplicationId: applicationId },
+      relations: ['createdByUser',  'assessmentSubmissions', 'assessmentSubmissions.documents'],
+      select: {
+        id: true,
+        assessmentType: true,
+        maximumScore: true,
+        obtainedScore: true,
+        percentage: true,
+        grade: true,
+        selectedGrade: true,
+        createdByUser: {
+          id: true,
+          firstName: true,
+          lastName: true,
+        },
+      },
+    });
+
+    if (!report || report.length === 0) {
+      throw new NotFoundException(`Inspection report with application ID ${applicationId} not found`);
+    }
+
+    return report;
+  }
+
+  async findByApplicationIdAssessment(applicationId: string, userId: string): Promise<InspectionReport> {
+    const report = await this.inspectionReportRepository.findOne({
+      where: { warehouseOperatorApplicationId: applicationId, createdBy: userId },
+      relations: ['assessmentSubmissions', 'assessmentSubmissions.documents'],
+    });
+
+    if (!report) {
+      throw new NotFoundException(`Inspection report with application ID ${applicationId} and user ID ${userId} not found`);
+    }
+
+    return report;
+  }
 }
