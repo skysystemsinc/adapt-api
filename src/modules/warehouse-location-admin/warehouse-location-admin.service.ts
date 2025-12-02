@@ -67,8 +67,8 @@ export class WarehouseLocationAdminService {
     // If user is HOD or Expert, filter by assignment
     if (user && (hasPermission(user, Permissions.IS_HOD) || hasPermission(user, Permissions.IS_EXPERT))) {
       queryBuilder
-        .innerJoin('assignment', 'assignment', 'assignment.applicationId = location.id')
-        .andWhere('assignment.assignedTo = :assignedToUserId', { assignedToUserId: userId });
+        .innerJoin('assignment', 'assignment', 'assignment."applicationLocationId" = location.id')
+        .andWhere('assignment."assignedTo" = :assignedToUserId', { assignedToUserId: userId });
     }
 
     if (status) {
@@ -286,7 +286,7 @@ export class WarehouseLocationAdminService {
     if (user && (hasPermission(user, Permissions.IS_HOD) || hasPermission(user, Permissions.IS_EXPERT))) {
       const assignment = await this.dataSource.getRepository(Assignment).findOne({
         where: {
-          applicationId: id,
+          applicationLocationId: id,  // Use applicationLocationId for location applications
           assignedTo: userId,
         },
         relations: ['sections', 'sections.fields'],
@@ -306,6 +306,7 @@ export class WarehouseLocationAdminService {
           weighing: null,
           technicalQualitative: null,
           humanResources: [],
+          warehouseLocationChecklist: null,
           totalCount: 0,
         };
       }
@@ -409,6 +410,11 @@ export class WarehouseLocationAdminService {
       ) || [];
     } else {
       application.humanResources = [];
+    }
+
+    // Filter checklist (section 8)
+    if (!assignedSections.has('checklist')) {
+      application.warehouseLocationChecklist = null as any;
     }
   }
 

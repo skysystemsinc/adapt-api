@@ -6,12 +6,13 @@ import { WarehouseLocationAdminController } from './warehouse-location-admin.con
 import { WarehouseLocationAdminService } from './warehouse-location-admin.service';
 import { WarehouseLocation } from '../warehouse-location/entities/warehouse-location.entity';
 import { User } from '../users/entities/user.entity';
+import { Assignment } from '../warehouse/operator/assignment/entities/assignment.entity';
 
 @Module({
   controllers: [WarehouseLocationAdminController],
   providers: [WarehouseLocationAdminService],
   imports: [
-    TypeOrmModule.forFeature([WarehouseLocation, User]),
+    TypeOrmModule.forFeature([WarehouseLocation, User, Assignment]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
@@ -22,5 +23,5 @@ import { User } from '../users/entities/user.entity';
     }),
   ],
 })
-export class WarehouseLocationAdminModule {}
+export class WarehouseLocationAdminModule { }
 
