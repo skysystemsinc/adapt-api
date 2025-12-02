@@ -318,6 +318,7 @@ export class RegistrationApplicationService {
       // Mapping from labels to readable property names
       const labelToPropertyMap: Record<string, string> = {
         "Please select your application types:": "applicationType",
+        "Please select your application type:": "applicationType",
         "CNIC Number": "cnicNumber",
         "Name of Applicant as per CNIC": "nameAsPerCNIC",
         "Date of Issuance of CNIC of Applicant Authrotrized Signatory": "cnicIssuanceDate",
@@ -345,6 +346,11 @@ export class RegistrationApplicationService {
       const applicationId = application.id;
       const details: Record<string, string> = {};
 
+      // Add applicationType from the applicationTypeId relation if it exists
+      if (application.applicationTypeId?.name) {
+        details['applicationType'] = application.applicationTypeId.name;
+      }
+
       const fieldKeys = Object.keys(fieldKeyToPropertyMap);
       if (fieldKeys.length > 0) {
         // Get details for this application with the specific field keys
@@ -359,9 +365,20 @@ export class RegistrationApplicationService {
         for (const detail of applicationDetails) {
           const propertyName = fieldKeyToPropertyMap[detail.key];
           if (propertyName) {
+            // Skip applicationType if it's from form fields - we'll use the relation value instead
+            // Form fields might contain slug (e.g., "private-limited") instead of name (e.g., "Private Limited")
+            if (propertyName === 'applicationType') {
+              continue;
+            }
             details[propertyName] = detail.value;
           }
         }
+      }
+
+      // Add applicationType from the applicationTypeId relation if it exists (authoritative source)
+      // This ensures we return the proper name (e.g., "Private Limited") instead of slug (e.g., "private-limited")
+      if (application.applicationTypeId?.name) {
+        details['applicationType'] = application.applicationTypeId.name;
       }
 
       // Step 5: Return the values with readable property names
