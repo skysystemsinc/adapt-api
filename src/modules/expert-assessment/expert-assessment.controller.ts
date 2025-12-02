@@ -43,6 +43,52 @@ export class ExpertAssessmentController {
     return this.expertAssessmentService.findByCategory(category, query);
   }
 
+  @Get('by-category/:category')
+  @ApiOperation({ 
+    summary: 'Get expert assessments by category with sub-sections (optimized single query)',
+    description: 'Highly optimized endpoint that returns assessments with their sub-sections in a single database query. Use this for inspection forms.'
+  })
+  @ApiQuery({ 
+    name: 'includeSubSections', 
+    required: false, 
+    type: Boolean,
+    description: 'Whether to include sub-sections in the response (default: true)'
+  })
+  @ApiQuery({ 
+    name: 'limit', 
+    required: false, 
+    type: Number,
+    description: 'Maximum number of results (default: 100)'
+  })
+  @ApiQuery({ 
+    name: 'page', 
+    required: false, 
+    type: Number,
+    description: 'Page number (default: 1)'
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'List of expert assessments with sub-sections for the category',
+    type: [ExpertAssessment]
+  })
+  async findByCategoryWithSubSections(
+    @Param('category') category: string,
+    @Query('includeSubSections') includeSubSections?: string,
+    @Query('limit') limit?: string,
+    @Query('page') page?: string,
+  ) {
+    const includeSubSectionsBool = includeSubSections !== 'false'; // Default to true
+    const limitNum = limit ? parseInt(limit, 10) : 100;
+    const pageNum = page ? parseInt(page, 10) : 1;
+
+    return this.expertAssessmentService.findByCategoryWithSubSections(
+      category,
+      includeSubSectionsBool,
+      limitNum,
+      pageNum,
+    );
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get a single expert assessment by ID' })
   @ApiResponse({ status: 200, description: 'Expert assessment details', type: ExpertAssessment })

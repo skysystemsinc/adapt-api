@@ -1,3 +1,4 @@
+import { AssessmentCategory } from "../../expert-assessment/entities/expert-assessment.entity";
 import { AssessmentSubmission } from "../../expert-assessment/assessment-submission/entities/assessment-submission.entity";
 import { User } from "../../users/entities/user.entity";
 import { WarehouseLocation } from "../../warehouse-location/entities/warehouse-location.entity";
@@ -8,6 +9,12 @@ import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, OneToMany, Pri
 export class InspectionReport {
     @PrimaryGeneratedColumn('uuid')
     id: string;
+
+    @Column({
+        type: 'enum',
+        enum: AssessmentCategory,
+    })
+    assessmentType: AssessmentCategory;
 
     // Overall Inspection Findings
     @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })

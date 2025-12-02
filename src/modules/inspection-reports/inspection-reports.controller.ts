@@ -36,6 +36,7 @@ export class InspectionReportsController {
 
     // Parse FormData
     const parsedData: any = {
+      assessmentType: body.assessmentType,
       maximumScore: body.maximumScore,
       obtainedScore: body.obtainedScore,
       percentage: body.percentage,
