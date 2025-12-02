@@ -41,8 +41,11 @@ export class WarehouseLocationService {
       );
     }
 
+    const applicationId = await this.generateApplicationId();
+
     const newApplication = this.warehouseLocationRepository.create({
       userId,
+      applicationId,
       status: WarehouseLocationStatus.DRAFT,
     });
 
@@ -82,5 +85,11 @@ export class WarehouseLocationService {
 
   remove(id: number) {
     return `This action removes a #${id} warehouseLocation`;
+  }
+
+  async generateApplicationId(): Promise<string> {
+    const count = await this.warehouseLocationRepository.count();
+    const applicationId = `WHL-${String(count + 1).padStart(6, '0')}`;
+    return applicationId;
   }
 }

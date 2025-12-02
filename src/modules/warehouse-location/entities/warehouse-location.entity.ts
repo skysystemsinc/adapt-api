@@ -9,6 +9,7 @@ import { TechnicalQualitative } from "../technical-qualitative/entities/technica
 import { HumanResource } from "../human-resource/entities/human-resource.entity";
 import { User } from "../../users/entities/user.entity";
 import { AssessmentSubmission } from "../../expert-assessment/assessment-submission/entities/assessment-submission.entity";
+import { WarehouseLocationChecklistEntity } from "./warehouse-location-checklist.entity";
 
 export enum WarehouseLocationStatus {
     PENDING = 'PENDING',
@@ -23,6 +24,9 @@ export enum WarehouseLocationStatus {
 export class WarehouseLocation {
     @PrimaryGeneratedColumn('uuid')
     id: string;
+
+    @Column({ type: 'varchar', unique: true })
+    applicationId: string;
 
     @Column({ type: 'uuid' })
     userId: string;
@@ -65,6 +69,9 @@ export class WarehouseLocation {
 
     @OneToMany(() => AssessmentSubmission, (submission) => submission.warehouseLocation)
     assessmentSubmissions: AssessmentSubmission[];
+
+    @OneToOne(() => WarehouseLocationChecklistEntity, (checklist) => checklist.warehouseLocation)
+    warehouseLocationChecklist: WarehouseLocationChecklistEntity;
 
     @Column({ type: 'boolean', default: true })
     isActive: boolean;

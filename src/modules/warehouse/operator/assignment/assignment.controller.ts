@@ -18,7 +18,7 @@ export class AssignmentController {
     return await this.assignmentService.getData(applicationId);
   }
 
-  @ApiOperation({ summary: 'Assign an assignment to a user' })
+  @ApiOperation({ summary: 'Assign an assignment to a user for warehouse operator application' })
   @ApiBody({ type: CreateAssignmentDto })
   @Post('/application/:applicationId')
   async assign(@Body() createAssignmentDto: CreateAssignmentDto,
@@ -30,6 +30,20 @@ export class AssignmentController {
       throw new Error('User ID not found in request. Authentication may have failed.');
     }
     return await this.assignmentService.assign(applicationId, createAssignmentDto, userId as string);
+  }
+
+  @ApiOperation({ summary: 'Assign an assignment to a user for warehouse location application' })
+  @ApiBody({ type: CreateAssignmentDto })
+  @Post('/location/:applicationLocationId')
+  async assignToLocation(@Body() createAssignmentDto: CreateAssignmentDto,
+    @Req() req: any,
+    @Param('applicationLocationId') applicationLocationId: string) {
+    // JWT payload typically has 'sub' field containing the user ID
+    const userId = req.user?.sub || req.user?.id;
+    if (!userId) {
+      throw new Error('User ID not found in request. Authentication may have failed.');
+    }
+    return await this.assignmentService.assignToLocation(applicationLocationId, createAssignmentDto, userId as string);
   }
 
   @Get()

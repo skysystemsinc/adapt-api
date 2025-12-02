@@ -49,6 +49,7 @@ export class WarehouseLocationAdminService {
       .leftJoin('location.facility', 'facility')
       .select([
         'location.id',
+        'location.applicationId',
         'location.status',
         'location.createdAt',
         'location.updatedAt',
@@ -66,8 +67,8 @@ export class WarehouseLocationAdminService {
     // If user is HOD or Expert, filter by assignment
     if (user && (hasPermission(user, Permissions.IS_HOD) || hasPermission(user, Permissions.IS_EXPERT))) {
       queryBuilder
-        .innerJoin('assignment', 'assignment', 'assignment.applicationId = location.id')
-        .andWhere('assignment.assignedTo = :assignedToUserId', { assignedToUserId: userId });
+        .innerJoin('assignment', 'assignment', 'assignment."applicationLocationId" = location.id')
+        .andWhere('assignment."assignedTo" = :assignedToUserId', { assignedToUserId: userId });
     }
 
     if (status) {
@@ -120,6 +121,7 @@ export class WarehouseLocationAdminService {
       where: { id },
       select: {
         id: true,
+        applicationId: true,
         status: true,
         createdAt: true,
         updatedAt: true,
@@ -219,6 +221,33 @@ export class WarehouseLocationAdminService {
           email: true,
           hrNationalTaxNumber: true,
         },
+        warehouseLocationChecklist: {
+          id: true,
+          ownershipLegalDocuments: {
+            id: true,
+          },
+          humanResourcesKey: {
+            id: true,
+          },
+          locationRisk: {
+            id: true,
+          },
+          securityPerimeter: {
+            id: true,
+          },
+          infrastructureUtilities: {
+            id: true,
+          },
+          storageFacilities: {
+            id: true,
+          },
+          registrationFee: {
+            id: true,
+          },
+          declaration: {
+            id: true,
+          },
+        },
       },
       relations: {
         user: true,
@@ -236,6 +265,16 @@ export class WarehouseLocationAdminService {
           professionalExperiences: true,
           declaration: true,
         },
+        warehouseLocationChecklist: {
+          ownershipLegalDocuments: true,
+          humanResourcesKey: true,
+          locationRisk: true,
+          securityPerimeter: true,
+          infrastructureUtilities: true,
+          storageFacilities: true,
+          registrationFee: true,
+          declaration: true,
+        },
       },
     });
 
@@ -247,7 +286,7 @@ export class WarehouseLocationAdminService {
     if (user && (hasPermission(user, Permissions.IS_HOD) || hasPermission(user, Permissions.IS_EXPERT))) {
       const assignment = await this.dataSource.getRepository(Assignment).findOne({
         where: {
-          applicationId: id,
+          applicationLocationId: id,  // Use applicationLocationId for location applications
           assignedTo: userId,
         },
         relations: ['sections', 'sections.fields'],
@@ -267,6 +306,7 @@ export class WarehouseLocationAdminService {
           weighing: null,
           technicalQualitative: null,
           humanResources: [],
+          warehouseLocationChecklist: null,
           totalCount: 0,
         };
       }
@@ -370,6 +410,11 @@ export class WarehouseLocationAdminService {
       ) || [];
     } else {
       application.humanResources = [];
+    }
+
+    // Filter checklist (section 8)
+    if (!assignedSections.has('checklist')) {
+      application.warehouseLocationChecklist = null as any;
     }
   }
 
