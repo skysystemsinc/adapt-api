@@ -7,7 +7,7 @@ import { InspectionReport } from './entities/inspection-report.entity';
 import { AssessmentDocument } from '../expert-assessment/assessment-documents/entities/assessment-document.entity';
 import { AssessmentSubmission } from '../expert-assessment/assessment-submission/entities/assessment-submission.entity';
 import { AssessmentSubSection } from '../expert-assessment/assessment-sub-section/entities/assessment-sub-section.entity';
-import { ExpertAssessment } from '../expert-assessment/entities/expert-assessment.entity';
+import { AssessmentCategory, ExpertAssessment } from '../expert-assessment/entities/expert-assessment.entity';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
@@ -187,6 +187,13 @@ export class InspectionReportsService {
     return await this.inspectionReportRepository.find({
       relations: ['createdByUser', 'warehouseOperatorApplication', 'warehouseLocation', 'assessmentSubmissions'],
       order: { createdAt: 'DESC' },
+    });
+  }
+
+  async findByAssessmentType(assessmentType: AssessmentCategory): Promise<InspectionReport[]> {
+    return await this.inspectionReportRepository.find({
+      where: { assessmentType },
+      relations: ['createdByUser', 'warehouseOperatorApplication', 'warehouseLocation', 'assessmentSubmissions', 'assessmentSubmissions.documents'],
     });
   }
 

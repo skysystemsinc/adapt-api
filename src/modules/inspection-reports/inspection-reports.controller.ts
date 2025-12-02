@@ -7,6 +7,7 @@ import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
+import { AssessmentCategory } from '../expert-assessment/entities/expert-assessment.entity';
 
 @ApiTags('Inspection Reports')
 @ApiBearerAuth('JWT-auth')
@@ -87,6 +88,15 @@ export class InspectionReportsController {
   @ApiResponse({ status: 200, description: 'List of inspection reports' })
   findAll() {
     return this.inspectionReportsService.findAll();
+  }
+
+  //Get inspection report by assessment type
+  @Get('assessment-type/:assessmentType')
+  @ApiOperation({ summary: 'Get an inspection report by assessment type' })
+  @ApiResponse({ status: 200, description: 'Inspection report found' })
+  @ApiResponse({ status: 404, description: 'Inspection report not found' })
+  findByAssessmentType(@Param('assessmentType') assessmentType: AssessmentCategory) {
+    return this.inspectionReportsService.findByAssessmentType(assessmentType);
   }
 
   @Get(':id')
