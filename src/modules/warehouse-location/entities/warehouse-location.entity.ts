@@ -24,6 +24,9 @@ export class WarehouseLocation {
     @PrimaryGeneratedColumn('uuid')
     id: string;
 
+    @Column({ type: 'varchar', unique: true })
+    applicationId: string;
+
     @Column({ type: 'uuid' })
     userId: string;
 

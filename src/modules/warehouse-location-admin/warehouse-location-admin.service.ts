@@ -49,6 +49,7 @@ export class WarehouseLocationAdminService {
       .leftJoin('location.facility', 'facility')
       .select([
         'location.id',
+        'location.applicationId',
         'location.status',
         'location.createdAt',
         'location.updatedAt',
@@ -120,6 +121,7 @@ export class WarehouseLocationAdminService {
       where: { id },
       select: {
         id: true,
+        applicationId: true,
         status: true,
         createdAt: true,
         updatedAt: true,
