@@ -221,6 +221,33 @@ export class WarehouseLocationAdminService {
           email: true,
           hrNationalTaxNumber: true,
         },
+        warehouseLocationChecklist: {
+          id: true,
+          ownershipLegalDocuments: {
+            id: true,
+          },
+          humanResourcesKey: {
+            id: true,
+          },
+          locationRisk: {
+            id: true,
+          },
+          securityPerimeter: {
+            id: true,
+          },
+          infrastructureUtilities: {
+            id: true,
+          },
+          storageFacilities: {
+            id: true,
+          },
+          registrationFee: {
+            id: true,
+          },
+          declaration: {
+            id: true,
+          },
+        },
       },
       relations: {
         user: true,
@@ -236,6 +263,16 @@ export class WarehouseLocationAdminService {
           professionalQualifications: true,
           trainings: true,
           professionalExperiences: true,
+          declaration: true,
+        },
+        warehouseLocationChecklist: {
+          ownershipLegalDocuments: true,
+          humanResourcesKey: true,
+          locationRisk: true,
+          securityPerimeter: true,
+          infrastructureUtilities: true,
+          storageFacilities: true,
+          registrationFee: true,
           declaration: true,
         },
       },
