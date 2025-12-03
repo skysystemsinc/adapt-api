@@ -504,8 +504,8 @@ export class WarehouseAdminService {
       .innerJoin('rolePermissions.permission', 'permission')
       .select(`
     role.name AS role,
-    json_agg(
-      json_build_object(
+    jsonb_agg(
+      DISTINCT jsonb_build_object(
         'id', "user"."id",
         'firstName', "user"."firstName",
         'lastName', "user"."lastName",
@@ -515,14 +515,42 @@ export class WarehouseAdminService {
   `);
 
     if (hasPermission(user, Permissions.IS_HOD)) {
-      if (user.organization) {
-        usersQuery.where(`permission.name = :name AND user.organizationId = :organizationId`, {
-          name: Permissions.IS_EXPERT,
-          organizationId: user.organization.id
-        });
+      // Find the HOD's department specialization
+      const departmentPermissions = [
+        Permissions.IS_HR,
+        Permissions.IS_FINANCE,
+        Permissions.IS_LEGAL,
+        Permissions.IS_INSPECTION,
+        Permissions.IS_SECURITY,
+        Permissions.IS_TECHNICAL,
+        Permissions.IS_ESG,
+      ];
+
+      let hodSpecialization: string | null = null;
+      for (const dept of departmentPermissions) {
+        if (hasPermission(user, dept)) {
+          hodSpecialization = dept;
+          break;
+        }
       }
-      else {
-        throw new ForbiddenException('User does not have an organization');
+
+      if (hodSpecialization) {
+        // Filter experts who have both IS_EXPERT and the same department permission
+        // Using subquery to find users with both permissions
+        const expertUsersSubquery = this.dataSource
+          .getRepository(User)
+          .createQueryBuilder('u')
+          .innerJoin('u.userRoles', 'ur2')
+          .innerJoin('ur2.role', 'r2')
+          .innerJoin('r2.rolePermissions', 'rp2')
+          .innerJoin('rp2.permission', 'p2')
+          .where('p2.name IN (:...permNames)', { permNames: [Permissions.IS_EXPERT, hodSpecialization] })
+          .groupBy('u.id')
+          .having('COUNT(DISTINCT p2.name) = 2')
+          .select('u.id');
+
+        usersQuery.where(`user.id IN (${expertUsersSubquery.getQuery()})`)
+          .setParameters(expertUsersSubquery.getParameters());
       }
     } else if (hasPermission(user, Permissions.MANAGE_WAREHOUSE_APPLICATION_ASSIGNMENT)) {
       usersQuery.where(`permission.name = :name`, { name: Permissions.IS_HOD })
