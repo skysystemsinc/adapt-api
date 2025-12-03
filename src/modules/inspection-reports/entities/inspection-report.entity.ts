@@ -5,6 +5,15 @@ import { WarehouseLocation } from "../../warehouse-location/entities/warehouse-l
 import { WarehouseOperatorApplicationRequest } from "../../warehouse/entities/warehouse-operator-application-request.entity";
 import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 
+export enum InspectionReportStatus {
+    PENDING = 'PENDING',
+    APPROVED = 'APPROVED',
+    REJECTED = 'REJECTED',
+    DRAFT = 'DRAFT',
+    UNDER_REVIEW = 'UNDER_REVIEW',
+    RESUBMITTED = 'RESUBMITTED',
+}
+
 @Entity('inspection_reports')
 export class InspectionReport {
     @PrimaryGeneratedColumn('uuid')
@@ -64,6 +73,13 @@ export class InspectionReport {
 
     @OneToMany(() => AssessmentSubmission, (submission) => submission.inspectionReport)
     assessmentSubmissions: AssessmentSubmission[];
+
+    @Column({
+        type: 'enum',
+        enum: InspectionReportStatus,
+        default: InspectionReportStatus.PENDING,
+    })
+    status: InspectionReportStatus;
 
     @CreateDateColumn()
     createdAt: Date;
