@@ -291,7 +291,7 @@ export class RBACSeeder {
         }
       }
 
-      
+
     }
 
     const technicalExpertRole = createdRoles.find((r) => r.name === 'Expert Maker - Technical');
@@ -325,6 +325,42 @@ export class RBACSeeder {
             });
             await rolePermissionRepository.save(rolePermission);
             console.log(`✓ Assigned permission ${permission.name} to Technical Expert`);
+          }
+        }
+      }
+    }
+
+
+    const esgExpertMakerRole = createdRoles.find((r) => r.name === 'Expert Maker - ESG');
+    if (esgExpertMakerRole) {
+      // ESG Expert gets ESG-related permissions
+      const esgPermissions = [
+        Permissions.VIEW_ALL_APPLICATIONS,
+        Permissions.VIEW_APPLICATION,
+        Permissions.VIEW_FINANCE_REPORTS,
+        Permissions.APPROVE_FINANCE,
+        Permissions.UPDATE_APPLICATION_STATUS,
+        Permissions.IS_ESG,
+        Permissions.IS_EXPERT,
+        Permissions.VIEW_WAREHOUSE_APPLICATION_ASSIGNMENT,
+      ];
+      for (const permissionName of esgPermissions) {
+        const permission = createdPermissions.find((p) => p.name === permissionName);
+        if (permission) {
+          const exists = await rolePermissionRepository.findOne({
+            where: {
+              roleId: esgExpertMakerRole.id,
+              permissionId: permission.id,
+            },
+          });
+
+          if (!exists) {
+            const rolePermission = rolePermissionRepository.create({
+              roleId: esgExpertMakerRole.id,
+              permissionId: permission.id,
+            });
+            await rolePermissionRepository.save(rolePermission);
+            console.log(`✓ Assigned permission ${permission.name} to ESG Expert`);
           }
         }
       }
@@ -617,6 +653,43 @@ export class RBACSeeder {
         }
       }
     }
+
+    const esgHodRole = createdRoles.find((r) => r.name === 'HOD - ESG');
+    if (esgHodRole) {
+      // ESG HOD gets ESG-related permissions
+      const esgHodPermissions = [
+        Permissions.VIEW_ALL_APPLICATIONS,
+        Permissions.VIEW_APPLICATION,
+        Permissions.VIEW_FINANCE_REPORTS,
+        Permissions.APPROVE_FINANCE,
+        Permissions.UPDATE_APPLICATION_STATUS,
+        Permissions.IS_HOD,
+        Permissions.VIEW_WAREHOUSE_APPLICATION_ASSIGNMENT,
+        Permissions.IS_ESG,
+      ];
+
+      for (const permissionName of esgHodPermissions) {
+        const permission = createdPermissions.find((p) => p.name === permissionName);
+        if (permission) {
+          const exists = await rolePermissionRepository.findOne({
+            where: {
+              roleId: esgHodRole.id,
+              permissionId: permission.id,
+            },
+          });
+
+          if (!exists) {
+            const rolePermission = rolePermissionRepository.create({
+              roleId: esgHodRole.id,
+              permissionId: permission.id,
+            });
+            await rolePermissionRepository.save(rolePermission);
+            console.log(`✓ Assigned permission ${permission.name} to ESG HOD`);
+          }
+        }
+      }
+    }
+
 
     const hodRole = createdRoles.find((r) => r.name === 'HOD - Final Review');
     if (hodRole) {
