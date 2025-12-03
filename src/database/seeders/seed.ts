@@ -56,9 +56,6 @@ async function runSeeders() {
 
     const expertAssessmentSeeder = new ExpertAssessmentSeeder();
     await expertAssessmentSeeder.run(AppDataSource);
-    
-    const rolesSeeder = new RolesSeeder();
-    await rolesSeeder.run(AppDataSource);
 
     const adminSeeder = new AdminSeeder();
     await adminSeeder.run(AppDataSource);

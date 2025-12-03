@@ -59,9 +59,13 @@ export enum Permissions {
   IS_INSPECTION = 'is_inspection',
   IS_SECURITY = 'is_security',
   IS_TECHNICAL = 'is_technical',
-  IS_ESC = 'is_esc',
+  IS_ESG = 'is_esg',
 
   // Review permissions
   REVIEW_ASSESSMENT = 'review_assessment',
+  REVIEW_FINAL_APPLICATION = 'review_final_application',
+
+  WAREHOUSE_OPERATOR_REVIEW = 'warehouse_operator_review',
+  WAREHOUSE_OPERATOR_DESCISION = 'warehouse_operator_decision',
 }
 

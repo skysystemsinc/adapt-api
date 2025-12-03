@@ -59,6 +59,7 @@ export class AdminSeeder {
         } else {
             console.log(`- Super admin user already exists: ${superAdminUser.email}`);
         }
+        
         console.log('\n✅ Super admin user seeding completed!');
     }
 }
