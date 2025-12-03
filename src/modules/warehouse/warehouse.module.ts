@@ -32,6 +32,7 @@ import { RegistrationFeeChecklistEntity } from './entities/checklist/registratio
 import { DeclarationChecklistEntity } from './entities/checklist/declaration.entity';
 import { WarehouseApplicantVerificationModule } from './warehouse-applicant-verification/warehouse-applicant-verification.module';
 import { AssignmentModule } from './operator/assignment/assignment.module';
+import { ReviewModule } from './review/review.module';
 
 @Module({
   controllers: [WarehouseController],
@@ -74,6 +75,7 @@ import { AssignmentModule } from './operator/assignment/assignment.module';
     }),
     WarehouseApplicantVerificationModule,
     AssignmentModule,
+    ReviewModule,
   ],
   exports: [WarehouseService],
 })
