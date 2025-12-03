@@ -8,6 +8,7 @@ import { SettingsSeeder } from './settings.seeder';
 import { DesignationSeeder } from './designation.seeder';
 import { OrganisationSeeder } from './organisation.seeder';
 import { ExpertAssessmentSeeder } from './expert-assessment.seeder';
+import { RolesSeeder } from './roles.seeder';
 // Load environment variables
 config();
 
@@ -53,7 +54,10 @@ async function runSeeders() {
     await organisationSeeder.run(AppDataSource);
 
     const expertAssessmentSeeder = new ExpertAssessmentSeeder();
-    await expertAssessmentSeeder.run(AppDataSource);    
+    await expertAssessmentSeeder.run(AppDataSource);
+    
+    const rolesSeeder = new RolesSeeder();
+    await rolesSeeder.run(AppDataSource);
 
     console.log('\n✅ Seeding completed successfully!');
     process.exit(0);
