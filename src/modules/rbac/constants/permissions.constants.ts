@@ -60,5 +60,8 @@ export enum Permissions {
   IS_SECURITY = 'is_security',
   IS_TECHNICAL = 'is_technical',
   IS_ESC = 'is_esc',
+
+  // Review permissions
+  REVIEW_ASSESSMENT = 'review_assessment',
 }
 
