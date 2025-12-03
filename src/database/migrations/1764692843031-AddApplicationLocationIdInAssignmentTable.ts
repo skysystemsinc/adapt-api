@@ -4,18 +4,60 @@ export class AddApplicationLocationIdInAssignmentTable1764692843031 implements M
     name = 'AddApplicationLocationIdInAssignmentTable1764692843031'
 
     public async up(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`ALTER TABLE "financial_others" DROP CONSTRAINT "FK_financial_others_document"`);
-        await queryRunner.query(`ALTER TABLE "form_fields_requests" DROP CONSTRAINT "FK_form_fields_requests_formRequestId"`);
-        await queryRunner.query(`ALTER TABLE "form_requests" DROP CONSTRAINT "FK_form_requests_formId"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_forms_isActive"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_forms_version"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_form_fields_requests_formRequestId"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_form_fields_requests_fieldKey"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_form_fields_requests_action"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_form_requests_formId"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_form_requests_status"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_form_requests_slug"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_form_requests_requestedBy"`);
+        // Drop constraint only if it exists
+        await queryRunner.query(`
+            DO $$
+            BEGIN
+                IF EXISTS (
+                    SELECT 1 
+                    FROM information_schema.table_constraints 
+                    WHERE constraint_name = 'FK_financial_others_document'
+                ) THEN
+                    ALTER TABLE "financial_others" DROP CONSTRAINT "FK_financial_others_document";
+                END IF;
+            END
+            $$;
+        `);
+        
+        // Drop other constraints with IF EXISTS check
+        await queryRunner.query(`
+            DO $$
+            BEGIN
+                IF EXISTS (
+                    SELECT 1 
+                    FROM information_schema.table_constraints 
+                    WHERE constraint_name = 'FK_form_fields_requests_formRequestId'
+                ) THEN
+                    ALTER TABLE "form_fields_requests" DROP CONSTRAINT "FK_form_fields_requests_formRequestId";
+                END IF;
+            END
+            $$;
+        `);
+        
+        await queryRunner.query(`
+            DO $$
+            BEGIN
+                IF EXISTS (
+                    SELECT 1 
+                    FROM information_schema.table_constraints 
+                    WHERE constraint_name = 'FK_form_requests_formId'
+                ) THEN
+                    ALTER TABLE "form_requests" DROP CONSTRAINT "FK_form_requests_formId";
+                END IF;
+            END
+            $$;
+        `);
+        
+        // ... rest of the migration
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."IDX_forms_isActive"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."IDX_forms_version"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."IDX_form_fields_requests_formRequestId"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."IDX_form_fields_requests_fieldKey"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."IDX_form_fields_requests_action"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."IDX_form_requests_formId"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."IDX_form_requests_status"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."IDX_form_requests_slug"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."IDX_form_requests_requestedBy"`);
         await queryRunner.query(`ALTER TABLE "assignment" ADD "applicationLocationId" uuid`);
         await queryRunner.query(`ALTER TABLE "assignment" ADD CONSTRAINT "FK_458d532da8be03a5b7865f7e000" FOREIGN KEY ("applicationLocationId") REFERENCES "warehouse_location"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
     }
