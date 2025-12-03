@@ -33,29 +33,29 @@ async function runSeeders() {
     console.log('✓ Database connection established\n');
 
     // Run seeders
-    // const applicationTypeSeeder = new ApplicationTypeSeeder();
-    // await applicationTypeSeeder.run(AppDataSource);
+    const applicationTypeSeeder = new ApplicationTypeSeeder();
+    await applicationTypeSeeder.run(AppDataSource);
 
-    // const userSeeder = new UserSeeder();
-    // await userSeeder.run(AppDataSource);
+    const userSeeder = new UserSeeder();
+    await userSeeder.run(AppDataSource);
 
-    // const rbacSeeder = new RBACSeeder();
-    // await rbacSeeder.run(AppDataSource);
+    const rbacSeeder = new RBACSeeder();
+    await rbacSeeder.run(AppDataSource);
 
-    // const documentTypeSeeder = new DocumentTypeSeeder();
-    // await documentTypeSeeder.run(AppDataSource);
+    const documentTypeSeeder = new DocumentTypeSeeder();
+    await documentTypeSeeder.run(AppDataSource);
 
-    // const settingsSeeder = new SettingsSeeder();
-    // await settingsSeeder.run(AppDataSource);
+    const settingsSeeder = new SettingsSeeder();
+    await settingsSeeder.run(AppDataSource);
 
-    // const designationSeeder = new DesignationSeeder();
-    // await designationSeeder.run(AppDataSource);
+    const designationSeeder = new DesignationSeeder();
+    await designationSeeder.run(AppDataSource);
 
-    // const organisationSeeder = new OrganisationSeeder();
-    // await organisationSeeder.run(AppDataSource);
+    const organisationSeeder = new OrganisationSeeder();
+    await organisationSeeder.run(AppDataSource);
 
-    // const expertAssessmentSeeder = new ExpertAssessmentSeeder();
-    // await expertAssessmentSeeder.run(AppDataSource);
+    const expertAssessmentSeeder = new ExpertAssessmentSeeder();
+    await expertAssessmentSeeder.run(AppDataSource);
     
     const rolesSeeder = new RolesSeeder();
     await rolesSeeder.run(AppDataSource);

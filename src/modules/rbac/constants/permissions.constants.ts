@@ -51,5 +51,14 @@ export enum Permissions {
   //Expert
   IS_EXPERT = 'is_expert',
   IS_HR_EXPERT = 'is_hr_expert',
+
+  // Department permissions
+  IS_HR = 'is_hr',
+  IS_FINANCE = 'is_finance',
+  IS_LEGAL = 'is_legal',
+  IS_INSPECTION = 'is_inspection',
+  IS_SECURITY = 'is_security',
+  IS_TECHNICAL = 'is_technical',
+  IS_ESC = 'is_esc',
 }
 
