@@ -99,8 +99,17 @@ export class RBACSeeder {
     // Assign permissions to roles
     const superAdminRole = createdRoles.find((r) => r.name === 'Super Admin');
     if (superAdminRole) {
-      // Super Admin gets all permissions
-      for (const permission of createdPermissions) {
+
+      const excludedPermissions = [
+        Permissions.IS_HOD,
+        Permissions.IS_EXPERT,
+      ];
+
+      const permissionsForSuperAdmin = createdPermissions.filter(
+        (permission) => !excludedPermissions.includes(permission.name as Permissions)
+      );
+
+      for (const permission of permissionsForSuperAdmin) {
         const exists = await rolePermissionRepository.findOne({
           where: {
             roleId: superAdminRole.id,
