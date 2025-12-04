@@ -588,7 +588,7 @@ export class WarehouseLocationChecklistService {
 
     return {
       message: 'Warehouse location checklist saved successfully',
-      data: this.mapChecklistEntityToResponse(hydratedChecklist!),
+      data: await this.mapChecklistEntityToResponse(hydratedChecklist!, warehouseLocation.applicationId),
     };
   }
 
@@ -672,7 +672,7 @@ export class WarehouseLocationChecklistService {
 
     return {
       message: 'Warehouse location checklist updated successfully',
-      data: this.mapChecklistEntityToResponse(hydratedChecklist!),
+      data: await this.mapChecklistEntityToResponse(hydratedChecklist!, warehouseLocation.applicationId),
     };
   }
 
@@ -1524,13 +1524,23 @@ export class WarehouseLocationChecklistService {
 
     return {
       message: 'Warehouse location checklist retrieved successfully',
-      data: this.mapChecklistEntityToResponse(checklist),
+      data: await this.mapChecklistEntityToResponse(checklist, warehouseLocation.applicationId),
     };
   }
 
-  private mapChecklistEntityToResponse(checklist: WarehouseLocationChecklistEntity) {
+  private async mapChecklistEntityToResponse(checklist: WarehouseLocationChecklistEntity, applicationId?: string) {
+    // If applicationId is not provided, fetch it from warehouseLocation
+    let finalApplicationId = applicationId;
+    if (!finalApplicationId) {
+      const warehouseLocation = await this.warehouseLocationRepository.findOne({
+        where: { id: checklist.warehouseLocationId },
+        select: ['applicationId'],
+      });
+      finalApplicationId = warehouseLocation?.applicationId;
+    }
     return {
       id: checklist.id,
+      applicationId: finalApplicationId,
       ownershipLegalDocuments: checklist.ownershipLegalDocuments
         ? {
             id: checklist.ownershipLegalDocuments.id,
