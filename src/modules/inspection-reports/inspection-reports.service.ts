@@ -8,6 +8,9 @@ import { AssessmentDocument } from '../expert-assessment/assessment-documents/en
 import { AssessmentSubmission } from '../expert-assessment/assessment-submission/entities/assessment-submission.entity';
 import { AssessmentSubSection } from '../expert-assessment/assessment-sub-section/entities/assessment-sub-section.entity';
 import { AssessmentCategory, ExpertAssessment } from '../expert-assessment/entities/expert-assessment.entity';
+import { ReviewEntity } from '../warehouse/review/entities/review.entity';
+import { Permissions } from '../rbac/constants/permissions.constants';
+import { User } from '../users/entities/user.entity';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
@@ -25,6 +28,8 @@ export class InspectionReportsService {
     private readonly assessmentSubSectionRepository: Repository<AssessmentSubSection>,
     @InjectRepository(ExpertAssessment)
     private readonly expertAssessmentRepository: Repository<ExpertAssessment>,
+    @InjectRepository(ReviewEntity)
+    private readonly reviewEntityRepository: Repository<ReviewEntity>,
     private readonly dataSource: DataSource
   ) {}
 
@@ -159,6 +164,39 @@ export class InspectionReportsService {
           });
 
           await queryRunner.manager.save(AssessmentDocument, document);
+        }
+      }
+
+      // Step 4: Check if this is the 6th inspection report for this application+location
+      const reportCount = await queryRunner.manager.count(InspectionReport, {
+        where: {
+          warehouseOperatorApplicationId: createInspectionReportDto.warehouseOperatorApplicationId,
+          warehouseLocationId: createInspectionReportDto.warehouseLocationId,
+        },
+      });
+
+      if (reportCount === 6) {
+        // Find user with WAREHOUSE_OPERATOR_REVIEW permission
+        const reviewerUser = await queryRunner.manager
+          .getRepository(User)
+          .createQueryBuilder('user')
+          .innerJoin('user.userRoles', 'ur')
+          .innerJoin('ur.role', 'role')
+          .innerJoin('role.rolePermissions', 'rp')
+          .innerJoin('rp.permission', 'permission')
+          .where('permission.name = :permName', { permName: Permissions.WAREHOUSE_OPERATOR_REVIEW })
+          .getOne();
+
+        if (reviewerUser) {
+          const review = queryRunner.manager.create(ReviewEntity, {
+            applicationId: createInspectionReportDto.warehouseOperatorApplicationId,
+            applicationLocationId: createInspectionReportDto.warehouseLocationId,
+            userId: userId,
+            type: 'HOD',
+            createdAt: new Date(),
+          });
+
+          await queryRunner.manager.save(ReviewEntity, review);
         }
       }
 

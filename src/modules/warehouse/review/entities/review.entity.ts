@@ -23,6 +23,9 @@ export class ReviewEntity {
   @JoinColumn({ name: 'applicationLocationId' })
   applicationLocation: WarehouseLocation;
 
+  @Column({ type: 'varchar', nullable: false })
+  type: string;
+
   @Column({ type: 'uuid', nullable: false })
   userId: string;
 

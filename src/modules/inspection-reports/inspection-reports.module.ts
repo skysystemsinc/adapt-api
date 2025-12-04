@@ -9,11 +9,12 @@ import { AssessmentSubmission } from '../expert-assessment/assessment-submission
 import { AssessmentDocument } from '../expert-assessment/assessment-documents/entities/assessment-document.entity';
 import { AssessmentSubSection } from '../expert-assessment/assessment-sub-section/entities/assessment-sub-section.entity';
 import { ExpertAssessment } from '../expert-assessment/entities/expert-assessment.entity';
+import { ReviewEntity } from '../warehouse/review/entities/review.entity';
 import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([InspectionReport, AssessmentSubmission, AssessmentDocument, AssessmentSubSection, ExpertAssessment]),
+    TypeOrmModule.forFeature([InspectionReport, AssessmentSubmission, AssessmentDocument, AssessmentSubSection, ExpertAssessment, ReviewEntity]),
     ConfigModule,
     AuthModule,
     JwtModule.registerAsync({
