@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { CreateInspectionReportDto } from './dto/create-inspection-report.dto';
 import { UpdateInspectionReportDto } from './dto/update-inspection-report.dto';
-import { InspectionReport } from './entities/inspection-report.entity';
+import { InspectionReport, InspectionReportStatus } from './entities/inspection-report.entity';
 import { AssessmentDocument } from '../expert-assessment/assessment-documents/entities/assessment-document.entity';
 import { AssessmentSubmission } from '../expert-assessment/assessment-submission/entities/assessment-submission.entity';
 import { AssessmentSubSection } from '../expert-assessment/assessment-sub-section/entities/assessment-sub-section.entity';
@@ -15,6 +15,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { Assignment, AssignmentLevel, AssignmentStatus } from '../warehouse/operator/assignment/entities/assignment.entity';
+import { ApproveOrRejectInspectionReportDto } from './dto/approve-reject-inspection';
 
 @Injectable()
 export class InspectionReportsService {
@@ -359,5 +360,20 @@ export class InspectionReportsService {
     }
 
     return report;
+  }
+
+  async approveOrReject(id: string, approveOrRejectInspectionReportDto: ApproveOrRejectInspectionReportDto, userId: string): Promise<InspectionReport> {
+    const report = await this.findOne(id);
+    if(!report) {
+      throw new NotFoundException(`Inspection report with not found`);
+    }
+    if (report.status === InspectionReportStatus.APPROVED || report.status === InspectionReportStatus.REJECTED) {
+      throw new BadRequestException('Inspection report is already approved or rejected');
+    }
+    report.status = approveOrRejectInspectionReportDto.status as unknown as InspectionReportStatus;
+    report.approvedBy = userId;
+    report.approvedAt = new Date();
+    report.remarks = approveOrRejectInspectionReportDto.remarks;
+    return await this.inspectionReportRepository.save(report);
   }
 }

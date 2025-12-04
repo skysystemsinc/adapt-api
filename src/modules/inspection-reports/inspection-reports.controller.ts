@@ -8,6 +8,10 @@ import { FilesInterceptor } from '@nestjs/platform-express';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { AssessmentCategory } from '../expert-assessment/entities/expert-assessment.entity';
+import { ApproveOrRejectInspectionReportDto } from './dto/approve-reject-inspection';
+import { Permissions } from '../rbac/constants/permissions.constants';
+import { PermissionsGuard } from 'src/common/guards/permissions.guard';
+import { RequirePermissions } from 'src/common/decorators/require-permissions.decorator';
 
 @ApiTags('Inspection Reports')
 @Controller('inspection-reports')
@@ -143,5 +147,20 @@ export class InspectionReportsController {
   ) {
     const userId = req.user?.sub || req.user?.id;
     return this.inspectionReportsService.findByApplicationIdAssessment(applicationId, userId);
+  }
+
+  @Patch(':id/approve-reject')
+  @ApiOperation({ summary: 'Approve or reject an inspection report' })
+  @ApiResponse({ status: 200, description: 'Inspection report approved or rejected successfully' })
+  @ApiResponse({ status: 404, description: 'Inspection report not found' })
+  @UseGuards(PermissionsGuard)
+  @RequirePermissions(Permissions.IS_HOD)
+  approveOrRejectInspectionReport(
+    @Param('id') id: string,
+    @Body() approveOrRejectInspectionReportDto: ApproveOrRejectInspectionReportDto,
+    @Request() req: any,
+  ) {
+    const userId = req.user?.sub || req.user?.id;
+    return this.inspectionReportsService.approveOrReject(id, approveOrRejectInspectionReportDto, userId);
   }
 }

@@ -64,6 +64,19 @@ export class InspectionReport {
     @JoinColumn({ name: 'warehouseLocationId' })
     warehouseLocation?: WarehouseLocation;
 
+    @Column({ type: 'text', nullable: true })
+    remarks: string;
+
+    @Column({ type: 'uuid', nullable: true })
+    approvedBy?: string;
+
+    @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
+    @JoinColumn({ name: 'approvedBy' })
+    approvedByUser?: User;
+
+    @Column({ type: 'timestamp', nullable: true })
+    approvedAt?: Date;
+
     @Column({ type: 'uuid', nullable: true })
     createdBy?: string;
 
