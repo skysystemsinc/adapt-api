@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { CreateInspectionReportDto } from './dto/create-inspection-report.dto';
@@ -8,9 +8,13 @@ import { AssessmentDocument } from '../expert-assessment/assessment-documents/en
 import { AssessmentSubmission } from '../expert-assessment/assessment-submission/entities/assessment-submission.entity';
 import { AssessmentSubSection } from '../expert-assessment/assessment-sub-section/entities/assessment-sub-section.entity';
 import { AssessmentCategory, ExpertAssessment } from '../expert-assessment/entities/expert-assessment.entity';
+import { ReviewEntity } from '../warehouse/review/entities/review.entity';
+import { Permissions } from '../rbac/constants/permissions.constants';
+import { User } from '../users/entities/user.entity';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import { Assignment, AssignmentLevel, AssignmentStatus } from '../warehouse/operator/assignment/entities/assignment.entity';
 
 @Injectable()
 export class InspectionReportsService {
@@ -25,8 +29,10 @@ export class InspectionReportsService {
     private readonly assessmentSubSectionRepository: Repository<AssessmentSubSection>,
     @InjectRepository(ExpertAssessment)
     private readonly expertAssessmentRepository: Repository<ExpertAssessment>,
+    @InjectRepository(ReviewEntity)
+    private readonly reviewEntityRepository: Repository<ReviewEntity>,
     private readonly dataSource: DataSource
-  ) {}
+  ) { }
 
   private readonly uploadDir = path.join(process.cwd(), 'uploads', 'assessment-documents');
 
@@ -53,7 +59,7 @@ export class InspectionReportsService {
 
       // Step 1: Create Inspection Report
       const { assessments, ...reportData } = createInspectionReportDto;
-      
+
       const inspectionReport = this.inspectionReportRepository.create({
         ...reportData,
         createdBy: userId,
@@ -162,6 +168,67 @@ export class InspectionReportsService {
         }
       }
 
+      // Step 4: Check if this is the 6th inspection report for this application+location
+      // const reportCount = await queryRunner.manager.count(InspectionReport, {
+      //   where: {
+      //     warehouseOperatorApplicationId: createInspectionReportDto.warehouseOperatorApplicationId,
+      //     warehouseLocationId: createInspectionReportDto.warehouseLocationId,
+      //   },
+      // });
+
+      // if (reportCount === 6) {
+      //   // Find user with WAREHOUSE_OPERATOR_REVIEW permission
+      //   const reviewerUser = await queryRunner.manager
+      //     .getRepository(User)
+      //     .createQueryBuilder('user')
+      //     .innerJoin('user.userRoles', 'ur')
+      //     .innerJoin('ur.role', 'role')
+      //     .innerJoin('role.rolePermissions', 'rp')
+      //     .innerJoin('rp.permission', 'permission')
+      //     .where('permission.name = :permName', { permName: Permissions.WAREHOUSE_OPERATOR_REVIEW })
+      //     .getOne();
+
+      //   if (reviewerUser) {
+      //     const review = queryRunner.manager.create(ReviewEntity, {
+      //       applicationId: createInspectionReportDto.warehouseOperatorApplicationId,
+      //       applicationLocationId: createInspectionReportDto.warehouseLocationId,
+      //       userId: userId,
+      //       type: 'HOD',
+      //       createdAt: new Date(),
+      //     });
+
+      //     await queryRunner.manager.save(ReviewEntity, review);
+      //   }
+      // }
+
+      // Step 5: Create Assignment
+
+      const hodAssignment = await queryRunner.manager.findOne(Assignment, {
+        where: {
+          applicationId: createInspectionReportDto.warehouseOperatorApplicationId,
+          applicationLocationId: createInspectionReportDto.warehouseLocationId,
+          level: AssignmentLevel.HOD_TO_EXPERT,
+          status: AssignmentStatus.ASSIGNED,
+          assignedTo: userId,
+        }
+      })
+
+      if (!hodAssignment) {
+        throw new NotFoundException('HOD assignment not found');
+      }
+
+      const assignment = await queryRunner.manager.create(Assignment, {
+        assessmentId: savedReport.id,
+        level: AssignmentLevel.EXPERT_TO_HOD,
+        status: AssignmentStatus.ASSIGNED,
+        applicationId: createInspectionReportDto.warehouseOperatorApplicationId,
+        applicationLocationId: createInspectionReportDto.warehouseLocationId,
+        assignedBy: userId,
+        assignedTo: hodAssignment.assignedBy,
+        parentAssignmentId: hodAssignment.id,
+      });
+      await queryRunner.manager.save(Assignment, assignment);
+
       await queryRunner.commitTransaction();
 
       // Return report with relations
@@ -212,9 +279,9 @@ export class InspectionReportsService {
 
   async update(id: string, updateInspectionReportDto: UpdateInspectionReportDto): Promise<InspectionReport> {
     const report = await this.findOne(id);
-    
+
     Object.assign(report, updateInspectionReportDto);
-    
+
     return await this.inspectionReportRepository.save(report);
   }
 
@@ -226,7 +293,7 @@ export class InspectionReportsService {
   async findByApplicationId(applicationId: string): Promise<InspectionReport[]> {
     const report = await this.inspectionReportRepository.find({
       where: { warehouseOperatorApplicationId: applicationId },
-      relations: ['createdByUser',  'assessmentSubmissions', 'assessmentSubmissions.documents'],
+      relations: ['createdByUser', 'assessmentSubmissions', 'assessmentSubmissions.documents'],
       select: {
         id: true,
         assessmentType: true,
@@ -251,8 +318,39 @@ export class InspectionReportsService {
   }
 
   async findByApplicationIdAssessment(applicationId: string, userId: string): Promise<InspectionReport> {
+    // get user with permission
+    const user = await this.dataSource.getRepository(User).findOne({
+      where: { id: userId },
+      relations: ['userRoles', 'userRoles.role', 'userRoles.role.rolePermissions', 'userRoles.role.rolePermissions.permission'],
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User with ID ${userId} not found`);
+    }
+
+    const isHod = user.userRoles.some(role => role.role.rolePermissions.some(permission => permission.permission.name === Permissions.IS_HOD));
+    let assessmentId: string | undefined;
+    let assignment: Assignment | null = null;
+
+    if (isHod) {
+      assignment = await this.dataSource.getRepository(Assignment).findOne({
+        where: {
+          applicationId: applicationId,
+          assignedTo: userId,
+          level: AssignmentLevel.EXPERT_TO_HOD
+        },
+      });
+      if (assignment) {
+        assessmentId = assignment.assessmentId;
+      }
+    }
+
+    // conditional where statement
     const report = await this.inspectionReportRepository.findOne({
-      where: { warehouseOperatorApplicationId: applicationId, createdBy: userId },
+      where: { 
+        warehouseOperatorApplicationId: applicationId,
+        ...(assessmentId ? { id: assessmentId, createdBy: assignment?.assignedBy } : { createdBy: userId }),
+      },
       relations: ['assessmentSubmissions', 'assessmentSubmissions.documents'],
     });
 

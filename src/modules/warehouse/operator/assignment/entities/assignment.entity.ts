@@ -13,6 +13,7 @@ import { User } from '../../../../users/entities/user.entity';
 import { WarehouseOperatorApplicationRequest } from '../../../../warehouse/entities/warehouse-operator-application-request.entity';
 import { AssignmentSection } from './assignment-section.entity';
 import { WarehouseLocation } from '../../../../warehouse-location/entities/warehouse-location.entity';
+import { InspectionReport } from '../../../../inspection-reports/entities/inspection-report.entity';
 
 export enum AssignmentStatus {
     ASSIGNED = 'ASSIGNED',
@@ -25,6 +26,7 @@ export enum AssignmentStatus {
 export enum AssignmentLevel {
     OFFICER_TO_HOD = 'OFFICER_TO_HOD',
     HOD_TO_EXPERT = 'HOD_TO_EXPERT',
+    EXPERT_TO_HOD = 'EXPERT_TO_HOD',
 }
 
 @Entity('assignment')
@@ -72,6 +74,13 @@ export class Assignment {
 
     @Column({ type: 'enum', enum: AssignmentLevel })
     level: AssignmentLevel;
+
+    @ManyToOne(() => InspectionReport, { onDelete: 'SET NULL' })
+    @JoinColumn({ name: 'assessmentId' })
+    assessment: InspectionReport;
+
+    @Column({ nullable: true })
+    assessmentId: string;
 
     @Column({
         type: 'enum',

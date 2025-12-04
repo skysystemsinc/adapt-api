@@ -48,9 +48,24 @@ export class WarehouseAdminService {
     }
 
 
+    // Subquery to get the latest assignment ID for each application
+    // Using raw SQL for correlated subquery
+    const latestAssignmentSubquery = `(
+      SELECT a.id 
+      FROM assignment a 
+      WHERE a."applicationId" = application.id 
+      ORDER BY a."createdAt" DESC 
+      LIMIT 1
+    )`;
+
     const queryBuilder = this.warehouseOperatorApplicationRequestRepository
       .createQueryBuilder('application')
       .leftJoin('application.user', 'user')
+      .leftJoin(
+        'assignment',
+        'assignment',
+        `assignment.applicationId = application.id AND assignment.id = ${latestAssignmentSubquery}`
+      )
       .select([
         'application.id',
         'application.applicationId',
@@ -62,14 +77,17 @@ export class WarehouseAdminService {
         'user.firstName',
         'user.lastName',
         'user.email',
-      ]);
+      ])
+      .addSelect('assignment.level', 'assignmentLevel')
+      .addSelect('assignment.assessmentId', 'assignmentAssessmentId')
+      .addSelect('assignment.status', 'assignmentStatus');
 
     queryBuilder.andWhere('application.status != :draftStatus', { draftStatus: WarehouseOperatorApplicationStatus.DRAFT });
 
 
     if (user && (hasPermission(user, Permissions.IS_HOD) || hasPermission(user, Permissions.IS_EXPERT))) {
       queryBuilder
-        .innerJoin('assignment', 'assignment', 'assignment.applicationId = application.id')
+        // .innerJoin('assignment', 'assignment', 'assignment.applicationId = application.id')
         .andWhere('assignment.assignedTo = :assignedToUserId', { assignedToUserId: userId });
     }
 
@@ -86,11 +104,26 @@ export class WarehouseAdminService {
     // Also order details by createdAt to maintain consistent order
     queryBuilder.addOrderBy('application.createdAt', 'ASC');
 
+    // Get total count before pagination
+    const total = await queryBuilder.getCount();
+
     // Pagination
     const skip = (page - 1) * limit;
     queryBuilder.skip(skip).take(limit);
 
-    const [data, total] = await queryBuilder.getManyAndCount();
+    // Use getRawAndEntities to get both entities and raw data (for aliased fields)
+    const { entities, raw } = await queryBuilder.getRawAndEntities();
+
+    // Map assignmentLevel from raw data to entities
+    const data = entities.map((entity, index) => {
+      const rawData = raw[index];
+      return {
+        ...entity,
+        assignmentLevel: rawData?.assignmentLevel || null,
+        assignmentStatus: rawData?.assignmentStatus || null,
+        assignmentAssessmentId: rawData?.assignmentAssessmentId || null,
+      };
+    });
 
     // const firstPendingId = await this.getFirstPendingApplicationId();
     // const enrichedData = data.map((app) =>
@@ -504,8 +537,8 @@ export class WarehouseAdminService {
       .innerJoin('rolePermissions.permission', 'permission')
       .select(`
     role.name AS role,
-    jsonb_agg(
-      DISTINCT jsonb_build_object(
+    json_agg(
+      json_build_object(
         'id', "user"."id",
         'firstName', "user"."firstName",
         'lastName', "user"."lastName",
@@ -515,42 +548,14 @@ export class WarehouseAdminService {
   `);
 
     if (hasPermission(user, Permissions.IS_HOD)) {
-      // Find the HOD's department specialization
-      const departmentPermissions = [
-        Permissions.IS_HR,
-        Permissions.IS_FINANCE,
-        Permissions.IS_LEGAL,
-        Permissions.IS_INSPECTION,
-        Permissions.IS_SECURITY,
-        Permissions.IS_TECHNICAL,
-        Permissions.IS_ESG,
-      ];
-
-      let hodSpecialization: string | null = null;
-      for (const dept of departmentPermissions) {
-        if (hasPermission(user, dept)) {
-          hodSpecialization = dept;
-          break;
-        }
+      if (user.organization) {
+        usersQuery.where(`permission.name = :name AND user.organizationId = :organizationId`, {
+          name: Permissions.IS_EXPERT,
+          organizationId: user.organization.id
+        });
       }
-
-      if (hodSpecialization) {
-        // Filter experts who have both IS_EXPERT and the same department permission
-        // Using subquery to find users with both permissions
-        const expertUsersSubquery = this.dataSource
-          .getRepository(User)
-          .createQueryBuilder('u')
-          .innerJoin('u.userRoles', 'ur2')
-          .innerJoin('ur2.role', 'r2')
-          .innerJoin('r2.rolePermissions', 'rp2')
-          .innerJoin('rp2.permission', 'p2')
-          .where('p2.name IN (:...permNames)', { permNames: [Permissions.IS_EXPERT, hodSpecialization] })
-          .groupBy('u.id')
-          .having('COUNT(DISTINCT p2.name) = 2')
-          .select('u.id');
-
-        usersQuery.where(`user.id IN (${expertUsersSubquery.getQuery()})`)
-          .setParameters(expertUsersSubquery.getParameters());
+      else {
+        throw new ForbiddenException('User does not have an organization');
       }
     } else if (hasPermission(user, Permissions.MANAGE_WAREHOUSE_APPLICATION_ASSIGNMENT)) {
       usersQuery.where(`permission.name = :name`, { name: Permissions.IS_HOD })
