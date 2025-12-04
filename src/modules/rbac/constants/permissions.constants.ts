@@ -67,5 +67,13 @@ export enum Permissions {
 
   WAREHOUSE_OPERATOR_REVIEW = 'warehouse_operator_review',
   WAREHOUSE_OPERATOR_DESCISION = 'warehouse_operator_decision',
+
+  // Expert Assessment permissions
+  VIEW_EXPERT_ASSESSMENT = 'view_expert_assessment',
+  MANAGE_EXPERT_ASSESSMENT = 'manage_expert_assessment',
+
+  // Settings Tab Permissions
+  VIEW_SETTINGS = 'view_settings',
+  MANAGE_SETTINGS = 'manage_settings',
 }
 
