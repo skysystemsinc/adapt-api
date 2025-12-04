@@ -85,18 +85,83 @@ export class WarehouseService {
     if (search) {
       query.andWhere('warehouseOperatorApplication.name LIKE :search', { search: `%${search}%` });
     }
+    
+    // Load relations needed for progress calculation
+    query.leftJoinAndSelect('warehouseOperatorApplication.authorizedSignatories', 'authorizedSignatories');
+    query.leftJoinAndSelect('warehouseOperatorApplication.companyInformation', 'companyInformation');
+    query.leftJoinAndSelect('warehouseOperatorApplication.bankDetails', 'bankDetails');
+    query.leftJoinAndSelect('warehouseOperatorApplication.hrs', 'hrs');
+    query.leftJoinAndSelect('warehouseOperatorApplication.financialInformation', 'financialInformation');
+    query.leftJoinAndSelect('warehouseOperatorApplication.applicantChecklist', 'applicantChecklist');
+    
     query.orderBy(`warehouseOperatorApplication.${sortBy}`, sortOrder);
     query.skip(((page ?? 1) - 1) * (limit ?? 10));
     query.take(limit ?? 10);
     const [applications, total] = await query.getManyAndCount();
+    
+    // Calculate progress for each application
+    const applicationsWithProgress = applications.map((application) => {
+      const progress = this.calculateApplicationProgress(application);
+      return {
+        ...application,
+        progress,
+      };
+    });
+    
     return {
-      applications,
+      applications: applicationsWithProgress,
       total,
       page: page ?? 1,
       limit: limit ?? 10,
       sortBy: sortBy ?? 'createdAt',
       sortOrder: sortOrder ?? 'DESC',
     };
+  }
+
+  private calculateApplicationProgress(application: WarehouseOperatorApplicationRequest): number {
+    // Define the main sections that need to be completed
+    const totalSections = 6;
+    let completedSections = 0;
+
+    // 1. Check Authorized Signatories (at least one required)
+    if (application.authorizedSignatories && application.authorizedSignatories.length > 0) {
+      completedSections++;
+    }
+
+    // 2. Check Company Information
+    if (application.companyInformation) {
+      completedSections++;
+    }
+
+    // 3. Check Bank Details
+    if (application.bankDetails) {
+      completedSections++;
+    }
+
+    // 4. Check HR Information (at least one required)
+    if (application.hrs && application.hrs.length > 0) {
+      completedSections++;
+    }
+
+    // 5. Check Financial Information
+    if (application.financialInformation) {
+      completedSections++;
+    }
+
+    // 6. Check Applicant Checklist
+    if (application.applicantChecklist) {
+      completedSections++;
+    }
+
+    // Calculate progress percentage
+    const progress = Math.round((completedSections / totalSections) * 100);
+
+    // If status is not DRAFT, return 100% for submitted/approved applications
+    if (application.status !== WarehouseOperatorApplicationStatus.DRAFT) {
+      return 100;
+    }
+
+    return progress;
   }
 
   async createOperatorApplication(

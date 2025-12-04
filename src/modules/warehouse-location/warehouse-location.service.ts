@@ -65,12 +65,13 @@ export class WarehouseLocationService {
   async findAllByUserId(userId: string): Promise<{ applicationId: string; status: string }[]> {
     const applications = await this.warehouseLocationRepository.find({
       where: { userId },
-      select: ['id', 'status'],
+      select: ['id', 'applicationId', 'status'],
       order: { createdAt: 'DESC' },
     });
 
     return applications.map((app) => ({
-      applicationId: app.id,
+      id: app.id,
+      applicationId: app.applicationId,
       status: app.status,
     }));
   }
