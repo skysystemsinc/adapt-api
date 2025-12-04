@@ -9,14 +9,16 @@ async function bootstrap() {
   // Enable CORS
   app.enableCors({
     origin: [
+      'https://adapt.demoprojects.co',
       'http://localhost:3000',
       'http://localhost:3001',
-      process.env.FRONTEND_URL || 'http://localhost:3000'
+      process.env.FRONTEND_URL || 'http://localhost:3000' || 'https://adapt.demoprojects.co'
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
   });
+
 
   // Enable global validation pipes
   app.useGlobalPipes(new ValidationPipe({
