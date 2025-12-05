@@ -175,11 +175,16 @@ export class ReviewService {
     };
   }
 
-  async findOne(id: string) {
-    return await this.reviewRepository.findOne({
-      where: { id },
+  async findOne(applicationId: string, assessmentId: string, userId: string) {
+    const assessment = await this.reviewRepository.findOne({
+      where: { id: assessmentId, applicationId, applicationLocationId: applicationId },
       relations: ['application', 'applicationLocation', 'user', 'details'],
     });
+    
+    if(!assessment) {
+      throw new NotFoundException('Assessment not found');
+    }
+    return assessment;
   }
 
   update(id: number, updateReviewDto: UpdateReviewDto) {
