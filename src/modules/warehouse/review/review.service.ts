@@ -33,6 +33,23 @@ export class ReviewService {
     private readonly usersService: UsersService,
   ) { }
   async create(applicationId: string, assessmentId: string, createReviewDto: CreateReviewDto, userId: string) {
+    const user = await this.usersRepository.findOne({
+      where: { id: userId },
+      relations: {
+        userRoles: {
+          role: {
+            rolePermissions: {
+              permission: true,
+            },
+          },
+        },
+      },
+    });
+
+    if(!user) {
+      throw new UnauthorizedException('Unauthorized');
+    }
+
     return await this.dataSource.transaction(async (manager) => {
       const reviewRepository = manager.getRepository(ReviewEntity);
       const assessmentDetailsRepository = manager.getRepository(AssessmentDetailsEntity);
@@ -111,20 +128,22 @@ export class ReviewService {
       review.userId = userId;
       await reviewRepository.save(review);
 
-      // user with permission "REVIEW_FINAL_APPLICATION"
-      const ceoUser = await this.usersService.findByPermission(Permissions.REVIEW_FINAL_APPLICATION);
-      
-      // Only create CEO review if a CEO user exists
-      if (ceoUser && ceoUser.length > 0 && ceoUser[0]?.id) {
-        const ceoReview = reviewRepository.create({
-          applicationId: review.applicationId,
-          applicationLocationId: review.applicationLocationId,
-          type: 'CEO',
-          userId: ceoUser[0].id,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-        await reviewRepository.save(ceoReview);
+      if(!hasPermission(user, Permissions.REVIEW_FINAL_APPLICATION)) {
+        // user with permission "REVIEW_FINAL_APPLICATION"
+        const ceoUser = await this.usersService.findByPermission(Permissions.REVIEW_FINAL_APPLICATION);
+        
+        // Only create CEO review if a CEO user exists
+        if (ceoUser && ceoUser.length > 0 && ceoUser[0]?.id) {
+          const ceoReview = reviewRepository.create({
+            applicationId: review.applicationId,
+            applicationLocationId: review.applicationLocationId,
+            type: 'CEO',
+            userId: ceoUser[0].id,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+          await reviewRepository.save(ceoReview);
+        }
       }
       return review;
     });
@@ -180,7 +199,7 @@ export class ReviewService {
       where: { id: assessmentId, applicationId, applicationLocationId: applicationId },
       relations: ['application', 'applicationLocation', 'user', 'details'],
     });
-    
+
     if(!assessment) {
       throw new NotFoundException('Assessment not found');
     }
