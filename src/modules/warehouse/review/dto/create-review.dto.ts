@@ -1,7 +1,7 @@
-import { IsArray, isEnum, IsEnum, IsNotEmpty, IsNumber, IsString, IsUUID, Max, Min, ValidateNested } from "class-validator";
+import { IsArray, IsDateString, isEnum, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Max, Min, ValidateNested } from "class-validator";
 import { AssessmentDecision } from "../entities/assessment_details.entity";
 import { Type } from "class-transformer";
-import { ApiProperty } from "@nestjs/swagger";
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 
 export enum ReviewType {
     HR = 'HR',
@@ -70,4 +70,36 @@ export class CreateReviewDto {
     @ValidateNested({ each: true })
     @Type(() => AssessmentReview)
     assessments: AssessmentReview[];
+
+    @ApiPropertyOptional({
+        description: 'Full name of the reviewer',
+        example: 'John Doe',
+    })
+    @IsString()
+    @IsOptional()
+    fullName?: string;
+
+    @ApiPropertyOptional({
+        description: 'Designation of the reviewer',
+        example: 'Chief Executive Officer',
+    })
+    @IsString()
+    @IsOptional()
+    designation?: string;
+
+    @ApiPropertyOptional({
+        description: 'Date of assessment',
+        example: '2025-12-05',
+    })
+    @IsDateString()
+    @IsOptional()
+    dateOfAssessment?: Date;
+
+    @ApiPropertyOptional({
+        description: 'Accreditation grade',
+        example: 'A+',
+    })
+    @IsString()
+    @IsOptional()
+    accreditationGrade?: string;
 }
