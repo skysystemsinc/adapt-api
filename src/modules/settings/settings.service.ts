@@ -8,6 +8,7 @@ import { fileTypeFromBuffer } from 'file-type';
 import { Setting } from './entities/setting.entity';
 import { CreateSettingDto } from './dto/create-setting.dto';
 import { UpdateSettingDto } from './dto/update-setting.dto';
+import { encryptBuffer, decryptBuffer } from 'src/common/utils/helper.utils';
 
 /**
  * MIME type mappings for file extensions
@@ -183,11 +184,14 @@ export class SettingsService {
     // Ensure directory exists
     await this.ensureUploadDirectory();
 
-    // Save file to disk
-    await fs.writeFile(filePath, file.buffer);
+    // Encrypt file buffer
+    const { encrypted, iv, authTag } = encryptBuffer(file.buffer);
+
+    // Save encrypted file to disk
+    await fs.writeFile(filePath, encrypted);
 
     this.logger.log(
-      `✅ File uploaded for setting '${key}': ${sanitizedFilename} (${(file.size / 1024).toFixed(2)}KB)`,
+      `✅ File uploaded and encrypted for setting '${key}': ${sanitizedFilename} (${(file.size / 1024).toFixed(2)}KB)`,
     );
 
     // Update or create setting
@@ -197,12 +201,16 @@ export class SettingsService {
 
     if (setting) {
       setting.value = filePath;
+      setting.iv = iv;
+      setting.authTag = authTag;
       return this.settingsRepository.save(setting);
     } else {
       // Create new setting
       setting = this.settingsRepository.create({
         key,
         value: filePath,
+        iv,
+        authTag,
       });
       return this.settingsRepository.save(setting);
     }
@@ -242,6 +250,62 @@ export class SettingsService {
       this.logger.error(`Error retrieving file path for key '${key}'`, error);
       return null;
     }
+  }
+
+  /**
+   * Get decrypted file buffer for a setting
+   * Automatically decrypts files if encryption metadata exists in database
+   */
+  async getSettingFileBuffer(key: string): Promise<{ buffer: Buffer; mimeType: string; filename: string }> {
+    const setting = await this.findByKey(key);
+
+    if (!setting || !setting.value) {
+      throw new NotFoundException(`Setting with key '${key}' not found`);
+    }
+
+    // Check if value is a file path (handle both forward and backslashes)
+    const normalizedValue = setting.value.replace(/\\/g, '/');
+    if (!normalizedValue.startsWith('uploads/')) {
+      throw new BadRequestException(`Setting '${key}' is not a file setting`);
+    }
+
+    // Normalize path for file system access
+    const filePath = path.normalize(setting.value);
+
+    // Verify file exists
+    try {
+      await fs.access(filePath);
+    } catch {
+      throw new NotFoundException(`File for setting '${key}' not found on server`);
+    }
+
+    // Read encrypted file from disk
+    const encryptedBuffer = await fs.readFile(filePath);
+
+    let buffer: Buffer;
+    let mimeType: string;
+    let filename: string;
+
+    if (setting.iv && setting.authTag) {
+      // File has encryption metadata - decrypt it
+      try {
+        buffer = decryptBuffer(encryptedBuffer, setting.iv, setting.authTag);
+        mimeType = await this.detectMimeType(buffer);
+        filename = `${key}${path.extname(filePath)}`;
+        this.logger.log(`✅ Decrypted file for setting '${key}'`);
+      } catch (error) {
+        this.logger.error(`Failed to decrypt file for setting '${key}': ${error.message}`);
+        throw new BadRequestException(`Failed to decrypt file: ${error.message}`);
+      }
+    } else {
+      // No encryption metadata - assume file is not encrypted (backward compatibility)
+      buffer = encryptedBuffer;
+      mimeType = await this.detectMimeType(buffer);
+      filename = `${key}${path.extname(filePath)}`;
+      this.logger.log(`⚠️  File for setting '${key}' is not encrypted (backward compatibility)`);
+    }
+
+    return { buffer, mimeType, filename };
   }
 
   /**
