@@ -39,9 +39,17 @@ export class ReviewController {
     return await this.reviewService.findAllPaginated(query, user.id);
   }
 
-  @Get(':id')
-  async findOne(@Param('id') id: string) {
-    return await this.reviewService.findOne(id);
+  @Get('/:applicationId/assessment/:assessmentId')
+  @ApiOperation({ summary: 'Get a review by ID' })
+  @ApiBearerAuth('JWT-auth')
+  @RequirePermissions(Permissions.REVIEW_ASSESSMENT, Permissions.REVIEW_FINAL_APPLICATION)
+  async findOne(
+    @Param('applicationId') applicationId: string,
+    @Param('assessmentId') assessmentId: string,
+    @Req() req: any,
+  ) {
+    const user = req.user as User;
+    return await this.reviewService.findOne(applicationId, assessmentId, user.id);
   }
 
   @Patch(':id')

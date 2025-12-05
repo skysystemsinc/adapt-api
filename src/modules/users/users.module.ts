@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { DynamicModule, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UsersService } from './users.service';
 import { UsersController } from './users.controller';
@@ -24,6 +24,13 @@ import { RegistrationApplicationDetails } from '../registration-application/enti
   ],
   controllers: [UsersController, UsersAdminController],
   providers: [UsersService],
-  exports: [UsersService],
+  exports: [UsersService, TypeOrmModule],
 })
-export class UsersModule {}
+export class UsersModule {
+  static forRoot(): DynamicModule {
+    return {
+      module: UsersModule,
+      imports: [TypeOrmModule.forFeature([User, RegistrationApplicationDetails])],
+    };
+  }
+}
