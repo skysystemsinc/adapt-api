@@ -11,6 +11,7 @@ import { AssessmentSubSection } from '../expert-assessment/assessment-sub-sectio
 import { ExpertAssessment } from '../expert-assessment/entities/expert-assessment.entity';
 import { ReviewEntity } from '../warehouse/review/entities/review.entity';
 import { AuthModule } from '../auth/auth.module';
+import { RBACModule } from '../rbac/rbac.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { AuthModule } from '../auth/auth.module';
       }),
       inject: [ConfigService],
     }),
+    RBACModule,
   ],
   controllers: [InspectionReportsController],
   providers: [InspectionReportsService],
