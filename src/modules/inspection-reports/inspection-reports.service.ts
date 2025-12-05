@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { CreateInspectionReportDto } from './dto/create-inspection-report.dto';
 import { UpdateInspectionReportDto } from './dto/update-inspection-report.dto';
 import { InspectionReport, InspectionReportStatus } from './entities/inspection-report.entity';
@@ -348,7 +348,7 @@ export class InspectionReportsService {
 
     // conditional where statement
     const report = await this.inspectionReportRepository.findOne({
-      where: { 
+      where: {
         warehouseOperatorApplicationId: applicationId,
         ...(assessmentId ? { id: assessmentId, createdBy: assignment?.assignedBy } : { createdBy: userId }),
       },
@@ -363,17 +363,92 @@ export class InspectionReportsService {
   }
 
   async approveOrReject(id: string, approveOrRejectInspectionReportDto: ApproveOrRejectInspectionReportDto, userId: string): Promise<InspectionReport> {
-    const report = await this.findOne(id);
-    if(!report) {
-      throw new NotFoundException(`Inspection report with not found`);
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const report = await this.findOne(id);
+      if (!report) {
+        throw new NotFoundException(`Inspection report not found`);
+      }
+
+      if (report.status === InspectionReportStatus.APPROVED || report.status === InspectionReportStatus.REJECTED) {
+        throw new BadRequestException('Inspection report is already approved or rejected');
+      }
+
+      // Update report status
+      report.status = approveOrRejectInspectionReportDto.status as unknown as InspectionReportStatus;
+      report.approvedBy = userId;
+      report.approvedAt = new Date();
+      report.remarks = approveOrRejectInspectionReportDto.remarks;
+
+      const savedReport = await queryRunner.manager.save(InspectionReport, report);
+
+      // Check if this is the 6th approved/rejected inspection report
+      const completedReportsCount = await queryRunner.manager.count(InspectionReport, {
+        where: {
+          warehouseOperatorApplicationId: report.warehouseOperatorApplicationId,
+          warehouseLocationId: report.warehouseLocationId,
+          status: In([InspectionReportStatus.APPROVED, InspectionReportStatus.REJECTED]),
+        },
+      });
+
+      // If 6 inspection reports are completed (approved or rejected), create a ReviewEntity
+      if (completedReportsCount === 6) {
+        // Check if review entry already exists for this application+location
+        const existingReview = await queryRunner.manager.findOne(ReviewEntity, {
+          where: {
+            applicationId: report.warehouseOperatorApplicationId,
+            applicationLocationId: report.warehouseLocationId,
+          },
+        });
+
+        if (!existingReview) {
+          // Find user with WAREHOUSE_OPERATOR_REVIEW permission
+          const reviewerUser = await queryRunner.manager
+            .getRepository(User)
+            .createQueryBuilder('user')
+            .innerJoin('user.userRoles', 'ur')
+            .innerJoin('ur.role', 'role')
+            .innerJoin('role.rolePermissions', 'rp')
+            .innerJoin('rp.permission', 'permission')
+            .where('permission.name = :permName', { permName: Permissions.WAREHOUSE_OPERATOR_REVIEW })
+            .getOne();
+
+          // Create review entry (userId is nullable, so it's ok if no reviewer found)
+          const reviewData: any = {
+            applicationId: report.warehouseOperatorApplicationId,
+            type: 'HOD',
+            isSubmitted: true,
+            submittedAt: new Date(),
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          };
+
+          // Only add applicationLocationId if it exists
+          if (report.warehouseLocationId) {
+            reviewData.applicationLocationId = report.warehouseLocationId;
+          }
+
+          // Only add userId if reviewer found
+          if (reviewerUser?.id) {
+            reviewData.userId = reviewerUser.id;
+          }
+
+          const review = queryRunner.manager.create(ReviewEntity, reviewData);
+          await queryRunner.manager.save(ReviewEntity, review);
+          console.log(`✓ Created review entry for application ${report.warehouseOperatorApplicationId} - 6 inspections completed`);
+        }
+      }
+
+      await queryRunner.commitTransaction();
+      return savedReport;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
     }
-    if (report.status === InspectionReportStatus.APPROVED || report.status === InspectionReportStatus.REJECTED) {
-      throw new BadRequestException('Inspection report is already approved or rejected');
-    }
-    report.status = approveOrRejectInspectionReportDto.status as unknown as InspectionReportStatus;
-    report.approvedBy = userId;
-    report.approvedAt = new Date();
-    report.remarks = approveOrRejectInspectionReportDto.remarks;
-    return await this.inspectionReportRepository.save(report);
   }
 }
