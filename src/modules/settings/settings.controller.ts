@@ -9,13 +9,30 @@ import {
   ParseUUIDPipe,
   HttpCode,
   HttpStatus,
+  UploadedFile,
+  UseInterceptors,
+  UseGuards,
+  BadRequestException,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBody } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiParam,
+  ApiBody,
+  ApiConsumes,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { SettingsService } from './settings.service';
 import { CreateSettingDto } from './dto/create-setting.dto';
 import { UpdateSettingDto } from './dto/update-setting.dto';
 import { UpdateSettingValueDto } from './dto/update-setting-value.dto';
 import { Setting } from './entities/setting.entity';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
+import { Permissions } from '../rbac/constants/permissions.constants';
 
 @ApiTags('Settings')
 @Controller('settings')
@@ -94,6 +111,56 @@ export class SettingsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async removeByKey(@Param('key') key: string): Promise<void> {
     return this.settingsService.removeByKey(key);
+  }
+}
+
+@ApiTags('Admin - Settings')
+@Controller('admin/settings')
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+@ApiBearerAuth('JWT-auth')
+export class SettingsAdminController {
+  constructor(private readonly settingsService: SettingsService) {}
+
+  @Post(':key/upload')
+  @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB max
+      },
+    }),
+  )
+  @RequirePermissions(Permissions.MANAGE_SETTINGS)
+  @ApiOperation({ summary: 'Upload file for a setting' })
+  @ApiParam({ name: 'key', description: 'Setting key' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+      required: ['file'],
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'File uploaded successfully',
+    type: Setting,
+  })
+  @ApiResponse({ status: 400, description: 'Invalid file or validation failed' })
+  async uploadFile(
+    @Param('key') key: string,
+    @UploadedFile() file: any, // Multer file type
+  ): Promise<Setting> {
+    if (!file) {
+      throw new BadRequestException('No file provided');
+    }
+
+    return this.settingsService.uploadSettingFile(key, file);
   }
 }
 
