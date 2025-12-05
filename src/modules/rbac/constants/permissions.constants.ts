@@ -83,5 +83,11 @@ export enum Permissions {
   // Document Type permissions
   VIEW_DOCUMENT_TYPE = 'view_document_type',
   MANAGE_DOCUMENT_TYPE = 'manage_document_type',
+  
+  // Form Requests permissions
+  MANAGE_FORM_REQUESTS = 'manage_form_request',
+
+  // Form Permissions
+  MANAGE_FORM = 'manage_forms',
 }
 

@@ -26,7 +26,7 @@ export class ReviewEntity {
   @Column({ type: 'varchar', nullable: false })
   type: string;
 
-  @Column({ type: 'uuid', nullable: false })
+  @Column({ type: 'uuid', nullable: true })
   userId: string;
 
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
