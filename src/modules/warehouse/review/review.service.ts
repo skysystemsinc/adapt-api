@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { CreateReviewDto, ReviewType } from './dto/create-review.dto';
 import { UpdateReviewDto } from './dto/update-review.dto';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -8,6 +8,8 @@ import { AssessmentDetailsEntity } from './entities/assessment_details.entity';
 import { PaginationQueryDto } from '../../expert-assessment/assessment-sub-section/dto/pagination-query.dto';
 import { Permissions } from '../../rbac/constants/permissions.constants';
 import { UsersService } from '../../users/users.service';
+import { hasPermission } from 'src/common/utils/helper.utils';
+import { User } from '../../users/entities/user.entity';
 
 const REQUIRED_ASSESSMENT_TYPES: ReviewType[] = [
   ReviewType.HR,
@@ -25,6 +27,8 @@ export class ReviewService {
     private readonly reviewRepository: Repository<ReviewEntity>,
     @InjectRepository(AssessmentDetailsEntity)
     private readonly assessmentDetailsRepository: Repository<AssessmentDetailsEntity>,
+    @InjectRepository(User)
+    private readonly usersRepository: Repository<User>,
     private readonly dataSource: DataSource,
     private readonly usersService: UsersService,
   ) { }
@@ -126,13 +130,32 @@ export class ReviewService {
     });
   }
 
-  async findAllPaginated(query: PaginationQueryDto) {
+  async findAllPaginated(query: PaginationQueryDto, userId: string) {
+    // Get user permissions
+    const user = await this.usersRepository.findOne({
+      where: { id: userId },
+      relations: {
+        userRoles: {
+          role: {
+            rolePermissions: {
+              permission: true,
+            },
+          },
+        },
+        organization: true,
+      },
+    });
+
+    if(!user) {
+      throw new UnauthorizedException('Unauthorized');
+    }
+
     const { page = 1, limit = 10 } = query;
     const skip = (page - 1) * limit;
     const [data, total] = await this.reviewRepository.findAndCount({
       where: {
         isSubmitted: true,
-        type: 'HOD',
+        type: hasPermission(user, Permissions.REVIEW_FINAL_APPLICATION) ? 'CEO' : 'HOD',
       },
       relations: ['application', 'applicationLocation', 'user', 'details'],
       order: {

@@ -4,7 +4,7 @@ import { CreateReviewDto } from './dto/create-review.dto';
 import { UpdateReviewDto } from './dto/update-review.dto';
 import { User } from '../../users/entities/user.entity';
 import { PaginationQueryDto } from '../../expert-assessment/assessment-sub-section/dto/pagination-query.dto';
-import { ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { Permissions } from '../../rbac/constants/permissions.constants';
 import { RequirePermissions } from '../../../common/decorators/require-permissions.decorator';
@@ -29,8 +29,14 @@ export class ReviewController {
   }
 
   @Get()
-  async findAllPaginated(@Query() query: PaginationQueryDto) {
-    return await this.reviewService.findAllPaginated(query);
+  @ApiOperation({ summary: 'Get all reviews' })
+  @ApiQuery({ type: PaginationQueryDto })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @RequirePermissions(Permissions.REVIEW_ASSESSMENT, Permissions.REVIEW_FINAL_APPLICATION)
+  async findAllPaginated(@Query() query: PaginationQueryDto, @Req() req: any) {
+    const user = req.user as User;
+    return await this.reviewService.findAllPaginated(query, user.id);
   }
 
   @Get(':id')
