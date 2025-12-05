@@ -47,4 +47,16 @@ export class ReviewEntity {
 
   @OneToMany(() => AssessmentDetailsEntity, (details) => details.assessment)
   details: AssessmentDetailsEntity[];
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  fullName: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  designation: string;
+  
+  @Column({ type: 'date', nullable: true })
+  dateOfAssessment: Date;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  accreditationGrade: string;
 }

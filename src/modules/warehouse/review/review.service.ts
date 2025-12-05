@@ -46,7 +46,7 @@ export class ReviewService {
       },
     });
 
-    if(!user) {
+    if (!user) {
       throw new UnauthorizedException('Unauthorized');
     }
 
@@ -126,6 +126,19 @@ export class ReviewService {
       }
 
       review.userId = userId;
+      if (createReviewDto.fullName) {
+        review.fullName = createReviewDto.fullName;
+      }
+      if (createReviewDto.designation) {
+        review.designation = createReviewDto.designation;
+      }
+      if (createReviewDto.dateOfAssessment) {
+        review.dateOfAssessment = createReviewDto.dateOfAssessment;
+      }
+      if (createReviewDto.accreditationGrade) {
+        review.accreditationGrade = createReviewDto.accreditationGrade;
+      }
+      
       await reviewRepository.save(review);
 
       // user with permission "REVIEW_FINAL_APPLICATION"
@@ -199,7 +212,7 @@ export class ReviewService {
       relations: ['application', 'applicationLocation', 'user', 'details'],
     });
 
-    if(!assessment) {
+    if (!assessment) {
       throw new NotFoundException('Assessment not found');
     }
     return assessment;
