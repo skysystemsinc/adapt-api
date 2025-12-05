@@ -57,7 +57,7 @@ export class ReviewService {
       const missingTypes = REQUIRED_ASSESSMENT_TYPES.filter(
         type => !providedTypes.includes(type)
       );
-      
+
       if (missingTypes.length > 0) {
         throw new BadRequestException(
           `All assessment types are required. Missing types: ${missingTypes.join(', ')}`
@@ -68,7 +68,7 @@ export class ReviewService {
       const duplicateTypes = providedTypes.filter(
         (type, index) => providedTypes.indexOf(type) !== index
       );
-      
+
       if (duplicateTypes.length > 0) {
         const uniqueDuplicates = [...new Set(duplicateTypes)];
         throw new BadRequestException(
@@ -113,13 +113,14 @@ export class ReviewService {
 
       // user with permission "REVIEW_FINAL_APPLICATION"
       const ceoUser = await this.usersService.findByPermission(Permissions.REVIEW_FINAL_APPLICATION);
-      
+
       // Only create CEO review if a CEO user exists
       if (ceoUser && ceoUser.length > 0 && ceoUser[0]?.id) {
         const ceoReview = reviewRepository.create({
           applicationId: review.applicationId,
           applicationLocationId: review.applicationLocationId,
           type: 'CEO',
+          isSubmitted: true,
           userId: ceoUser[0].id,
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -142,11 +143,11 @@ export class ReviewService {
             },
           },
         },
-        organization: true,
+        // organization: true,
       },
     });
 
-    if(!user) {
+    if (!user) {
       throw new UnauthorizedException('Unauthorized');
     }
 
@@ -177,11 +178,11 @@ export class ReviewService {
 
   async findOne(applicationId: string, assessmentId: string, userId: string) {
     const assessment = await this.reviewRepository.findOne({
-      where: { id: assessmentId, applicationId, applicationLocationId: applicationId },
+      where: { applicationId, type: 'HOD' },
       relations: ['application', 'applicationLocation', 'user', 'details'],
     });
-    
-    if(!assessment) {
+
+    if (!assessment) {
       throw new NotFoundException('Assessment not found');
     }
     return assessment;
