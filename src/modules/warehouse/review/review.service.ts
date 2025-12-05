@@ -33,6 +33,23 @@ export class ReviewService {
     private readonly usersService: UsersService,
   ) { }
   async create(applicationId: string, assessmentId: string, createReviewDto: CreateReviewDto, userId: string) {
+    const user = await this.usersRepository.findOne({
+      where: { id: userId },
+      relations: {
+        userRoles: {
+          role: {
+            rolePermissions: {
+              permission: true,
+            },
+          },
+        },
+      },
+    });
+
+    if(!user) {
+      throw new UnauthorizedException('Unauthorized');
+    }
+
     return await this.dataSource.transaction(async (manager) => {
       const reviewRepository = manager.getRepository(ReviewEntity);
       const assessmentDetailsRepository = manager.getRepository(AssessmentDetailsEntity);
@@ -182,7 +199,7 @@ export class ReviewService {
       relations: ['application', 'applicationLocation', 'user', 'details'],
     });
 
-    if (!assessment) {
+    if(!assessment) {
       throw new NotFoundException('Assessment not found');
     }
     return assessment;

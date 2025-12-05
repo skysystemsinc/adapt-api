@@ -17,7 +17,7 @@ export class ReviewController {
   @ApiOperation({ summary: 'Create a review' })
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
-  @RequirePermissions(Permissions.REVIEW_ASSESSMENT)
+  @RequirePermissions(Permissions.REVIEW_ASSESSMENT, Permissions.REVIEW_FINAL_APPLICATION)
   async create(
     @Param('applicationId') applicationId: string, 
     @Param('assessmentId') assessmentId: string,
