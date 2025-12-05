@@ -1,8 +1,9 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Req } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Req, Query } from '@nestjs/common';
 import { ReviewService } from './review.service';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { UpdateReviewDto } from './dto/update-review.dto';
-import { User } from 'src/modules/users/entities/user.entity';
+import { User } from '../../users/entities/user.entity';
+import { PaginationQueryDto } from '../../expert-assessment/assessment-sub-section/dto/pagination-query.dto';
 
 @Controller('review')
 export class ReviewController {
@@ -20,8 +21,8 @@ export class ReviewController {
   }
 
   @Get()
-  findAll() {
-    return this.reviewService.findAll();
+  findAllPaginated(@Query() query: PaginationQueryDto) {
+    return this.reviewService.findAllPaginated(query);
   }
 
   @Get(':id')

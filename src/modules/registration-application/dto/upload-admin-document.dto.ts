@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class AdminDocumentResponseDto {
   @ApiProperty({ description: 'Document ID' })
@@ -18,6 +18,12 @@ export class AdminDocumentResponseDto {
 
   @ApiProperty({ description: 'Updated at timestamp' })
   updatedAt: Date;
+
+  @ApiPropertyOptional({ description: 'IV' })
+  iv?: string;
+
+  @ApiPropertyOptional({ description: 'Auth tag' })
+  authTag?: string;
 }
 
 export class UploadAdminDocumentResponseDto extends AdminDocumentResponseDto {}

@@ -6,6 +6,7 @@ import { Repository } from 'typeorm';
 import { ReviewEntity } from './entities/review.entity';
 import { AssessmentDetailsEntity } from './entities/assessment_details.entity';
 import { InspectionReport } from 'src/modules/inspection-reports/entities/inspection-report.entity';
+import { PaginationQueryDto } from 'src/modules/expert-assessment/assessment-sub-section/dto/pagination-query.dto';
 
 @Injectable()
 export class ReviewService {
@@ -50,8 +51,30 @@ export class ReviewService {
     });
   }
 
-  findAll() {
-    return `This action returns all review`;
+  async findAllPaginated(query: PaginationQueryDto) {
+    const { page = 1, limit = 10 } = query;
+    const skip = (page - 1) * limit;
+    const [data, total] = await this.reviewRepository.findAndCount({
+      where: {
+        isSubmitted: true,
+        type: 'HOD',
+      },
+      relations: ['application', 'applicationLocation', 'user', 'details'],
+      order: {
+        createdAt: 'DESC',
+      },
+      skip,
+      take: limit,
+    });
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 
   findOne(id: number) {

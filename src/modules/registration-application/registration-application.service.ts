@@ -20,6 +20,7 @@ import { calculateDaysCount, calculateBusinessDays, isApplicationOverdue } from 
 import { UsersService } from '../users/users.service';
 import { Role } from '../rbac/entities/role.entity';
 import { FormField } from '../forms/entities/form-field.entity';
+import { encryptBuffer, decryptBuffer } from 'src/common/utils/helper.utils';
 
 @Injectable()
 export class RegistrationApplicationService {
@@ -622,14 +623,22 @@ export class RegistrationApplicationService {
     const filePath = path.join(this.uploadDir, sanitizedFilename);
     const documentPath = `/uploads/${sanitizedFilename}`;
 
+    const { encrypted, iv, authTag } = encryptBuffer(file.buffer);
+    
     // Save file to disk
-    await fs.writeFile(filePath, file.buffer);
+    // await fs.writeFile(filePath, file.buffer);
+    await fs.writeFile(filePath, encrypted);
 
     // Create document record
     const document = this.adminRegistrationDocumentRepository.create({
       applicationId: registrationId,
       detailId: detailId,
       document: documentPath,
+      iv,
+      authTag,
+      originalName: file.originalname || undefined,
+      mimeType: file.mimetype || undefined,
+      size: file.size || undefined,
     });
 
     const savedDocument = await this.adminRegistrationDocumentRepository.save(document);
@@ -641,6 +650,8 @@ export class RegistrationApplicationService {
       document: savedDocument.document,
       createdAt: savedDocument.createdAt,
       updatedAt: savedDocument.updatedAt,
+      iv,
+      authTag,
     };
   }
 
@@ -705,6 +716,73 @@ export class RegistrationApplicationService {
       createdAt: doc.createdAt,
       updatedAt: doc.updatedAt,
     }));
+  }
+
+  /**
+   * Download and decrypt admin document
+   */
+  async downloadAdminDocument(documentId: string): Promise<{ buffer: Buffer; mimeType: string; filename: string }> {
+    // Find the document
+    const document = await this.adminRegistrationDocumentRepository.findOne({
+      where: { id: documentId },
+    });
+
+    if (!document) {
+      throw new NotFoundException(`Admin document with ID '${documentId}' not found`);
+    }
+
+    // Extract filename from document path (e.g., /uploads/uuid.pdf -> uuid.pdf)
+    const filename = document.document.split('/').pop() || document.document;
+    const filePath = path.join(this.uploadDir, filename);
+
+    // Check if file exists
+    try {
+      await fs.access(filePath);
+    } catch {
+      throw new NotFoundException(`File for document '${documentId}' not found on disk`);
+    }
+
+    // Read encrypted file
+    const encryptedBuffer = await fs.readFile(filePath);
+
+    // Decrypt if iv and authTag are present
+    let decryptedBuffer: Buffer;
+    if (document.iv && document.authTag) {
+      try {
+        decryptedBuffer = decryptBuffer(encryptedBuffer, document.iv, document.authTag);
+      } catch (error) {
+        throw new BadRequestException(`Failed to decrypt document: ${error.message}`);
+      }
+    } else {
+      // If no encryption metadata, assume file is not encrypted
+      decryptedBuffer = encryptedBuffer;
+    }
+
+    // Determine MIME type from document metadata or file extension
+    const mimeType = document.mimeType || this.getMimeTypeFromExtension(filename);
+    const displayFilename = document.originalName || filename;
+
+    return {
+      buffer: decryptedBuffer,
+      mimeType,
+      filename: displayFilename,
+    };
+  }
+
+  /**
+   * Get MIME type from file extension
+   */
+  private getMimeTypeFromExtension(filename: string): string {
+    const ext = path.extname(filename).toLowerCase();
+    const mimeTypes: Record<string, string> = {
+      '.pdf': 'application/pdf',
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      '.doc': 'application/msword',
+    };
+    return mimeTypes[ext] || 'application/octet-stream';
   }
 
   /**

@@ -8,6 +8,7 @@ import {
   HttpCode,
   HttpStatus,
   BadRequestException,
+  Response,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -18,6 +19,7 @@ import {
   ApiBody,
   ApiParam,
 } from '@nestjs/swagger';
+import type { Response as ExpressResponse } from 'express';
 import { RegistrationApplicationService } from './registration-application.service';
 import { UploadAdminDocumentResponseDto, AdminDocumentResponseDto } from './dto/upload-admin-document.dto';
 
@@ -92,6 +94,27 @@ export class AdminUploadController {
       detailId,
       file,
     );
+  }
+
+  @Get('documents/:documentId/download')
+  @ApiOperation({ summary: 'Download admin document (decrypted)' })
+  @ApiParam({ name: 'documentId', description: 'Admin document ID' })
+  @ApiResponse({ status: 200, description: 'File content' })
+  @ApiResponse({ status: 404, description: 'Document not found' })
+  async downloadAdminDocument(
+    @Param('documentId') documentId: string,
+    @Response() res: ExpressResponse,
+  ): Promise<void> {
+    const { buffer, mimeType, filename } = await this.registrationApplicationService.downloadAdminDocument(documentId);
+
+    // Set security headers
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'");
+    res.setHeader('X-Frame-Options', 'DENY');
+
+    res.send(buffer);
   }
 }
 
