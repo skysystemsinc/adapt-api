@@ -17,6 +17,12 @@ export class Setting {
   @Column({ type: 'text' })
   value: string;
 
+  @Column({ type: 'text', nullable: true })
+  iv?: string;
+
+  @Column({ type: 'text', nullable: true })
+  authTag?: string;
+
   @CreateDateColumn()
   createdAt: Date;
 
