@@ -41,6 +41,7 @@ export class ReviewController {
 
   @Get('/:applicationId/assessment/:assessmentId')
   @ApiOperation({ summary: 'Get a review by ID' })
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @RequirePermissions(Permissions.REVIEW_ASSESSMENT, Permissions.REVIEW_FINAL_APPLICATION)
   async findOne(
