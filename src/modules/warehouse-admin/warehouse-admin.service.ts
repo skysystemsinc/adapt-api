@@ -231,9 +231,49 @@ export class WarehouseAdminService {
     }
 
     // Filter HR information
+    // Note: HR assignments use sub-item IDs (personalDetails.id, academicQualifications[].id, etc.) as resourceId,
+    // not the HR entity ID. So we need to check if any of the HR's sub-items are assigned.
     if (assignedSections.has('hrs')) {
       const assignedResourceIds = assignedSections.get('hrs')!;
-      application.hrs = application.hrs?.filter((hr) => assignedResourceIds.has(hr.id)) || [];
+      application.hrs = application.hrs?.filter((hr) => {
+        // Check if HR entity ID is assigned (for backward compatibility)
+        if (assignedResourceIds.has(hr.id)) {
+          return true;
+        }
+        
+        // Check if any sub-item is assigned
+        // Personal Details
+        if (hr.personalDetails?.id && assignedResourceIds.has(hr.personalDetails.id)) {
+          return true;
+        }
+        
+        // Academic Qualifications
+        if (hr.academicQualifications?.some(aq => assignedResourceIds.has(aq.id))) {
+          return true;
+        }
+        
+        // Professional Qualifications
+        if (hr.professionalQualifications?.some(pq => assignedResourceIds.has(pq.id))) {
+          return true;
+        }
+        
+        // Trainings
+        if (hr.trainings?.some(training => assignedResourceIds.has(training.id))) {
+          return true;
+        }
+        
+        // Experiences
+        if (hr.experiences?.some(exp => assignedResourceIds.has(exp.id))) {
+          return true;
+        }
+        
+        // Declaration
+        if (hr.declaration?.id && assignedResourceIds.has(hr.declaration.id)) {
+          return true;
+        }
+        
+        return false;
+      }) || [];
     } else {
       application.hrs = [];
     }
