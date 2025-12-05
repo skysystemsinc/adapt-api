@@ -4,12 +4,14 @@ import { UpdateReviewDto } from './dto/update-review.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { ReviewEntity } from './entities/review.entity';
-import { AssessmentDetailsEntity } from './entities/assessment_details.entity';
+import { AssessmentDecision, AssessmentDetailsEntity } from './entities/assessment_details.entity';
 import { PaginationQueryDto } from '../../expert-assessment/assessment-sub-section/dto/pagination-query.dto';
 import { Permissions } from '../../rbac/constants/permissions.constants';
 import { UsersService } from '../../users/users.service';
 import { hasPermission } from 'src/common/utils/helper.utils';
 import { User } from '../../users/entities/user.entity';
+import { WarehouseOperatorApplicationStatus } from '../entities/warehouse-operator-application-request.entity';
+import { WarehouseOperatorApplicationRequest } from '../entities/warehouse-operator-application-request.entity';
 
 const REQUIRED_ASSESSMENT_TYPES: ReviewType[] = [
   ReviewType.HR,
@@ -31,8 +33,11 @@ export class ReviewService {
     private readonly usersRepository: Repository<User>,
     private readonly dataSource: DataSource,
     private readonly usersService: UsersService,
+    @InjectRepository(WarehouseOperatorApplicationRequest)
+    private readonly warehouseOperatorApplicationRequestRepository: Repository<WarehouseOperatorApplicationRequest>,
   ) { }
   async create(applicationId: string, assessmentId: string, createReviewDto: CreateReviewDto, userId: string) {
+    let decision: AssessmentDecision | undefined = undefined;
     const user = await this.usersRepository.findOne({
       where: { id: userId },
       relations: {
@@ -101,6 +106,9 @@ export class ReviewService {
       }
 
       for (const assessment of createReviewDto.assessments) {
+        // If any assessment is rejected, the decision is rejected
+        if(assessment.decision == AssessmentDecision.REJECTED) decision = AssessmentDecision.REJECTED;
+
         const existingAssessmentDetail = await assessmentDetailsRepository.findOne({
           where: {
             submissionId: assessment.assessmentSubmissionId,
@@ -156,6 +164,25 @@ export class ReviewService {
           updatedAt: new Date(),
         });
         await reviewRepository.save(ceoReview);
+      }
+
+      // If CEO has approved the application:
+      // 1- set the application status to "APPROVED"
+      if (hasPermission(user, Permissions.REVIEW_FINAL_APPLICATION)) {
+        const application = await this.warehouseOperatorApplicationRequestRepository.findOne({
+          where: { id: applicationId },
+        });
+        if (application) {
+          application.status = decision == AssessmentDecision.REJECTED ? WarehouseOperatorApplicationStatus.REJECTED : WarehouseOperatorApplicationStatus.APPROVED;
+          await this.warehouseOperatorApplicationRequestRepository.save(application);
+        }
+
+        // TODO: send email to the user
+
+        if(decision == AssessmentDecision.ACCEPTED) {
+          // Send email to the applicant
+        }
+
       }
       return review;
     });
