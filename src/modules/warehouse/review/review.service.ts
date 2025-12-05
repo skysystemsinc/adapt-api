@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { CreateReviewDto } from './dto/create-review.dto';
+import { CreateReviewDto, ReviewType } from './dto/create-review.dto';
 import { UpdateReviewDto } from './dto/update-review.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
@@ -8,6 +8,15 @@ import { AssessmentDetailsEntity } from './entities/assessment_details.entity';
 import { PaginationQueryDto } from '../../expert-assessment/assessment-sub-section/dto/pagination-query.dto';
 import { Permissions } from '../../rbac/constants/permissions.constants';
 import { UsersService } from '../../users/users.service';
+
+const REQUIRED_ASSESSMENT_TYPES: ReviewType[] = [
+  ReviewType.HR,
+  ReviewType.FINANCIAL,
+  ReviewType.LEGAL,
+  ReviewType.SECURITY,
+  ReviewType.TECHNICAL,
+  ReviewType.ECG,
+];
 
 @Injectable()
 export class ReviewService {
@@ -37,6 +46,37 @@ export class ReviewService {
 
       if (!createReviewDto.assessments || createReviewDto.assessments.length === 0) {
         throw new BadRequestException('At least one assessment is required');
+      }
+
+      // Validate that all required assessment types are provided
+      const providedTypes = createReviewDto.assessments.map(a => a.type);
+      const missingTypes = REQUIRED_ASSESSMENT_TYPES.filter(
+        type => !providedTypes.includes(type)
+      );
+      
+      if (missingTypes.length > 0) {
+        throw new BadRequestException(
+          `All assessment types are required. Missing types: ${missingTypes.join(', ')}`
+        );
+      }
+
+      // Validate that there are no duplicate assessment types
+      const duplicateTypes = providedTypes.filter(
+        (type, index) => providedTypes.indexOf(type) !== index
+      );
+      
+      if (duplicateTypes.length > 0) {
+        const uniqueDuplicates = [...new Set(duplicateTypes)];
+        throw new BadRequestException(
+          `Duplicate assessment types found: ${uniqueDuplicates.join(', ')}. Each assessment type must be provided exactly once.`
+        );
+      }
+
+      // Validate that exactly 6 assessments are provided
+      if (createReviewDto.assessments.length !== REQUIRED_ASSESSMENT_TYPES.length) {
+        throw new BadRequestException(
+          `Exactly ${REQUIRED_ASSESSMENT_TYPES.length} assessments are required (one for each type: ${REQUIRED_ASSESSMENT_TYPES.join(', ')}). Provided: ${createReviewDto.assessments.length}`
+        );
       }
 
       for (const assessment of createReviewDto.assessments) {

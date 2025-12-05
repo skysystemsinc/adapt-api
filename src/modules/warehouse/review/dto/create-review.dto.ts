@@ -60,8 +60,10 @@ class AssessmentReview {
 
 export class CreateReviewDto {
     @ApiProperty({
-        description: 'The assessments of the review',
+        description: 'The assessments of the review. All assessment types (HR, FINANCIAL, LEGAL, SECURITY, TECHNICAL, ECG) must be provided exactly once.',
         type: [AssessmentReview],
+        minItems: 6,
+        maxItems: 6,
     })
     @IsArray()
     @IsNotEmpty()
