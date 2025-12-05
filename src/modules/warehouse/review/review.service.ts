@@ -2,11 +2,12 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { CreateReviewDto } from './dto/create-review.dto';
 import { UpdateReviewDto } from './dto/update-review.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { ReviewEntity } from './entities/review.entity';
 import { AssessmentDetailsEntity } from './entities/assessment_details.entity';
-import { InspectionReport } from 'src/modules/inspection-reports/entities/inspection-report.entity';
-import { PaginationQueryDto } from 'src/modules/expert-assessment/assessment-sub-section/dto/pagination-query.dto';
+import { PaginationQueryDto } from '../../expert-assessment/assessment-sub-section/dto/pagination-query.dto';
+import { Permissions } from '../../rbac/constants/permissions.constants';
+import { UsersService } from '../../users/users.service';
 
 @Injectable()
 export class ReviewService {
@@ -15,39 +16,73 @@ export class ReviewService {
     private readonly reviewRepository: Repository<ReviewEntity>,
     @InjectRepository(AssessmentDetailsEntity)
     private readonly assessmentDetailsRepository: Repository<AssessmentDetailsEntity>,
-    @InjectRepository(InspectionReport)
-    private readonly inspectionReportRepository: Repository<InspectionReport>,
-  ) {}
+    private readonly dataSource: DataSource,
+    private readonly usersService: UsersService,
+  ) { }
   async create(applicationId: string, assessmentId: string, createReviewDto: CreateReviewDto, userId: string) {
-    const review = await this.reviewRepository.findOne({
-      where: {
-        id: assessmentId,
-        applicationId,
-        userId,
-      },
-    });
-    if (!review) {
-      throw new NotFoundException('Review not found');
-    }
+    return await this.dataSource.transaction(async (manager) => {
+      const reviewRepository = manager.getRepository(ReviewEntity);
+      const assessmentDetailsRepository = manager.getRepository(AssessmentDetailsEntity);
 
-    const assessmentDetail = await this.assessmentDetailsRepository.findOne({
-      where: {
-        submissionId: createReviewDto.assessmentSubmissionId,
-        assessmentId: assessmentId,
-      },
-    });
+      const review = await reviewRepository.findOne({
+        where: {
+          id: assessmentId,
+          applicationId,
+        },
+      });
 
-    if (assessmentDetail) {
-      throw new BadRequestException('Assessment detail already submitted');
-    }
+      if (!review) {
+        throw new NotFoundException('Review not found');
+      }
 
-    return await this.assessmentDetailsRepository.save({
-      assessmentId,
-      submissionId: createReviewDto.assessmentSubmissionId,
-      type: createReviewDto.type,
-      decision: createReviewDto.decision,
-      score: createReviewDto.score,
-      remarks: createReviewDto.remarks,
+      if (!createReviewDto.assessments || createReviewDto.assessments.length === 0) {
+        throw new BadRequestException('At least one assessment is required');
+      }
+
+      for (const assessment of createReviewDto.assessments) {
+        const existingAssessmentDetail = await assessmentDetailsRepository.findOne({
+          where: {
+            submissionId: assessment.assessmentSubmissionId,
+            assessmentId,
+          },
+        });
+        if (existingAssessmentDetail) {
+          throw new BadRequestException(
+            `Assessment detail already submitted for submission ID: ${assessment.assessmentSubmissionId}`
+          );
+        }
+        const assessmentDetail = assessmentDetailsRepository.create({
+          submissionId: assessment.assessmentSubmissionId,
+          assessmentId,
+          type: assessment.type,
+          decision: assessment.decision,
+          score: assessment.score,
+          remarks: assessment.remarks,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+        await assessmentDetailsRepository.save(assessmentDetail);
+      }
+
+      review.userId = userId;
+      await reviewRepository.save(review);
+
+      // user with permission "REVIEW_FINAL_APPLICATION"
+      const ceoUser = await this.usersService.findByPermission(Permissions.REVIEW_FINAL_APPLICATION);
+      
+      // Only create CEO review if a CEO user exists
+      if (ceoUser && ceoUser.length > 0 && ceoUser[0]?.id) {
+        const ceoReview = reviewRepository.create({
+          applicationId: review.applicationId,
+          applicationLocationId: review.applicationLocationId,
+          type: 'CEO',
+          userId: ceoUser[0].id,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+        await reviewRepository.save(ceoReview);
+      }
+      return review;
     });
   }
 
@@ -77,8 +112,11 @@ export class ReviewService {
     };
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} review`;
+  async findOne(id: string) {
+    return await this.reviewRepository.findOne({
+      where: { id },
+      relations: ['application', 'applicationLocation', 'user', 'details'],
+    });
   }
 
   update(id: number, updateReviewDto: UpdateReviewDto) {

@@ -11,6 +11,7 @@ import { RegistrationApplicationDetails } from '../registration-application/enti
 import { Organization } from '../organization/entities/organization.entity';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserRole } from '../rbac/entities/user-role.entity';
+import { Permissions } from '../rbac/constants/permissions.constants';
 
 @Injectable()
 export class UsersService {
@@ -330,5 +331,32 @@ export class UsersService {
     });
 
     return updatedUser || savedUser;
+  }
+
+  async findByPermission(permission: Permissions): Promise<User[]> {
+    return await this.userRepository.find({
+      where: {
+        userRoles: {
+          role: {
+            rolePermissions: {
+              permission: {
+                name: permission,
+              },
+            },
+          },
+        },
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        organization: {
+          id: true,
+          name: true,
+        },
+      },
+      relations: ['userRoles', 'userRoles.role', 'userRoles.role.rolePermissions', 'userRoles.role.rolePermissions.permission'],
+    });
   }
 }
