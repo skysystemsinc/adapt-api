@@ -64,5 +64,17 @@ export class UploadFileResponseDto {
     example: 'application/pdf',
   })
   mimeType: string;
+
+  @ApiProperty({
+    description: 'IV',
+    example: 'd1ac02a6-a483-4a80-8a62-1f2de08dfaca',
+  })
+  iv: string;
+
+  @ApiProperty({
+    description: 'Auth tag',
+    example: 'd1ac02a6-a483-4a80-8a62-1f2de08dfaca',
+  })
+  authTag: string;
 }
 

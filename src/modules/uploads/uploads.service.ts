@@ -13,7 +13,9 @@ import { fileTypeFromBuffer } from 'file-type';
 
 import { Form } from '../forms/entities/form.entity';
 import { FormField } from '../forms/entities/form-field.entity';
+import { FileUpload } from './entities/file-upload.entity';
 import type { UploadFileResponseDto } from './dto/upload-file.dto';
+import { encryptBuffer, decryptBuffer } from 'src/common/utils/helper.utils';
 
 /**
  * MIME type mappings for file extensions
@@ -51,6 +53,8 @@ export class UploadsService {
     private readonly formRepository: Repository<Form>,
     @InjectRepository(FormField)
     private readonly formFieldRepository: Repository<FormField>,
+    @InjectRepository(FileUpload)
+    private readonly fileUploadRepository: Repository<FileUpload>,
   ) {
     // Ensure upload directory exists
     this.ensureUploadDirectory();
@@ -135,21 +139,37 @@ export class UploadsService {
     const filePath = path.join(this.uploadDir, sanitizedFilename);
     const fileUrl = `/uploads/${sanitizedFilename}`;
 
-    // 7. Save file to disk
-    await fs.writeFile(filePath, file.buffer);
+    const { encrypted, iv, authTag } = encryptBuffer(file.buffer);
 
-    // 8. Log upload
+    // 7. Save file to disk
+    // await fs.writeFile(filePath, file.buffer);
+    await fs.writeFile(filePath, encrypted);
+
+    // 8. Save encryption metadata to database
+    const fileUpload = this.fileUploadRepository.create({
+      filePath: fileUrl, // e.g., "/uploads/uuid.pdf"
+      iv,
+      authTag,
+      originalName: file.originalname,
+      mimeType: detectedMimeType,
+      size: file.size,
+    });
+    await this.fileUploadRepository.save(fileUpload);
+
+    // 9. Log upload
     this.logger.log(
       `✅ File uploaded successfully: ${sanitizedFilename} (${(file.size / 1024).toFixed(2)}KB) by user=${userId || 'anonymous'}`,
     );
 
-    // 9. Return file metadata
+    // 10. Return file metadata
     return {
       url: fileUrl,
       path: filePath,
       originalName: file.originalname,
       size: file.size,
       mimeType: detectedMimeType,
+      iv,
+      authTag,
     };
   }
 
@@ -182,23 +202,77 @@ export class UploadsService {
 
   /**
    * Get file from disk for serving
+   * Supports subdirectories (e.g., 'assessment-documents/filename.jpeg')
+   * Automatically decrypts files if encryption metadata exists in database
    */
-  async getFile(filename: string): Promise<{ buffer: Buffer; mimeType: string }> {
-    const filePath = path.join(this.uploadDir, filename);
+  async getFile(filePath: string): Promise<{ buffer: Buffer; mimeType: string; filename: string }> {
+    // Normalize the path to prevent directory traversal
+    // Remove any leading slashes and normalize
+    const normalizedPath = filePath.startsWith('/') ? filePath.slice(1) : filePath;
+    
+    // Join with uploadDir - path.join will handle the subdirectory structure
+    const fullPath = path.join(this.uploadDir, normalizedPath);
+    
+    // Security check: ensure the resolved path is still within uploadDir
+    const resolvedPath = path.resolve(fullPath);
+    const resolvedUploadDir = path.resolve(this.uploadDir);
+    
+    if (!resolvedPath.startsWith(resolvedUploadDir)) {
+      throw new BadRequestException('Invalid file path - directory traversal detected');
+    }
 
     try {
       // Check if file exists
-      await fs.access(filePath);
+      await fs.access(resolvedPath);
 
-      // Read file
-      const buffer = await fs.readFile(filePath);
+      // Read encrypted file from disk
+      const encryptedBuffer = await fs.readFile(resolvedPath);
 
-      // Detect MIME type
-      const mimeType = await this.detectMimeType(buffer);
+      // Check if this file has encryption metadata in database
+      // The filePath parameter is just the filename (e.g., "uuid.pdf")
+      // But we store it in DB as "/uploads/uuid.pdf", so construct the full path
+      const lookupPath = filePath.startsWith('/uploads/') 
+        ? filePath 
+        : `/uploads/${filePath}`;
+      
+      this.logger.log(`🔍 Looking up file metadata for path: ${lookupPath}`);
+      const fileUpload = await this.fileUploadRepository.findOne({
+        where: { filePath: lookupPath },
+      });
+      
+      if (fileUpload) {
+        this.logger.log(`✅ Found file metadata for ${lookupPath}`);
+      } else {
+        this.logger.warn(`⚠️ No file metadata found for ${lookupPath} - assuming unencrypted`);
+      }
 
-      return { buffer, mimeType };
+      let buffer: Buffer;
+      let mimeType: string;
+      let filename: string;
+
+      if (fileUpload && fileUpload.iv && fileUpload.authTag) {
+        // File has encryption metadata - decrypt it
+        try {
+          buffer = decryptBuffer(encryptedBuffer, fileUpload.iv, fileUpload.authTag);
+          mimeType = fileUpload.mimeType || (await this.detectMimeType(buffer));
+          filename = fileUpload.originalName || path.basename(normalizedPath);
+        } catch (error) {
+          this.logger.error(`Failed to decrypt file ${filePath}: ${error.message}`);
+          throw new BadRequestException(`Failed to decrypt file: ${error.message}`);
+        }
+      } else {
+        // No encryption metadata - assume file is not encrypted (backward compatibility)
+        buffer = encryptedBuffer;
+        mimeType = await this.detectMimeType(buffer);
+        filename = path.basename(normalizedPath);
+      }
+
+      return { buffer, mimeType, filename };
     } catch (error) {
-      throw new NotFoundException(`File '${filename}' not found`);
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new NotFoundException(`File '${filePath}' not found`);
     }
   }
 

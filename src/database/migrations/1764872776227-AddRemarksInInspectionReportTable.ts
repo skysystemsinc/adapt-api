@@ -14,6 +14,6 @@ export class AddRemarksInInspectionReportTable1764872776227 implements Migration
         await queryRunner.query(`ALTER TABLE "inspection_reports" DROP CONSTRAINT "FK_7565014f876844c63be69fd701e"`);
         await queryRunner.query(`ALTER TABLE "inspection_reports" DROP COLUMN "approvedAt"`);
         await queryRunner.query(`ALTER TABLE "inspection_reports" DROP COLUMN "approvedBy"`);
-        await queryRunner.query(`ALTER TABLE "inspection_reports" DROP COLUMN "remarks"`);}
-
+        await queryRunner.query(`ALTER TABLE "inspection_reports" DROP COLUMN "remarks"`);
+    }
 }

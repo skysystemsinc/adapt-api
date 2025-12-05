@@ -11,6 +11,7 @@ import {
   HttpStatus,
   Response,
   BadRequestException,
+  Req,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -22,6 +23,7 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 import type { Response as ExpressResponse } from 'express';
+import * as path from 'path';
 
 import { UploadsService } from './uploads.service';
 import { UploadFileDto, UploadFileResponseDto } from './dto/upload-file.dto';
@@ -92,25 +94,41 @@ export class UploadsController {
     return this.uploadsService.uploadFile(formId, fieldId, file, userId);
   }
 
-  @Get(':filename')
+  @Get('*')
   @ApiOperation({ summary: 'Download/view an uploaded file' })
-  @ApiParam({ name: 'filename', description: 'File name (UUID + extension)' })
   @ApiResponse({ status: 200, description: 'File content' })
   @ApiResponse({ status: 404, description: 'File not found' })
   async downloadFile(
-    @Param('filename') filename: string,
+    @Req() req: any,
     @Response() res: ExpressResponse,
   ): Promise<void> {
-    // Validate filename (prevent directory traversal)
-    if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
-      throw new BadRequestException('Invalid filename');
+    // Extract the path from the request URL
+    // The URL will be like /uploads/assessment-documents/filename.jpeg
+    // We need to extract everything after /uploads/
+    const fullUrl = req.url;
+    const uploadsPrefix = '/uploads/';
+    
+    if (!fullUrl.startsWith(uploadsPrefix)) {
+      throw new BadRequestException('Invalid file path');
     }
 
-    const { buffer, mimeType } = await this.uploadsService.getFile(filename);
+    // Get the path after /uploads/
+    const filePath = fullUrl.slice(uploadsPrefix.length);
+
+    // Validate filePath (prevent directory traversal)
+    if (!filePath || filePath.includes('..') || filePath.includes('\\')) {
+      throw new BadRequestException('Invalid file path');
+    }
+
+    console.log('📂 File path:', filePath);
+    const { buffer, mimeType, filename } = await this.uploadsService.getFile(filePath);
+
+    // Extract just the filename for Content-Disposition header
+    const displayFilename = path.basename(filePath);
 
     // Set security headers
     res.setHeader('Content-Type', mimeType);
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Disposition', `inline; filename="${displayFilename}"`);
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Content-Security-Policy', "default-src 'none'");
     res.setHeader('X-Frame-Options', 'DENY');

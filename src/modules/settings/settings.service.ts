@@ -1,16 +1,43 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import * as fs from 'fs/promises';
+import * as path from 'path';
+import { v4 as uuidv4 } from 'uuid';
+import { fileTypeFromBuffer } from 'file-type';
 import { Setting } from './entities/setting.entity';
 import { CreateSettingDto } from './dto/create-setting.dto';
 import { UpdateSettingDto } from './dto/update-setting.dto';
 
+/**
+ * MIME type mappings for file extensions
+ */
+const FILE_MIME_TYPE_MAP: Record<string, string[]> = {
+  '.pdf': ['application/pdf'],
+  '.doc': ['application/msword'],
+  '.docx': [
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  ],
+  '.xlsx': [
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ],
+};
+
+const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx', '.xlsx'];
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const SETTINGS_UPLOAD_DIR = 'uploads/settings';
+
 @Injectable()
 export class SettingsService {
+  private readonly logger = new Logger(SettingsService.name);
+
   constructor(
     @InjectRepository(Setting)
     private settingsRepository: Repository<Setting>,
-  ) {}
+  ) {
+    // Ensure upload directory exists
+    this.ensureUploadDirectory();
+  }
 
   async create(createDto: CreateSettingDto): Promise<Setting> {
     // Check if setting with this key already exists
@@ -88,6 +115,167 @@ export class SettingsService {
   async removeByKey(key: string): Promise<void> {
     const setting = await this.findByKey(key);
     await this.settingsRepository.remove(setting);
+  }
+
+  /**
+   * Upload file for a setting
+   * Validates file type and size, saves to uploads/settings/, and stores path in settings
+   */
+  async uploadSettingFile(key: string, file: any): Promise<Setting> {
+    if (!file) {
+      throw new BadRequestException('No file provided');
+    }
+
+    // Validate file size
+    if (file.size > MAX_FILE_SIZE) {
+      throw new BadRequestException(
+        `File size ${(file.size / 1024 / 1024).toFixed(2)}MB exceeds maximum allowed size of ${(MAX_FILE_SIZE / 1024 / 1024).toFixed(0)}MB`,
+      );
+    }
+
+    // Validate file extension
+    const fileExtension = path.extname(file.originalname).toLowerCase();
+    if (!ALLOWED_EXTENSIONS.includes(fileExtension)) {
+      throw new BadRequestException(
+        `File type '${fileExtension}' is not allowed. Allowed types: ${ALLOWED_EXTENSIONS.join(', ')}`,
+      );
+    }
+
+    // Validate MIME type
+    const detectedMimeType = await this.detectMimeType(file.buffer);
+    const expectedMimeTypes = FILE_MIME_TYPE_MAP[fileExtension] || [];
+    if (
+      expectedMimeTypes.length > 0 &&
+      !expectedMimeTypes.includes(detectedMimeType)
+    ) {
+      throw new BadRequestException(
+        `File MIME type '${detectedMimeType}' does not match extension '${fileExtension}'. Possible file type mismatch or malicious file.`,
+      );
+    }
+
+    // Check for existing setting and delete old file if exists
+    try {
+      const existingSetting = await this.settingsRepository.findOne({
+        where: { key },
+      });
+
+      if (existingSetting && existingSetting.value) {
+        // Check if old value is a file path (starts with uploads/)
+        if (existingSetting.value.startsWith('uploads/')) {
+          try {
+            await fs.unlink(existingSetting.value);
+            this.logger.log(`🗑️  Deleted old file: ${existingSetting.value}`);
+          } catch (error) {
+            this.logger.warn(`Failed to delete old file: ${existingSetting.value}`, error);
+            // Continue even if old file deletion fails
+          }
+        }
+      }
+    } catch (error) {
+      // If setting doesn't exist, that's fine - we'll create it
+      this.logger.log(`No existing setting found for key: ${key}`);
+    }
+
+    // Generate unique filename: {key}-{uuid}.{extension}
+    const sanitizedFilename = `${key}-${uuidv4()}${fileExtension}`;
+    const filePath = path.join(SETTINGS_UPLOAD_DIR, sanitizedFilename);
+
+    // Ensure directory exists
+    await this.ensureUploadDirectory();
+
+    // Save file to disk
+    await fs.writeFile(filePath, file.buffer);
+
+    this.logger.log(
+      `✅ File uploaded for setting '${key}': ${sanitizedFilename} (${(file.size / 1024).toFixed(2)}KB)`,
+    );
+
+    // Update or create setting
+    let setting = await this.settingsRepository.findOne({
+      where: { key },
+    });
+
+    if (setting) {
+      setting.value = filePath;
+      return this.settingsRepository.save(setting);
+    } else {
+      // Create new setting
+      setting = this.settingsRepository.create({
+        key,
+        value: filePath,
+      });
+      return this.settingsRepository.save(setting);
+    }
+  }
+
+  /**
+   * Get file path for a setting
+   */
+  async getSettingFilePath(key: string): Promise<string | null> {
+    try {
+      const setting = await this.settingsRepository.findOne({
+        where: { key },
+      });
+
+      if (!setting || !setting.value) {
+        return null;
+      }
+
+      // Check if value is a file path (handle both forward and backslashes)
+      const normalizedValue = setting.value.replace(/\\/g, '/');
+      if (!normalizedValue.startsWith('uploads/')) {
+        return null; // Not a file, it's a regular value
+      }
+
+      // Normalize path for file system access (use path.join for cross-platform compatibility)
+      const filePath = path.normalize(setting.value);
+
+      // Verify file exists
+      try {
+        await fs.access(filePath);
+        return filePath;
+      } catch {
+        this.logger.warn(`File not found at path: ${filePath}`);
+        return null;
+      }
+    } catch (error) {
+      this.logger.error(`Error retrieving file path for key '${key}'`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Check if a setting value is a file path
+   */
+  isFileSetting(value: string): boolean {
+    // Handle both forward and backslashes (Windows vs Unix)
+    const normalized = value.replace(/\\/g, '/');
+    return normalized.startsWith('uploads/');
+  }
+
+  /**
+   * Detect actual MIME type from file buffer
+   */
+  private async detectMimeType(buffer: Buffer): Promise<string> {
+    try {
+      const type = await fileTypeFromBuffer(buffer);
+      return type?.mime || 'application/octet-stream';
+    } catch (error) {
+      this.logger.warn('Could not detect MIME type, using default');
+      return 'application/octet-stream';
+    }
+  }
+
+  /**
+   * Ensure upload directory exists
+   */
+  private async ensureUploadDirectory(): Promise<void> {
+    try {
+      await fs.access(SETTINGS_UPLOAD_DIR);
+    } catch {
+      await fs.mkdir(SETTINGS_UPLOAD_DIR, { recursive: true });
+      this.logger.log(`📁 Created upload directory: ${SETTINGS_UPLOAD_DIR}`);
+    }
   }
 }
 

@@ -32,6 +32,21 @@ export class AdminRegistrationDocument {
     @Column({ type: 'text' })
     document: string; // File path
 
+    @Column({ type: 'text', nullable: true })
+    iv?: string;
+
+    @Column({ type: 'text', nullable: true })
+    authTag?: string;
+
+    @Column({ type: 'text', nullable: true })
+    originalName?: string;
+
+    @Column({ type: 'text', nullable: true })
+    mimeType?: string;
+
+    @Column({ type: 'int', nullable: true })
+    size?: number;
+
     @CreateDateColumn()
     createdAt: Date;
 
