@@ -720,6 +720,7 @@ export class RBACSeeder {
         Permissions.VIEW_WAREHOUSE_APPLICATION_ASSIGNMENT,
         Permissions.WAREHOUSE_OPERATOR_REVIEW,
         Permissions.VIEW_KYC,
+        Permissions.REVIEW_ASSESSMENT
       ];
 
       for (const permissionName of hodPermissions) {
@@ -756,6 +757,7 @@ export class RBACSeeder {
         Permissions.WAREHOUSE_OPERATOR_DESCISION,
         Permissions.VIEW_WAREHOUSE_APPLICATION_ASSIGNMENT,
         Permissions.VIEW_KYC,
+        Permissions.REVIEW_FINAL_APPLICATION
       ];
 
       for (const permissionName of ceoCommitteePermissions) {
