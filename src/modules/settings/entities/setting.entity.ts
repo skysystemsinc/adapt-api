@@ -23,6 +23,12 @@ export class Setting {
   @Column({ type: 'text', nullable: true })
   authTag?: string;
 
+  @Column({ type: 'text', nullable: true })
+  originalName?: string;
+
+  @Column({ type: 'text', nullable: true })
+  mimeType?: string;
+
   @CreateDateColumn()
   createdAt: Date;
 

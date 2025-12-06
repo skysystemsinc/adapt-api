@@ -154,6 +154,10 @@ export class SettingsService {
       );
     }
 
+    // Store original filename and MIME type for proper download
+    const originalName = file.originalname;
+    const mimeType = detectedMimeType || file.mimetype;
+
     // Check for existing setting and delete old file if exists
     try {
       const existingSetting = await this.settingsRepository.findOne({
@@ -203,6 +207,8 @@ export class SettingsService {
       setting.value = filePath;
       setting.iv = iv;
       setting.authTag = authTag;
+      setting.originalName = originalName;
+      setting.mimeType = mimeType;
       return this.settingsRepository.save(setting);
     } else {
       // Create new setting
@@ -211,6 +217,8 @@ export class SettingsService {
         value: filePath,
         iv,
         authTag,
+        originalName,
+        mimeType,
       });
       return this.settingsRepository.save(setting);
     }
@@ -287,8 +295,10 @@ export class SettingsService {
     let mimeType: string;
     let filename: string;
 
-    // Get file extension from the stored file path
-    const fileExtension = path.extname(filePath).toLowerCase();
+    // Extract filename from the path stored in value column (same as registration application)
+    // value contains path like "uploads/settings/self-assessment-uuid.pdf"
+    const filenameFromPath = setting.value.split('/').pop() || setting.value;
+    const fileExtension = path.extname(filenameFromPath).toLowerCase();
     
     if (setting.iv && setting.authTag) {
       // File has encryption metadata - decrypt it
@@ -300,11 +310,6 @@ export class SettingsService {
         if (!buffer || buffer.length === 0) {
           throw new Error('Decryption resulted in empty buffer');
         }
-        
-        // Detect MIME type with extension fallback
-        mimeType = await this.detectMimeType(buffer, fileExtension);
-        filename = `${key}${fileExtension}`;
-        this.logger.log(`✅ Decrypted file for setting '${key}': ${filename} (${buffer.length} bytes, mime: ${mimeType}, ext: ${fileExtension})`);
       } catch (error) {
         this.logger.error(`❌ Failed to decrypt file for setting '${key}': ${error.message}`, error.stack);
         throw new BadRequestException(`Failed to decrypt file: ${error.message}`);
@@ -312,11 +317,15 @@ export class SettingsService {
     } else {
       // No encryption metadata - assume file is not encrypted (backward compatibility)
       buffer = encryptedBuffer;
-      // Detect MIME type with extension fallback
-      mimeType = await this.detectMimeType(buffer, fileExtension);
-      filename = `${key}${fileExtension}`;
-      this.logger.log(`⚠️  File for setting '${key}' is not encrypted (backward compatibility) - ${buffer.length} bytes, mime: ${mimeType}, ext: ${fileExtension}`);
     }
+
+    // Use stored MIME type from database or detect from buffer/extension (same as registration application)
+    mimeType = setting.mimeType || await this.detectMimeType(buffer, fileExtension);
+    
+    // Use stored original filename from database or extract from path stored in value column
+    filename = setting.originalName || filenameFromPath;
+    
+    this.logger.log(`✅ File for setting '${key}': ${filename} (${buffer.length} bytes, mime: ${mimeType})`);
 
     // Final validation
     if (!buffer || buffer.length === 0) {
