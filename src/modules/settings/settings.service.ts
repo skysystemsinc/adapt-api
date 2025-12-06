@@ -157,6 +157,8 @@ export class SettingsService {
     // Store original filename and MIME type for proper download
     const originalName = file.originalname;
     const mimeType = detectedMimeType || file.mimetype;
+    
+    this.logger.log(`📤 Storing file metadata for setting '${key}': originalName=${originalName}, mimeType=${mimeType}, extension=${fileExtension}`);
 
     // Check for existing setting and delete old file if exists
     try {
@@ -209,7 +211,9 @@ export class SettingsService {
       setting.authTag = authTag;
       setting.originalName = originalName;
       setting.mimeType = mimeType;
-      return this.settingsRepository.save(setting);
+      const saved = await this.settingsRepository.save(setting);
+      this.logger.log(`💾 Updated setting '${key}' with originalName=${saved.originalName}, mimeType=${saved.mimeType}`);
+      return saved;
     } else {
       // Create new setting
       setting = this.settingsRepository.create({
@@ -220,7 +224,9 @@ export class SettingsService {
         originalName,
         mimeType,
       });
-      return this.settingsRepository.save(setting);
+      const saved = await this.settingsRepository.save(setting);
+      this.logger.log(`💾 Created setting '${key}' with originalName=${saved.originalName}, mimeType=${saved.mimeType}`);
+      return saved;
     }
   }
 
@@ -295,7 +301,7 @@ export class SettingsService {
     let mimeType: string;
     let filename: string;
 
-    // Extract filename from the path stored in value column (same as registration application)
+    // Extract filename from the path stored in value column (for fallback)
     // value contains path like "uploads/settings/self-assessment-uuid.pdf"
     const filenameFromPath = setting.value.split('/').pop() || setting.value;
     const fileExtension = path.extname(filenameFromPath).toLowerCase();
@@ -319,13 +325,28 @@ export class SettingsService {
       buffer = encryptedBuffer;
     }
 
-    // Use stored MIME type from database or detect from buffer/extension (same as registration application)
-    mimeType = setting.mimeType || await this.detectMimeType(buffer, fileExtension);
+    // Use stored MIME type from database first, then detect from buffer/extension (same as registration application)
+    if (setting.mimeType) {
+      mimeType = setting.mimeType;
+      this.logger.log(`📄 Using stored MIME type from database: ${mimeType} for setting '${key}'`);
+    } else {
+      mimeType = await this.detectMimeType(buffer, fileExtension);
+      this.logger.warn(`⚠️  No stored MIME type found for setting '${key}', detected: ${mimeType} (extension: ${fileExtension})`);
+    }
     
-    // Use stored original filename from database or extract from path stored in value column
-    filename = setting.originalName || filenameFromPath;
+    // Use stored original filename from database first, then extract from path stored in value column
+    if (setting.originalName) {
+      filename = setting.originalName;
+      this.logger.log(`📝 Using stored original filename from database: ${filename} for setting '${key}'`);
+    } else {
+      filename = filenameFromPath;
+      this.logger.warn(`⚠️  No stored original filename found for setting '${key}', using filename from path: ${filename}`);
+    }
     
     this.logger.log(`✅ File for setting '${key}': ${filename} (${buffer.length} bytes, mime: ${mimeType})`);
+    
+    // Debug: Log what's in the database
+    this.logger.debug(`🔍 Database values for setting '${key}': originalName=${setting.originalName}, mimeType=${setting.mimeType}`);
 
     // Final validation
     if (!buffer || buffer.length === 0) {

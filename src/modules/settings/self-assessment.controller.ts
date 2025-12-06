@@ -43,6 +43,9 @@ export class SettingsDownloadController {
         throw new NotFoundException(`File for setting '${key}' is empty`);
       }
 
+      // Log what we're sending
+      this.logger.log(`📤 Downloading file for setting '${key}': filename=${filename}, mimeType=${mimeType}, size=${buffer.length} bytes`);
+
       // Encode filename for Content-Disposition header (handles special characters)
       const encodedFilename = encodeURIComponent(filename);
 
@@ -54,7 +57,7 @@ export class SettingsDownloadController {
 
       // Send decrypted buffer
       res.send(buffer);
-      this.logger.log(`✅ File downloaded and decrypted for setting '${key}': ${filename} (${buffer.length} bytes)`);
+      this.logger.log(`✅ File downloaded and decrypted for setting '${key}': ${filename} (${buffer.length} bytes, Content-Type: ${mimeType})`);
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
