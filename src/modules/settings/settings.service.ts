@@ -143,7 +143,7 @@ export class SettingsService {
     }
 
     // Validate MIME type
-    const detectedMimeType = await this.detectMimeType(file.buffer);
+    const detectedMimeType = await this.detectMimeType(file.buffer, fileExtension);
     const expectedMimeTypes = FILE_MIME_TYPE_MAP[fileExtension] || [];
     if (
       expectedMimeTypes.length > 0 &&
@@ -287,6 +287,9 @@ export class SettingsService {
     let mimeType: string;
     let filename: string;
 
+    // Get file extension from the stored file path
+    const fileExtension = path.extname(filePath).toLowerCase();
+    
     if (setting.iv && setting.authTag) {
       // File has encryption metadata - decrypt it
       try {
@@ -298,9 +301,10 @@ export class SettingsService {
           throw new Error('Decryption resulted in empty buffer');
         }
         
-        mimeType = await this.detectMimeType(buffer);
-        filename = `${key}${path.extname(filePath)}`;
-        this.logger.log(`✅ Decrypted file for setting '${key}': ${filename} (${buffer.length} bytes, mime: ${mimeType})`);
+        // Detect MIME type with extension fallback
+        mimeType = await this.detectMimeType(buffer, fileExtension);
+        filename = `${key}${fileExtension}`;
+        this.logger.log(`✅ Decrypted file for setting '${key}': ${filename} (${buffer.length} bytes, mime: ${mimeType}, ext: ${fileExtension})`);
       } catch (error) {
         this.logger.error(`❌ Failed to decrypt file for setting '${key}': ${error.message}`, error.stack);
         throw new BadRequestException(`Failed to decrypt file: ${error.message}`);
@@ -308,9 +312,10 @@ export class SettingsService {
     } else {
       // No encryption metadata - assume file is not encrypted (backward compatibility)
       buffer = encryptedBuffer;
-      mimeType = await this.detectMimeType(buffer);
-      filename = `${key}${path.extname(filePath)}`;
-      this.logger.log(`⚠️  File for setting '${key}' is not encrypted (backward compatibility) - ${buffer.length} bytes, mime: ${mimeType}`);
+      // Detect MIME type with extension fallback
+      mimeType = await this.detectMimeType(buffer, fileExtension);
+      filename = `${key}${fileExtension}`;
+      this.logger.log(`⚠️  File for setting '${key}' is not encrypted (backward compatibility) - ${buffer.length} bytes, mime: ${mimeType}, ext: ${fileExtension}`);
     }
 
     // Final validation
@@ -331,16 +336,41 @@ export class SettingsService {
   }
 
   /**
-   * Detect actual MIME type from file buffer
+   * Get MIME type from file extension
    */
-  private async detectMimeType(buffer: Buffer): Promise<string> {
+  private getMimeTypeFromExtension(extension: string): string {
+    const ext = extension.toLowerCase();
+    const mimeMap: Record<string, string> = {
+      '.pdf': 'application/pdf',
+      '.doc': 'application/msword',
+      '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    };
+    return mimeMap[ext] || 'application/octet-stream';
+  }
+
+  /**
+   * Detect actual MIME type from file buffer
+   * Falls back to extension-based detection if buffer detection fails
+   */
+  private async detectMimeType(buffer: Buffer, fileExtension?: string): Promise<string> {
     try {
       const type = await fileTypeFromBuffer(buffer);
-      return type?.mime || 'application/octet-stream';
+      if (type?.mime) {
+        return type.mime;
+      }
     } catch (error) {
-      this.logger.warn('Could not detect MIME type, using default');
-      return 'application/octet-stream';
+      this.logger.warn('Could not detect MIME type from buffer');
     }
+
+    // Fallback to extension-based detection
+    if (fileExtension) {
+      const mimeFromExt = this.getMimeTypeFromExtension(fileExtension);
+      this.logger.log(`Using extension-based MIME type: ${mimeFromExt} for extension: ${fileExtension}`);
+      return mimeFromExt;
+    }
+
+    return 'application/octet-stream';
   }
 
   /**
