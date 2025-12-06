@@ -281,6 +281,7 @@ export class SettingsService {
 
     // Read encrypted file from disk
     const encryptedBuffer = await fs.readFile(filePath);
+    this.logger.log(`📖 Read encrypted file for setting '${key}': ${encryptedBuffer.length} bytes`);
 
     let buffer: Buffer;
     let mimeType: string;
@@ -289,12 +290,19 @@ export class SettingsService {
     if (setting.iv && setting.authTag) {
       // File has encryption metadata - decrypt it
       try {
+        this.logger.log(`🔓 Attempting to decrypt file for setting '${key}' (iv: ${setting.iv.substring(0, 8)}..., authTag: ${setting.authTag.substring(0, 8)}...)`);
         buffer = decryptBuffer(encryptedBuffer, setting.iv, setting.authTag);
+        
+        // Validate decrypted buffer
+        if (!buffer || buffer.length === 0) {
+          throw new Error('Decryption resulted in empty buffer');
+        }
+        
         mimeType = await this.detectMimeType(buffer);
         filename = `${key}${path.extname(filePath)}`;
-        this.logger.log(`✅ Decrypted file for setting '${key}'`);
+        this.logger.log(`✅ Decrypted file for setting '${key}': ${filename} (${buffer.length} bytes, mime: ${mimeType})`);
       } catch (error) {
-        this.logger.error(`Failed to decrypt file for setting '${key}': ${error.message}`);
+        this.logger.error(`❌ Failed to decrypt file for setting '${key}': ${error.message}`, error.stack);
         throw new BadRequestException(`Failed to decrypt file: ${error.message}`);
       }
     } else {
@@ -302,7 +310,12 @@ export class SettingsService {
       buffer = encryptedBuffer;
       mimeType = await this.detectMimeType(buffer);
       filename = `${key}${path.extname(filePath)}`;
-      this.logger.log(`⚠️  File for setting '${key}' is not encrypted (backward compatibility)`);
+      this.logger.log(`⚠️  File for setting '${key}' is not encrypted (backward compatibility) - ${buffer.length} bytes, mime: ${mimeType}`);
+    }
+
+    // Final validation
+    if (!buffer || buffer.length === 0) {
+      throw new BadRequestException(`File buffer is empty for setting '${key}'`);
     }
 
     return { buffer, mimeType, filename };

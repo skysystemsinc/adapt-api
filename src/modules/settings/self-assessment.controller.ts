@@ -37,13 +37,24 @@ export class SettingsDownloadController {
       // Get decrypted file buffer
       const { buffer, mimeType, filename } = await this.settingsService.getSettingFileBuffer(key);
 
+      // Validate buffer
+      if (!buffer || buffer.length === 0) {
+        this.logger.error(`Empty buffer for setting '${key}'`);
+        throw new NotFoundException(`File for setting '${key}' is empty`);
+      }
+
+      // Encode filename for Content-Disposition header (handles special characters)
+      const encodedFilename = encodeURIComponent(filename);
+
       // Set headers for file download
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       res.setHeader('Content-Type', mimeType);
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodedFilename}`);
+      res.setHeader('Content-Length', buffer.length.toString());
+      res.setHeader('X-Content-Type-Options', 'nosniff');
 
       // Send decrypted buffer
       res.send(buffer);
-      this.logger.log(`✅ File downloaded and decrypted for setting '${key}': ${filename}`);
+      this.logger.log(`✅ File downloaded and decrypted for setting '${key}': ${filename} (${buffer.length} bytes)`);
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
