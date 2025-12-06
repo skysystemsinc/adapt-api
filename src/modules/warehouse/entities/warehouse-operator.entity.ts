@@ -51,6 +51,18 @@ export class WarehouseOperator {
   @Column({ type: 'uuid', nullable: true })
   approvedBy: string;
 
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  approvedByFullName: string;
+  
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  approvedByDesignation: string;
+
+  @Column({ type: 'date', nullable: true })
+  dateOfAssessment: Date;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  accreditationGrade: string;
+
   @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'approvedBy' })
   approvedByUser: User;

@@ -12,6 +12,7 @@ import { hasPermission } from 'src/common/utils/helper.utils';
 import { User } from '../../users/entities/user.entity';
 import { WarehouseOperatorApplicationStatus } from '../entities/warehouse-operator-application-request.entity';
 import { WarehouseOperatorApplicationRequest } from '../entities/warehouse-operator-application-request.entity';
+import { WarehouseOperator } from '../entities/warehouse-operator.entity';
 
 const REQUIRED_ASSESSMENT_TYPES: ReviewType[] = [
   ReviewType.HR,
@@ -35,9 +36,12 @@ export class ReviewService {
     private readonly usersService: UsersService,
     @InjectRepository(WarehouseOperatorApplicationRequest)
     private readonly warehouseOperatorApplicationRequestRepository: Repository<WarehouseOperatorApplicationRequest>,
+    @InjectRepository(WarehouseOperator)
+    private readonly warehouseOperatorRepository: Repository<WarehouseOperator>,
   ) { }
   async create(applicationId: string, assessmentId: string, createReviewDto: CreateReviewDto, userId: string) {
-    let decision: AssessmentDecision | undefined = undefined;
+    let decision: AssessmentDecision = AssessmentDecision.ACCEPTED;
+
     const user = await this.usersRepository.findOne({
       where: { id: userId },
       relations: {
@@ -107,7 +111,7 @@ export class ReviewService {
 
       for (const assessment of createReviewDto.assessments) {
         // If any assessment is rejected, the decision is rejected
-        if(assessment.decision == AssessmentDecision.REJECTED) decision = AssessmentDecision.REJECTED;
+        if (assessment.decision == AssessmentDecision.REJECTED) decision = AssessmentDecision.REJECTED;
 
         const existingAssessmentDetail = await assessmentDetailsRepository.findOne({
           where: {
@@ -146,41 +150,58 @@ export class ReviewService {
       if (createReviewDto.accreditationGrade) {
         review.accreditationGrade = createReviewDto.accreditationGrade;
       }
-      
+
       await reviewRepository.save(review);
 
-      // user with permission "REVIEW_FINAL_APPLICATION"
-      const ceoUser = await this.usersService.findByPermission(Permissions.REVIEW_FINAL_APPLICATION);
+      // If LogedIn User is not CEO
+      if (!hasPermission(user, Permissions.REVIEW_FINAL_APPLICATION)) {
+        // user with permission "REVIEW_FINAL_APPLICATION"
+        const ceoUser = await this.usersService.findByPermission(Permissions.REVIEW_FINAL_APPLICATION);
 
-      // Only create CEO review if a CEO user exists
-      if (ceoUser && ceoUser.length > 0 && ceoUser[0]?.id) {
-        const ceoReview = reviewRepository.create({
-          applicationId: review.applicationId,
-          applicationLocationId: review.applicationLocationId,
-          type: 'CEO',
-          isSubmitted: true,
-          userId: ceoUser[0].id,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-        await reviewRepository.save(ceoReview);
+        // Only create CEO review if a CEO user exists
+        if (ceoUser && ceoUser.length > 0 && ceoUser[0]?.id) {
+          const ceoReview = reviewRepository.create({
+            applicationId: review.applicationId,
+            applicationLocationId: review.applicationLocationId,
+            type: 'CEO',
+            isSubmitted: true,
+            userId: ceoUser[0].id,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+          await reviewRepository.save(ceoReview);
+        }
       }
 
       // If CEO has approved the application:
-      // 1- set the application status to "APPROVED"
+      // 1- update the application status
+      let application: WarehouseOperatorApplicationRequest | undefined | null;
       if (hasPermission(user, Permissions.REVIEW_FINAL_APPLICATION)) {
-        const application = await this.warehouseOperatorApplicationRequestRepository.findOne({
+        application = await this.warehouseOperatorApplicationRequestRepository.findOne({
           where: { id: applicationId },
         });
-        if (application) {
-          application.status = decision == AssessmentDecision.REJECTED ? WarehouseOperatorApplicationStatus.REJECTED : WarehouseOperatorApplicationStatus.APPROVED;
-          await this.warehouseOperatorApplicationRequestRepository.save(application);
+
+        if(!application) {
+          throw new NotFoundException('Application not found');
         }
+
+        application.status = decision == AssessmentDecision.REJECTED ? WarehouseOperatorApplicationStatus.REJECTED : WarehouseOperatorApplicationStatus.APPROVED;
+        await this.warehouseOperatorApplicationRequestRepository.save(application);
 
         // TODO: send email to the user
 
-        if(decision == AssessmentDecision.ACCEPTED) {
-          // Send email to the applicant
+        if (decision == AssessmentDecision.ACCEPTED) {
+          const warehouseOperator = await this.warehouseOperatorRepository.create({
+            applicationId,
+            userId: application.userId,
+            approvedByFullName: review.fullName ?? undefined,
+            approvedByDesignation: review.designation ?? undefined,
+            dateOfAssessment: review.dateOfAssessment ?? undefined,
+            operatorCode: application.applicationId,
+            approvedBy: user.id,
+            accreditationGrade: review.accreditationGrade,
+          });
+          await this.warehouseOperatorRepository.save(warehouseOperator);
         }
 
       }
