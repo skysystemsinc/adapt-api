@@ -7,10 +7,12 @@ import { AssessmentDetailsEntity } from './entities/assessment_details.entity';
 import { UsersModule } from '../../users/users.module';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { WarehouseOperator } from '../entities/warehouse-operator.entity';
+import { WarehouseOperatorApplicationRequest } from '../entities/warehouse-operator-application-request.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([ReviewEntity, AssessmentDetailsEntity]),
+    TypeOrmModule.forFeature([ReviewEntity, AssessmentDetailsEntity, WarehouseOperator, WarehouseOperatorApplicationRequest]),
     UsersModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
