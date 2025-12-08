@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, NotFoundException, UnauthorizedExcepti
 import { CreateReviewDto, ReviewType } from './dto/create-review.dto';
 import { UpdateReviewDto } from './dto/update-review.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, IsNull, Not, Repository } from 'typeorm';
 import { ReviewEntity } from './entities/review.entity';
 import { AssessmentDecision, AssessmentDetailsEntity } from './entities/assessment_details.entity';
 import { PaginationQueryDto } from '../../expert-assessment/assessment-sub-section/dto/pagination-query.dto';
@@ -59,6 +59,21 @@ export class ReviewService {
       throw new UnauthorizedException('Unauthorized');
     }
 
+    const reviewApplication = await this.reviewRepository.findOne({
+      where: 
+        [
+        {applicationId: applicationId},
+        {applicationLocationId: applicationId},
+      ],
+      select: {
+        id: true,
+        applicationId: true,
+        applicationLocationId: true,
+      },
+    });
+
+    const isLocationReview = reviewApplication?.applicationLocationId === applicationId;
+
     return await this.dataSource.transaction(async (manager) => {
       const reviewRepository = manager.getRepository(ReviewEntity);
       const assessmentDetailsRepository = manager.getRepository(AssessmentDetailsEntity);
@@ -66,7 +81,7 @@ export class ReviewService {
       const review = await reviewRepository.findOne({
         where: {
           id: assessmentId,
-          applicationId,
+          ...(isLocationReview ? { applicationLocationId: applicationId } : { applicationId }),
         },
       });
 
@@ -229,12 +244,13 @@ export class ReviewService {
       throw new UnauthorizedException('Unauthorized');
     }
 
-    const { page = 1, limit = 10 } = query;
+    const { page = 1, limit = 10 , type = 'operator' } = query;
     const skip = (page - 1) * limit;
     const [data, total] = await this.reviewRepository.findAndCount({
       where: {
         isSubmitted: true,
         type: hasPermission(user, Permissions.REVIEW_FINAL_APPLICATION) ? 'CEO' : 'HOD',
+        ...(type == 'location' ? { applicationLocationId: Not(IsNull()) } : { applicationLocationId: IsNull() }),
       },
       relations: ['application', 'applicationLocation', 'user', 'details'],
       order: {
@@ -256,7 +272,11 @@ export class ReviewService {
 
   async findOne(applicationId: string, assessmentId: string, userId: string) {
     const assessment = await this.reviewRepository.findOne({
-      where: { applicationId, type: 'HOD' },
+      where: 
+      [
+        { applicationId, type: 'HOD' },
+        { applicationLocationId: applicationId, type: 'HOD' },
+      ],
       relations: ['application', 'applicationLocation', 'user', 'details'],
     });
 

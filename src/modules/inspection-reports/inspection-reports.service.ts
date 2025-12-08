@@ -293,7 +293,10 @@ export class InspectionReportsService {
 
   async findByApplicationId(applicationId: string): Promise<InspectionReport[]> {
     const report = await this.inspectionReportRepository.find({
-      where: { warehouseOperatorApplicationId: applicationId },
+      where: [
+        { warehouseOperatorApplicationId: applicationId },
+        { warehouseLocationId: applicationId }
+      ],
       relations: ['createdByUser', 'assessmentSubmissions', 'assessmentSubmissions.documents'],
       select: {
         id: true,
