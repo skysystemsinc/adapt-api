@@ -348,10 +348,16 @@ export class InspectionReportsService {
 
     // conditional where statement
     const report = await this.inspectionReportRepository.findOne({
-      where: {
-        warehouseOperatorApplicationId: applicationId,
-        ...(assessmentId ? { id: assessmentId, createdBy: assignment?.assignedBy } : { createdBy: userId }),
-      },
+      where: [
+        {
+          warehouseOperatorApplicationId: applicationId,
+          ...(assessmentId ? { id: assessmentId, createdBy: assignment?.assignedBy } : { createdBy: userId }),
+        },
+        {
+          warehouseLocationId: applicationId,
+          ...(assessmentId ? { id: assessmentId, createdBy: assignment?.assignedBy } : { createdBy: userId }),
+        }
+      ],
       relations: ['assessmentSubmissions', 'assessmentSubmissions.documents'],
     });
 
