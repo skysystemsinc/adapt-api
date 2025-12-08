@@ -43,9 +43,24 @@ export class WarehouseLocationAdminService {
       }
     }
 
+    // Subquery to get the latest assignment ID for each location
+    // Using raw SQL for correlated subquery
+    const latestAssignmentSubquery = `(
+      SELECT a.id 
+      FROM assignment a 
+      WHERE a."applicationLocationId" = location.id 
+      ORDER BY a."createdAt" DESC 
+      LIMIT 1
+    )`;
+
     const queryBuilder = this.warehouseLocationRepository
       .createQueryBuilder('location')
       .leftJoin('location.user', 'user')
+      .leftJoin(
+        'assignment',
+        'assignment',
+        `assignment."applicationLocationId" = location.id AND assignment.id = ${latestAssignmentSubquery}`
+      )
       .leftJoin('location.facility', 'facility')
       .select([
         'location.id',
@@ -59,7 +74,10 @@ export class WarehouseLocationAdminService {
         'user.email',
         'facility.id',
         'facility.facilityName',
-      ]);
+      ])
+      .addSelect('assignment.level', 'assignmentLevel')
+      .addSelect('assignment.assessmentId', 'assignmentAssessmentId')
+      .addSelect('assignment.status', 'assignmentStatus');
 
     // Exclude DRAFT status applications
     queryBuilder.andWhere('location.status != :draftStatus', { draftStatus: WarehouseLocationStatus.DRAFT });
@@ -67,7 +85,6 @@ export class WarehouseLocationAdminService {
     // If user is HOD or Expert, filter by assignment
     if (user && (hasPermission(user, Permissions.IS_HOD) || hasPermission(user, Permissions.IS_EXPERT))) {
       queryBuilder
-        .innerJoin('assignment', 'assignment', 'assignment."applicationLocationId" = location.id')
         .andWhere('assignment."assignedTo" = :assignedToUserId', { assignedToUserId: userId });
     }
 
@@ -86,11 +103,26 @@ export class WarehouseLocationAdminService {
     queryBuilder.orderBy(`location.${sortBy}`, sortOrder);
     queryBuilder.addOrderBy('location.createdAt', 'ASC');
 
+    // Get total count before pagination
+    const total = await queryBuilder.getCount();
+
     // Pagination
     const skip = (page - 1) * limit;
     queryBuilder.skip(skip).take(limit);
 
-    const [data, total] = await queryBuilder.getManyAndCount();
+    // Use getRawAndEntities to get both entities and raw data (for aliased fields)
+    const { entities, raw } = await queryBuilder.getRawAndEntities();
+
+    // Map assignmentLevel from raw data to entities
+    const data = entities.map((entity, index) => {
+      const rawData = raw[index];
+      return {
+        ...entity,
+        assignmentLevel: rawData?.assignmentLevel || null,
+        assignmentStatus: rawData?.assignmentStatus || null,
+        assignmentAssessmentId: rawData?.assignmentAssessmentId || null,
+      };
+    });
 
     return {
       data,
