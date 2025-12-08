@@ -272,7 +272,11 @@ export class ReviewService {
 
   async findOne(applicationId: string, assessmentId: string, userId: string) {
     const assessment = await this.reviewRepository.findOne({
-      where: { applicationId, type: 'HOD' },
+      where: 
+      [
+        { applicationId, type: 'HOD' },
+        { applicationLocationId: applicationId, type: 'HOD' },
+      ],
       relations: ['application', 'applicationLocation', 'user', 'details'],
     });
 
