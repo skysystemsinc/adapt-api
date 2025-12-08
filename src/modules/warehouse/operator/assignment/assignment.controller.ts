@@ -24,6 +24,12 @@ export class AssignmentController {
     return await this.assignmentService.getAssignmentsByApplicationId(applicationId);
   }
 
+  @ApiOperation({ summary: 'Get all assignments for a warehouse location application' })
+  @Get('/location/:applicationLocationId/assignments')
+  async getAssignmentsByLocationId(@Param('applicationLocationId') applicationLocationId: string) {
+    return await this.assignmentService.getAssignmentsByLocationId(applicationLocationId);
+  }
+
   @ApiOperation({ summary: 'Assign an assignment to a user for warehouse operator application' })
   @ApiBody({ type: CreateAssignmentDto })
   @Post('/application/:applicationId')
