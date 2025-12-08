@@ -335,11 +335,18 @@ export class InspectionReportsService {
 
     if (isHod) {
       assignment = await this.dataSource.getRepository(Assignment).findOne({
-        where: {
-          applicationId: applicationId,
-          assignedTo: userId,
-          level: AssignmentLevel.EXPERT_TO_HOD
-        },
+        where: [
+          {
+            applicationId: applicationId,
+            assignedTo: userId,
+            level: AssignmentLevel.EXPERT_TO_HOD
+          },
+          {
+            applicationLocationId: applicationId,
+            assignedTo: userId,
+            level: AssignmentLevel.EXPERT_TO_HOD
+          }
+        ],
       });
       if (assignment) {
         assessmentId = assignment.assessmentId;
@@ -348,10 +355,16 @@ export class InspectionReportsService {
 
     // conditional where statement
     const report = await this.inspectionReportRepository.findOne({
-      where: {
-        warehouseOperatorApplicationId: applicationId,
-        ...(assessmentId ? { id: assessmentId, createdBy: assignment?.assignedBy } : { createdBy: userId }),
-      },
+      where: [
+        {
+          warehouseOperatorApplicationId: applicationId,
+          ...(assessmentId ? { id: assessmentId, createdBy: assignment?.assignedBy } : { createdBy: userId }),
+        },
+        {
+          warehouseLocationId: applicationId,
+          ...(assessmentId ? { id: assessmentId, createdBy: assignment?.assignedBy } : { createdBy: userId }),
+        }
+      ],
       relations: ['assessmentSubmissions', 'assessmentSubmissions.documents'],
     });
 
