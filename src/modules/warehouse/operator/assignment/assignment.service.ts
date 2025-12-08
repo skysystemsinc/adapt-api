@@ -323,4 +323,17 @@ export class AssignmentService {
     });
     return assignments;
   }
+
+  /**
+   * Get all assignments for a specific location application
+   * Returns list of assignments with assignedTo user IDs
+   */
+  async getAssignmentsByLocationId(applicationLocationId: string) {
+    const assignments = await this.dataSource.getRepository(Assignment).find({
+      where: { applicationLocationId: applicationLocationId },
+      select: ['id', 'assignedTo', 'assignedBy', 'level', 'status', 'createdAt'],
+      relations: ['assignedToUser'],
+    });
+    return assignments;
+  }
 }
