@@ -218,7 +218,7 @@ export class WarehouseService {
       }
     }
 
-    let warehouseOperatorApplication;
+    let warehouseOperatorApplication: WarehouseOperatorApplicationRequest | undefined;
     let attempts = 0;
     const maxAttempts = 5;
     
@@ -246,6 +246,10 @@ export class WarehouseService {
           throw error;
         }
       }
+    }
+
+    if (!warehouseOperatorApplication) {
+      throw new BadRequestException('Failed to create warehouse operator application. Please try again.');
     }
 
     const authorizedSignatories = createWarehouseDto.authorizedSignatories.map((authorizedSignatory: AuthorizedSignatoryDto) => {
