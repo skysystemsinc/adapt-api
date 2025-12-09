@@ -218,13 +218,35 @@ export class WarehouseService {
       }
     }
 
-    const newApplication = this.warehouseOperatorRepository.create({
-      applicationId: await this.generateApplicationId(),
-      userId,
-      status: WarehouseOperatorApplicationStatus.DRAFT
-    });
+    let warehouseOperatorApplication;
+    let attempts = 0;
+    const maxAttempts = 5;
+    
+    while (attempts < maxAttempts) {
+      try {
+        const newApplication = this.warehouseOperatorRepository.create({
+          applicationId: await this.generateApplicationId(),
+          userId,
+          status: WarehouseOperatorApplicationStatus.DRAFT
+        });
 
-    const warehouseOperatorApplication = await this.warehouseOperatorRepository.save(newApplication);
+        warehouseOperatorApplication = await this.warehouseOperatorRepository.save(newApplication);
+        break; // Success, exit loop
+      } catch (error: any) {
+        // Check if it's a unique constraint violation on applicationId
+        if (error?.code === '23505' && error?.constraint === 'UQ_b98b2292d2ddaa311612788ef7c') {
+          attempts++;
+          if (attempts >= maxAttempts) {
+            throw new BadRequestException('Failed to generate unique application ID. Please try again.');
+          }
+          // Wait a bit before retrying (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, 100 * attempts));
+        } else {
+          // Re-throw if it's a different error
+          throw error;
+        }
+      }
+    }
 
     const authorizedSignatories = createWarehouseDto.authorizedSignatories.map((authorizedSignatory: AuthorizedSignatoryDto) => {
       return this.authorizedSignatoryRepository.save({
@@ -3603,9 +3625,29 @@ export class WarehouseService {
   }
 
   async generateApplicationId() {
+    // Count existing application requests to generate next ID
     const count = await this.warehouseOperatorRepository.count();
-    const applicationId = `WHO-${String(count + 1).padStart(6, '0')}`;
-    return applicationId;
+    let attempt = 0;
+    const maxAttempts = 100;
+    
+    while (attempt < maxAttempts) {
+      const applicationId = `WHO-${String(count + attempt + 1).padStart(6, '0')}`;
+      
+      // Check if this ID already exists
+      const existing = await this.warehouseOperatorRepository.findOne({
+        where: { applicationId },
+      });
+      
+      if (!existing) {
+        return applicationId;
+      }
+      
+      attempt++;
+    }
+    
+    // Fallback: use timestamp if all attempts fail (shouldn't happen)
+    const timestamp = Date.now();
+    return `WHO-${timestamp.toString().slice(-6)}`;
   }
 
   async findOneWarehouseOperator(id: string, userId: string) {
