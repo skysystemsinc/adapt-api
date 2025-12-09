@@ -6,7 +6,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, In } from 'typeorm';
 import { plainToInstance } from 'class-transformer';
-import { RoleRequest, RoleRequestStatus } from '../entities/role-request.entity';
+import { RoleRequest, RoleRequestStatus, RoleRequestAction } from '../entities/role-request.entity';
 import { RolePermissionRequest, RolePermissionAction } from '../entities/role-permission-request.entity';
 import { CreateRoleRequestDto } from '../dto/create-role-request.dto';
 import { ReviewRoleRequestDto } from '../dto/review-role-request.dto';
@@ -74,6 +74,17 @@ export class RoleRequestsService {
       currentVersion = 'v1';
     }
 
+    // Determine action: create (new role), update (existing role), or delete
+    let action: RoleRequestAction;
+    if (createRoleRequestDto.action) {
+      // Use explicitly provided action
+      action = createRoleRequestDto.action as RoleRequestAction;
+    } else if (isNewRole) {
+      action = RoleRequestAction.CREATE;
+    } else {
+      action = RoleRequestAction.UPDATE;
+    }
+
     // Create role request
     const roleRequest = this.roleRequestRepository.create({
       roleId: createRoleRequestDto.roleId || null,
@@ -81,6 +92,7 @@ export class RoleRequestsService {
       description: createRoleRequestDto.description,
       status: RoleRequestStatus.PENDING,
       version: currentVersion,
+      action,
       requestedBy,
     });
 
@@ -238,6 +250,7 @@ export class RoleRequestsService {
   /**
    * Apply approved request to the actual role
    * Creates a new version of the role with the approved changes (or creates new role if roleId is null)
+   * Deletes the role if action is DELETE
    * Only applies permissions that are individually approved (or all if no decisions provided)
    */
   private async applyApprovedRequest(
@@ -245,6 +258,36 @@ export class RoleRequestsService {
     permissionDecisions?: Record<string, 'approved' | 'rejected'>,
   ): Promise<void> {
     return await this.dataSource.transaction(async (manager) => {
+      // Handle DELETE action
+      if (request.action === RoleRequestAction.DELETE) {
+        if (!request.roleId) {
+          throw new BadRequestException('Cannot delete role: roleId is missing');
+        }
+
+        const roleToDelete = await manager.findOne(Role, {
+          where: { id: request.roleId },
+          relations: ['userRoles'],
+        });
+
+        if (!roleToDelete) {
+          throw new NotFoundException(`Role with ID '${request.roleId}' not found`);
+        }
+
+        // Check if role has user assignments
+        if (roleToDelete.userRoles && roleToDelete.userRoles.length > 0) {
+          throw new BadRequestException(
+            `Cannot delete role: ${roleToDelete.userRoles.length} user(s) are assigned to this role. Please reassign users first.`
+          );
+        }
+
+        // Delete all role permissions first (cascade should handle this, but being explicit)
+        await manager.delete(RolePermission, { roleId: request.roleId });
+
+        // Delete the role
+        await manager.remove(roleToDelete);
+        return; // Exit early for delete action
+      }
+
       const isNewRole = !request.roleId;
       let originalRole: Role | null = null;
       let savedNewRole: Role;

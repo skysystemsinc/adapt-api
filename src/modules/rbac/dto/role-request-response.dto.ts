@@ -1,5 +1,5 @@
 import { Expose } from 'class-transformer';
-import { RoleRequestStatus } from '../entities/role-request.entity';
+import { RoleRequestStatus, RoleRequestAction } from '../entities/role-request.entity';
 
 export class RolePermissionRequestResponseDto {
   @Expose()
@@ -45,6 +45,9 @@ export class RoleRequestResponseDto {
 
   @Expose()
   status: RoleRequestStatus;
+
+  @Expose()
+  action: RoleRequestAction;
 
   @Expose()
   version?: string;

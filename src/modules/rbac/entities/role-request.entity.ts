@@ -14,6 +14,12 @@ export enum RoleRequestStatus {
   REJECTED = 'rejected',
 }
 
+export enum RoleRequestAction {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+}
+
 @Entity('role_requests')
 export class RoleRequest {
   @PrimaryGeneratedColumn('uuid')
@@ -30,6 +36,9 @@ export class RoleRequest {
 
   @Column({ type: 'enum', enum: RoleRequestStatus, default: RoleRequestStatus.PENDING })
   status: RoleRequestStatus;
+
+  @Column({ type: 'varchar', default: RoleRequestAction.UPDATE })
+  action: RoleRequestAction;
 
   @Column({ nullable: true })
   version: string;

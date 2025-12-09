@@ -35,6 +35,11 @@ export class CreateRoleRequestDto {
   @IsOptional()
   description?: string;
 
+  @ApiProperty({ description: 'Action: create, update, or delete', default: 'update', required: false })
+  @IsString()
+  @IsOptional()
+  action?: 'create' | 'update' | 'delete';
+
   @ApiProperty({ description: 'Role permissions', type: [CreateRolePermissionRequestDto] })
   @IsArray()
   @ValidateNested({ each: true })

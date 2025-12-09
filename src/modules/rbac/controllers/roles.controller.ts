@@ -51,9 +51,10 @@ export class RolesController {
   }
 
   @Delete(':id')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  async remove(@Param('id') id: string): Promise<void> {
-    return this.rolesService.remove(id);
+  @HttpCode(HttpStatus.OK)
+  async remove(@Param('id') id: string, @Request() req: any): Promise<any> {
+    const requestedBy = req.user?.id;
+    return this.rolesService.remove(id, requestedBy);
   }
 
   @Post(':id/permissions')

@@ -103,14 +103,33 @@ export class RolesService {
     return this.roleRequestsService.create(createRoleRequestDto, requestedBy);
   }
 
-  async remove(id: string): Promise<void> {
-    const role = await this.roleRepository.findOne({ where: { id } });
+  async remove(id: string, requestedBy?: string): Promise<RoleRequestResponseDto> {
+    const role = await this.roleRepository.findOne({ 
+      where: { id },
+      relations: ['rolePermissions'],
+    });
 
     if (!role) {
       throw new NotFoundException(`Role with ID ${id} not found`);
     }
 
-    await this.roleRepository.remove(role);
+    // Get current permissions for the role (all will be deleted)
+    const currentPermissions = role.rolePermissions?.map(rp => ({
+      permissionId: rp.permissionId,
+      action: 'delete' as const,
+      originalRolePermissionId: rp.id,
+    })) || [];
+
+    // Create a role request with delete action instead of directly deleting the role
+    const createRoleRequestDto: CreateRoleRequestDto = {
+      roleId: id,
+      name: role.name,
+      description: role.description,
+      action: 'delete',
+      permissions: currentPermissions,
+    };
+
+    return this.roleRequestsService.create(createRoleRequestDto, requestedBy);
   }
 
   async assignPermissions(id: string, assignPermissionsDto: AssignPermissionsToRoleDto, requestedBy?: string): Promise<RoleRequestResponseDto> {
