@@ -10,6 +10,7 @@ import { HumanResource } from "../human-resource/entities/human-resource.entity"
 import { User } from "../../users/entities/user.entity";
 import { AssessmentSubmission } from "../../expert-assessment/assessment-submission/entities/assessment-submission.entity";
 import { WarehouseLocationChecklistEntity } from "./warehouse-location-checklist.entity";
+import { ApplicationRejectionEntity } from "../../warehouse/entities/application-rejection.entity";
 
 export enum WarehouseLocationStatus {
     PENDING = 'PENDING',
@@ -72,6 +73,9 @@ export class WarehouseLocation {
 
     @OneToOne(() => WarehouseLocationChecklistEntity, (checklist) => checklist.warehouseLocation)
     warehouseLocationChecklist: WarehouseLocationChecklistEntity;
+
+    @OneToMany(() => ApplicationRejectionEntity, (rejection) => rejection.locationApplication)
+    rejections: ApplicationRejectionEntity[];
 
     @Column({ type: 'boolean', default: true })
     isActive: boolean;
