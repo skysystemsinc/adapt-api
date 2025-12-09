@@ -322,9 +322,19 @@ export class RegistrationApplicationService {
         "Please select your application type:": "applicationType",
         "CNIC Number": "cnicNumber",
         "Name of Applicant as per CNIC": "nameAsPerCNIC",
+        "Business / Applicant Name (as per CNIC)": "nameAsPerCNIC",
+        "Business Name of Partnership (as per registration)": "nameAsPerCNIC",
+        "Company Name (as per SECP Registration)": "nameAsPerCNIC",
+        "testign123": "nameAsPerCNIC",
+        "Business / Company Name": "nameAsPerCNIC",
         "Date of Issuance of CNIC of Applicant Authrotrized Signatory": "cnicIssuanceDate",
         "Registered Mobile No. of Applicant Authorized Signatory": "mobileNumber",
         "Valid Email ID of Applicant Authorized Signatory": "email",
+        "Active Filer Status of the Applicant": "activeFilerStatus",
+        "Applicant Official Bank Account / IBAN": "ibanNumber",
+        "Official Bank Account Number / IBAN": "ibanNumber",
+        "Official Bank Account Number / IBAN (in name of Firm)": "ibanNumber",
+        "Official Bank Account Number / IBAN (in name of Company)": "ibanNumber",
       };
 
       const targetLabels = Object.keys(labelToPropertyMap);
