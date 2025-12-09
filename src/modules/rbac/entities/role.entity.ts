@@ -20,6 +20,9 @@ export class Role {
   @Column({ nullable: true })
   description: string;
 
+  @Column({ default: 'v1' })
+  version: string;
+
   @OneToMany(() => RolePermission, (rolePermission) => rolePermission.role)
   rolePermissions: RolePermission[];
 

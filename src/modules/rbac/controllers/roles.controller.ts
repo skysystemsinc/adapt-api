@@ -9,6 +9,7 @@ import {
   HttpCode,
   HttpStatus,
   UseGuards,
+  Request,
 } from '@nestjs/common';
 import { RolesService } from '../services/roles.service';
 import { CreateRoleDto } from '../dto/create-role.dto';
@@ -28,8 +29,9 @@ export class RolesController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  async create(@Body() createRoleDto: CreateRoleDto): Promise<RoleResponseDto> {
-    return this.rolesService.create(createRoleDto);
+  async create(@Body() createRoleDto: CreateRoleDto, @Request() req: any): Promise<any> {
+    const requestedBy = req.user?.id;
+    return this.rolesService.create(createRoleDto, requestedBy);
   }
 
   @Get()
@@ -43,8 +45,9 @@ export class RolesController {
   }
 
   @Patch(':id')
-  async update(@Param('id') id: string, @Body() updateRoleDto: UpdateRoleDto): Promise<RoleResponseDto> {
-    return this.rolesService.update(id, updateRoleDto);
+  async update(@Param('id') id: string, @Body() updateRoleDto: UpdateRoleDto, @Request() req: any): Promise<any> {
+    const requestedBy = req.user?.id;
+    return this.rolesService.update(id, updateRoleDto, requestedBy);
   }
 
   @Delete(':id')
@@ -57,16 +60,20 @@ export class RolesController {
   async assignPermissions(
     @Param('id') id: string,
     @Body() assignPermissionsDto: AssignPermissionsToRoleDto,
-  ): Promise<RoleResponseDto> {
-    return this.rolesService.assignPermissions(id, assignPermissionsDto);
+    @Request() req: any,
+  ): Promise<any> {
+    const requestedBy = req.user?.id;
+    return this.rolesService.assignPermissions(id, assignPermissionsDto, requestedBy);
   }
 
   @Delete(':id/permissions/:permissionId')
   async removePermission(
     @Param('id') id: string,
     @Param('permissionId') permissionId: string,
-  ): Promise<RoleResponseDto> {
-    return this.rolesService.removePermission(id, permissionId);
+    @Request() req: any,
+  ): Promise<any> {
+    const requestedBy = req.user?.id;
+    return this.rolesService.removePermission(id, permissionId, requestedBy);
   }
 }
 
