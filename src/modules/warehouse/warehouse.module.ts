@@ -33,6 +33,7 @@ import { DeclarationChecklistEntity } from './entities/checklist/declaration.ent
 import { WarehouseApplicantVerificationModule } from './warehouse-applicant-verification/warehouse-applicant-verification.module';
 import { AssignmentModule } from './operator/assignment/assignment.module';
 import { ReviewModule } from './review/review.module';
+import { WarehouseOperator } from './entities/warehouse-operator.entity';
 
 @Module({
   controllers: [WarehouseController],
@@ -63,6 +64,7 @@ import { ReviewModule } from './review/review.module';
       FinancialSoundnessChecklistEntity,
       RegistrationFeeChecklistEntity,
       DeclarationChecklistEntity,
+      WarehouseOperator,
     ]),
     forwardRef(() => AuthModule),
     JwtModule.registerAsync({

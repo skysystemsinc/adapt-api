@@ -13,6 +13,8 @@ import { User } from '../../users/entities/user.entity';
 import { WarehouseOperatorApplicationStatus } from '../entities/warehouse-operator-application-request.entity';
 import { WarehouseOperatorApplicationRequest } from '../entities/warehouse-operator-application-request.entity';
 import { WarehouseOperator } from '../entities/warehouse-operator.entity';
+import { WarehouseLocation, WarehouseLocationStatus } from 'src/modules/warehouse-location/entities/warehouse-location.entity';
+import { WarehouseOperatorLocation, WarehouseOperatorLocationStatus } from 'src/modules/warehouse-operator-location/entities/warehouse-operator-location.entity';
 
 const REQUIRED_ASSESSMENT_TYPES: ReviewType[] = [
   ReviewType.HR,
@@ -38,6 +40,10 @@ export class ReviewService {
     private readonly warehouseOperatorApplicationRequestRepository: Repository<WarehouseOperatorApplicationRequest>,
     @InjectRepository(WarehouseOperator)
     private readonly warehouseOperatorRepository: Repository<WarehouseOperator>,
+    @InjectRepository(WarehouseLocation)
+    private readonly warehouseLocationRepository: Repository<WarehouseLocation>,
+    @InjectRepository(WarehouseOperatorLocation)
+    private readonly warehouseOperatorLocationRepository: Repository<WarehouseOperatorLocation>,
   ) { }
   async create(applicationId: string, assessmentId: string, createReviewDto: CreateReviewDto, userId: string) {
     let decision: AssessmentDecision = AssessmentDecision.ACCEPTED;
@@ -60,11 +66,11 @@ export class ReviewService {
     }
 
     const reviewApplication = await this.reviewRepository.findOne({
-      where: 
+      where:
         [
-        {applicationId: applicationId},
-        {applicationLocationId: applicationId},
-      ],
+          { applicationId: applicationId },
+          { applicationLocationId: applicationId },
+        ],
       select: {
         id: true,
         applicationId: true,
@@ -190,33 +196,73 @@ export class ReviewService {
 
       // If CEO has approved the application:
       // 1- update the application status
-      let application: WarehouseOperatorApplicationRequest | undefined | null;
+      let application: WarehouseOperatorApplicationRequest | WarehouseLocation | undefined | null;
       if (hasPermission(user, Permissions.REVIEW_FINAL_APPLICATION)) {
-        application = await this.warehouseOperatorApplicationRequestRepository.findOne({
-          where: { id: applicationId },
-        });
+        if (isLocationReview) {
+          application = await this.warehouseLocationRepository.findOne({
+            where: { id: applicationId },
+          });
+        } else {
+          application = await this.warehouseOperatorApplicationRequestRepository.findOne({
+            where: { id: applicationId },
+          });
+        }
 
-        if(!application) {
+        if (!application) {
           throw new NotFoundException('Application not found');
         }
 
         application.status = decision == AssessmentDecision.REJECTED ? WarehouseOperatorApplicationStatus.REJECTED : WarehouseOperatorApplicationStatus.APPROVED;
-        await this.warehouseOperatorApplicationRequestRepository.save(application);
+        if (isLocationReview) {
+          await this.warehouseLocationRepository.save(application as WarehouseLocation);
+        } else {
+          await this.warehouseOperatorApplicationRequestRepository.save(application as WarehouseOperatorApplicationRequest);
+        }
 
         // TODO: send email to the user
 
         if (decision == AssessmentDecision.ACCEPTED) {
-          const warehouseOperator = await this.warehouseOperatorRepository.create({
-            applicationId,
-            userId: application.userId,
-            approvedByFullName: review.fullName ?? undefined,
-            approvedByDesignation: review.designation ?? undefined,
-            dateOfAssessment: review.dateOfAssessment ?? undefined,
-            operatorCode: application.applicationId,
-            approvedBy: user.id,
-            accreditationGrade: review.accreditationGrade,
-          });
-          await this.warehouseOperatorRepository.save(warehouseOperator);
+          if (isLocationReview) {
+            const warehouseOperator = await this.warehouseOperatorRepository.findOne({
+              where: {
+                userId: application.userId,
+              },
+              select: {
+                id: true,
+              },
+            });
+
+            if (!warehouseOperator) {
+              throw new NotFoundException('Warehouse operator not found');
+            }
+
+            const warehouseOperatorLocation = await this.warehouseOperatorLocationRepository.create({
+              locationCode: application.applicationId,
+              warehouseOperatorId: warehouseOperator.id,
+              warehouseLocationId: application.id,
+              userId: application.userId,
+              status: WarehouseOperatorLocationStatus.ACTIVE,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+              approvedAt: new Date(),
+              approvedBy: user.id,
+              approvedByFullName: review.fullName ?? undefined,
+              approvedByDesignation: review.designation ?? undefined,
+            });
+            await this.warehouseOperatorLocationRepository.save(warehouseOperatorLocation);
+          } else {
+            const warehouseOperator = await this.warehouseOperatorRepository.create({
+              applicationId,
+              userId: application.userId,
+              approvedByFullName: review.fullName ?? undefined,
+              approvedByDesignation: review.designation ?? undefined,
+              dateOfAssessment: review.dateOfAssessment ?? undefined,
+              operatorCode: application.applicationId,
+              approvedBy: user.id,
+              accreditationGrade: review.accreditationGrade,
+            });
+            await this.warehouseOperatorRepository.save(warehouseOperator);
+          }
         }
 
       }
@@ -244,7 +290,7 @@ export class ReviewService {
       throw new UnauthorizedException('Unauthorized');
     }
 
-    const { page = 1, limit = 10 , type = 'operator' } = query;
+    const { page = 1, limit = 10, type = 'operator' } = query;
     const skip = (page - 1) * limit;
     const [data, total] = await this.reviewRepository.findAndCount({
       where: {
@@ -272,11 +318,11 @@ export class ReviewService {
 
   async findOne(applicationId: string, assessmentId: string, userId: string) {
     const assessment = await this.reviewRepository.findOne({
-      where: 
-      [
-        { applicationId, type: 'HOD' },
-        { applicationLocationId: applicationId, type: 'HOD' },
-      ],
+      where:
+        [
+          { applicationId, type: 'HOD' },
+          { applicationLocationId: applicationId, type: 'HOD' },
+        ],
       relations: ['application', 'applicationLocation', 'user', 'details'],
     });
 

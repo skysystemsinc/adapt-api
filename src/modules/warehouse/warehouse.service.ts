@@ -38,6 +38,7 @@ import { ListWarehouseOperatorApplicationDto } from './dto/list-warehouse.dto';
 import { CreateAuthorizedSignatoryDto } from './dto/create-authorized-signatory.dto';
 import { forwardRef, Inject } from '@nestjs/common';
 import { FinancialInformationService } from './financial-information.service';
+import { WarehouseOperator } from './entities/warehouse-operator.entity';
 
 @Injectable()
 export class WarehouseService {
@@ -65,6 +66,8 @@ export class WarehouseService {
     private readonly dataSource: DataSource,
     @Inject(forwardRef(() => FinancialInformationService))
     private readonly financialInformationService: FinancialInformationService,
+    @InjectRepository(WarehouseOperator)
+    private readonly warehouseOperatorsRepository: Repository<WarehouseOperator>,
   ) {
     // Ensure upload directory exists
     this.ensureUploadDirectory();
@@ -85,7 +88,7 @@ export class WarehouseService {
     if (search) {
       query.andWhere('warehouseOperatorApplication.name LIKE :search', { search: `%${search}%` });
     }
-    
+
     // Load relations needed for progress calculation
     query.leftJoinAndSelect('warehouseOperatorApplication.authorizedSignatories', 'authorizedSignatories');
     query.leftJoinAndSelect('warehouseOperatorApplication.companyInformation', 'companyInformation');
@@ -93,21 +96,49 @@ export class WarehouseService {
     query.leftJoinAndSelect('warehouseOperatorApplication.hrs', 'hrs');
     query.leftJoinAndSelect('warehouseOperatorApplication.financialInformation', 'financialInformation');
     query.leftJoinAndSelect('warehouseOperatorApplication.applicantChecklist', 'applicantChecklist');
-    
+
+    query.leftJoinAndSelect(
+      'warehouse_operators',
+      'warehouseOperator',
+      'warehouseOperator.applicationId = warehouseOperatorApplication.id'
+    );
+
     query.orderBy(`warehouseOperatorApplication.${sortBy}`, sortOrder);
     query.skip(((page ?? 1) - 1) * (limit ?? 10));
     query.take(limit ?? 10);
     const [applications, total] = await query.getManyAndCount();
-    
-    // Calculate progress for each application
-    const applicationsWithProgress = applications.map((application) => {
-      const progress = this.calculateApplicationProgress(application);
-      return {
-        ...application,
-        progress,
-      };
-    });
-    
+
+    // Calculate progress and include approval info
+    const applicationsWithProgress = await Promise.all(
+      applications.map(async (application) => {
+        const progress = this.calculateApplicationProgress(application);
+
+        let approvalInfo = null;
+        if (application.status === WarehouseOperatorApplicationStatus.APPROVED) {
+          // Query WarehouseOperator for this application
+          const warehouseOperator = await this.warehouseOperatorsRepository.findOne({
+            where: { applicationId: application.id },
+            select: ['approvedByFullName', 'approvedByDesignation', 'approvedAt', 'dateOfAssessment']
+          });
+
+          if (warehouseOperator) {
+            approvalInfo = {
+              approvedByFullName: warehouseOperator.approvedByFullName,
+              approvedByDesignation: warehouseOperator.approvedByDesignation,
+              approvedAt: warehouseOperator.approvedAt,
+              dateOfAssessment: warehouseOperator.dateOfAssessment,
+            };
+          }
+        }
+
+        return {
+          ...application,
+          progress,
+          approvalInfo,
+        };
+      })
+    );
+
     return {
       applications: applicationsWithProgress,
       total,
@@ -332,7 +363,7 @@ export class WarehouseService {
       data: cleanData
     };
   }
-  
+
   private async getFinancialInformationData(financialInformationId: string) {
     const financialInformation = await this.financialInformationRepository.findOne({
       where: { id: financialInformationId },
@@ -382,7 +413,7 @@ export class WarehouseService {
       data: cleanData
     };
   }
-  
+
   async updateAuthorizedSignatory(
     authorizedSignatoryId: string,
     updateAuthorizedSignatoryDto: CreateAuthorizedSignatoryDto,
@@ -1470,13 +1501,13 @@ export class WarehouseService {
 
     // Find or create HR context
     let hr: HrEntity | null = null;
-    
+
     if (hrInformationId) {
       // If hrInformationId is provided, find that specific HR entity
       hr = await this.hrRepository.findOne({
         where: { id: hrInformationId, applicationId: application.id },
       });
-      
+
       if (!hr) {
         throw new NotFoundException('HR information not found for the provided ID');
       }
@@ -1688,7 +1719,7 @@ export class WarehouseService {
     const hr = await this.hrRepository.findOne({
       where: { id: hrInformationId, applicationId: application.id },
     });
-    
+
     if (!hr) {
       throw new NotFoundException('HR information not found for the provided ID');
     }
@@ -1761,7 +1792,7 @@ export class WarehouseService {
     const hr = await this.hrRepository.findOne({
       where: { id: hrInformationId, applicationId: application.id },
     });
-    
+
     if (!hr) {
       throw new NotFoundException('HR information not found for the provided ID');
     }
@@ -1927,7 +1958,7 @@ export class WarehouseService {
     const hr = await this.hrRepository.findOne({
       where: { id: hrInformationId, applicationId: application.id },
     });
-    
+
     if (!hr) {
       throw new NotFoundException('HR information not found for the provided ID');
     }
@@ -2093,7 +2124,7 @@ export class WarehouseService {
     const hr = await this.hrRepository.findOne({
       where: { id: hrInformationId, applicationId: application.id },
     });
-    
+
     if (!hr) {
       throw new NotFoundException('HR information not found for the provided ID');
     }
@@ -2259,7 +2290,7 @@ export class WarehouseService {
     const hr = await this.hrRepository.findOne({
       where: { id: hrInformationId, applicationId: application.id },
     });
-    
+
     if (!hr) {
       throw new NotFoundException('HR information not found for the provided ID');
     }

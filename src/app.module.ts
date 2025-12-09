@@ -23,6 +23,7 @@ import { WarehouseLocationAdminModule } from './modules/warehouse-location-admin
 import { OrganizationModule } from './modules/organization/organization.module';
 import { ExpertAssessmentModule } from './modules/expert-assessment/expert-assessment.module';
 import { InspectionReportsModule } from './modules/inspection-reports/inspection-reports.module';
+import { WarehouseOperatorLocationModule } from './modules/warehouse-operator-location/warehouse-operator-location.module';
 import databaseConfig from './config/database.config';
 
 @Module({
@@ -62,6 +63,7 @@ import databaseConfig from './config/database.config';
     OrganizationModule,
     ExpertAssessmentModule,
     InspectionReportsModule,
+    WarehouseOperatorLocationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

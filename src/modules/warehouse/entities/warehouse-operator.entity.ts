@@ -6,9 +6,11 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  OneToMany,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { WarehouseOperatorApplicationRequest } from './warehouse-operator-application-request.entity';
+import { WarehouseOperatorLocation } from '../../warehouse-operator-location/entities/warehouse-operator-location.entity';
 
 export enum WarehouseOperatorStatus {
   ACTIVE = 'ACTIVE',
@@ -75,6 +77,9 @@ export class WarehouseOperator {
 
   @Column({ type: 'jsonb', nullable: true })
   metadata: any;
+
+  @OneToMany(() => WarehouseOperatorLocation, (location) => location.warehouseOperator)
+  locations: WarehouseOperatorLocation[];
 
   @CreateDateColumn()
   createdAt: Date;
