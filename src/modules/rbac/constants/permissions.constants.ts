@@ -89,5 +89,8 @@ export enum Permissions {
 
   // Form Permissions
   MANAGE_FORM = 'manage_forms',
+
+  // Role Requests permissions
+  MANAGE_ROLE_REQUESTS = 'manage_role_requests',
 }
 
