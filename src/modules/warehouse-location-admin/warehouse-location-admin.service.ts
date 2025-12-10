@@ -658,8 +658,10 @@ export class WarehouseLocationAdminService {
 
   /**
    * Get all users grouped by role for assignment
+   * @param userId - The ID of the user making the request
+   * @param applicationId - Optional application ID to filter out already-assigned users
    */
-  async findAllWarehouseLocationRoles(userId: string) {
+  async findAllWarehouseLocationRoles(userId: string, applicationId?: string) {
     const user = await this.usersRepository.findOne({
       where: { id: userId },
       relations: {
@@ -708,6 +710,18 @@ export class WarehouseLocationAdminService {
       }
     } else if (hasPermission(user, Permissions.MANAGE_WAREHOUSE_APPLICATION_ASSIGNMENT)) {
       usersQuery.where(`permission.name = :name`, { name: Permissions.IS_HOD });
+    }
+
+    // If applicationId is provided, exclude users already assigned to this application
+    if (applicationId) {
+      usersQuery.andWhere(
+        `user.id NOT IN (
+          SELECT DISTINCT a."assignedTo" 
+          FROM assignment a 
+          WHERE a."applicationLocationId" = :applicationId
+        )`,
+        { applicationId }
+      );
     }
 
     usersQuery.groupBy('role.id');
