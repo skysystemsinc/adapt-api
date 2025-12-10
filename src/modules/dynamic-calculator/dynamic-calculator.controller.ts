@@ -15,7 +15,7 @@ import { DynamicCalculator } from './entities/dynamic-calculator.entity';
 export class DynamicCalculatorController {
   constructor(private readonly dynamicCalculatorService: DynamicCalculatorService) {}
 
-  @Get()
+  @Get('/get-all')
   @ApiOperation({ summary: 'Get all dynamic calculator configurations (public)' })
   @ApiResponse({ status: 200, description: 'List of dynamic calculators', type: [DynamicCalculator] })
   async findAll(): Promise<DynamicCalculator[]> {
