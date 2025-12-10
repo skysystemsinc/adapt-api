@@ -1118,4 +1118,11 @@ export class WarehouseController {
   remove(@Param('id') id: string) {
     return this.warehouseService.remove(+id);
   }
+
+  // get warehouse application status by user id 
+  @Get('/operator/application/status')
+  getWarehouseApplicationStatus(@Request() request: any) {
+    const user = request.user as User;
+    return this.warehouseService.getWarehouseApplicationStatus(user.id);
+  }
 }
