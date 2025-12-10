@@ -5,10 +5,14 @@ export class ExpertAssessmentSeeder {
     public async run(dataSource: DataSource): Promise<void> {
         const repository = dataSource.getRepository(ExpertAssessment);
         
+        // Check environment variable - default to production
+        const isStaging = process.env.NODE_ENV === 'staging';
+        const limit = isStaging ? 2 : undefined;
+        
         const financialAssessments = [
             'Financial',
             'Corporate Legal',
-        ]
+        ];
 
         const technicalAssessments = [
             'Accessibility',
@@ -91,7 +95,24 @@ export class ExpertAssessmentSeeder {
             'Standards Verification',
         ];
 
-        for (const name of financialAssessments) {
+        // Helper function to limit array based on environment
+        const getAssessments = (assessments: string[]) => {
+            return limit ? assessments.slice(0, limit) : assessments;
+        };
+
+        // Use helper function to get limited or full arrays based on environment
+        const assessmentsToSeed = {
+            financial: getAssessments(financialAssessments),
+            technical: getAssessments(technicalAssessments),
+            security: getAssessments(securityAssessments),
+            hr: getAssessments(hrAssessments),
+            legal: getAssessments(legalAssessments),
+            ecg: getAssessments(ecgAssessments),
+        };
+
+        console.log(`\n🌱 Seeding expert assessments (${isStaging ? 'STAGING' : 'PRODUCTION'} mode - ${limit ? `${limit} per category` : 'all items'})...\n`);
+
+        for (const name of assessmentsToSeed.financial) {
             const exists = await repository.findOne({
                 where: { name, category: AssessmentCategory.FINANCIAL },
             });
@@ -108,7 +129,7 @@ export class ExpertAssessmentSeeder {
             }
         }
 
-        for (const name of technicalAssessments) {
+        for (const name of assessmentsToSeed.technical) {
             const exists = await repository.findOne({
                 where: { name, category: AssessmentCategory.TECHNICAL },
             });
@@ -126,7 +147,7 @@ export class ExpertAssessmentSeeder {
             }
         }
 
-        for (const name of securityAssessments) {
+        for (const name of assessmentsToSeed.security) {
             const exists = await repository.findOne({
                 where: { name, category: AssessmentCategory.SECURITY },
             });
@@ -143,7 +164,7 @@ export class ExpertAssessmentSeeder {
             }
         }
 
-        for (const name of hrAssessments) {
+        for (const name of assessmentsToSeed.hr) {
             const exists = await repository.findOne({
                 where: { name, category: AssessmentCategory.HR },
             });
@@ -160,7 +181,7 @@ export class ExpertAssessmentSeeder {
             }
         }
 
-        for (const name of legalAssessments) {
+        for (const name of assessmentsToSeed.legal) {
             const exists = await repository.findOne({
                 where: { name, category: AssessmentCategory.LEGAL },
             });
@@ -177,7 +198,7 @@ export class ExpertAssessmentSeeder {
             }
         }
 
-        for (const name of ecgAssessments) {
+        for (const name of assessmentsToSeed.ecg) {
             const exists = await repository.findOne({
                 where: { name, category: AssessmentCategory.ECG },
             });
