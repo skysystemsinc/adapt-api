@@ -1,5 +1,6 @@
 import { AssessmentCategory } from "../../expert-assessment/entities/expert-assessment.entity";
 import { AssessmentSubmission } from "../../expert-assessment/assessment-submission/entities/assessment-submission.entity";
+import { AssessmentDocument } from "../../expert-assessment/assessment-documents/entities/assessment-document.entity";
 import { User } from "../../users/entities/user.entity";
 import { WarehouseLocation } from "../../warehouse-location/entities/warehouse-location.entity";
 import { WarehouseOperatorApplicationRequest } from "../../warehouse/entities/warehouse-operator-application-request.entity";
@@ -86,6 +87,9 @@ export class InspectionReport {
 
     @OneToMany(() => AssessmentSubmission, (submission) => submission.inspectionReport)
     assessmentSubmissions: AssessmentSubmission[];
+
+    @OneToMany(() => AssessmentDocument, (document) => document.inspectionReport)
+    documents: AssessmentDocument[];
 
     @Column({
         type: 'enum',
