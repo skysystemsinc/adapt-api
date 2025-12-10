@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Like, In } from 'typeorm';
+import { Repository, Like, In, DataSource } from 'typeorm';
 import { plainToInstance, instanceToPlain } from 'class-transformer';
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -20,7 +20,10 @@ import { calculateDaysCount, calculateBusinessDays, isApplicationOverdue } from 
 import { UsersService } from '../users/users.service';
 import { Role } from '../rbac/entities/role.entity';
 import { FormField } from '../forms/entities/form-field.entity';
+import { User } from '../users/entities/user.entity';
 import { encryptBuffer, decryptBuffer } from 'src/common/utils/helper.utils';
+import { Permissions } from '../rbac/constants/permissions.constants';
+import { hasPermission } from 'src/common/utils/helper.utils';
 
 @Injectable()
 export class RegistrationApplicationService {
@@ -39,7 +42,10 @@ export class RegistrationApplicationService {
     private roleRepository: Repository<Role>,
     @InjectRepository(FormField)
     private formFieldRepository: Repository<FormField>,
+    @InjectRepository(User)
+    private usersRepository: Repository<User>,
     private usersService: UsersService,
+    private dataSource: DataSource,
   ) {
     this.ensureUploadDirectory();
   }
@@ -477,12 +483,12 @@ export class RegistrationApplicationService {
       // Generate a random strong password
       // const randomPassword = this.generateSecurePassword();
 
-      // Create user with business name as firstName, lastName always N/A
+      // Create user with business name as firstName; avoid N/A defaults
       const createdUser = await this.usersService.create({
         email: emailDetail.value,
         password: "Password@123",
-        firstName: businessNameDetail?.value || 'N/A',
-        lastName: 'N/A',
+        firstName: businessNameDetail?.value || '',
+        lastName: '',
         roleId: applicantRole.id,
         organizationId: null,
       });
@@ -794,6 +800,72 @@ export class RegistrationApplicationService {
     } catch {
       await fs.mkdir(this.uploadDir, { recursive: true });
     }
+  }
+
+  /**
+   * Get all users grouped by role for assignment
+   */
+  async findAllRegistrationApplicationRoles(userId: string) {
+    const user = await this.usersRepository.findOne({
+      where: { id: userId },
+      relations: {
+        userRoles: {
+          role: {
+            rolePermissions: {
+              permission: true,
+            },
+          },
+        },
+        organization: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const usersQuery = await this.dataSource
+      .getRepository(User)
+      .createQueryBuilder('user')
+      .innerJoin('user.userRoles', 'ur')
+      .innerJoin('ur.role', 'role')
+      .innerJoin('role.rolePermissions', 'rolePermissions')
+      .innerJoin('rolePermissions.permission', 'permission')
+      .select(`
+        role.name AS role,
+        json_agg(
+          json_build_object(
+            'id', "user"."id",
+            'firstName', "user"."firstName",
+            'lastName', "user"."lastName",
+            'email', "user"."email"
+          )
+        ) AS users
+      `);
+
+    if (hasPermission(user, Permissions.IS_HOD)) {
+      if (user.organization) {
+        usersQuery.where(`permission.name = :name AND user.organizationId = :organizationId`, {
+          name: Permissions.IS_EXPERT,
+          organizationId: user.organization.id
+        });
+      } else {
+        throw new ForbiddenException('User does not have an organization');
+      }
+    } else if (hasPermission(user, Permissions.VERIFY_KYC)) {
+      usersQuery.where(`permission.name = :name`, { name: Permissions.IS_HOD });
+    }
+
+    usersQuery.groupBy('role.id');
+    const users = await usersQuery.getRawMany();
+
+    // Convert to object keyed by role
+    const grouped: Record<string, any[]> = {};
+    for (const row of users) {
+      grouped[row.role] = row.users;
+    }
+
+    return grouped;
   }
 }
 

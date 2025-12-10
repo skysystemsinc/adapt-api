@@ -14,6 +14,7 @@ import { RBACModule } from '../rbac/rbac.module';
 import { UsersModule } from '../users/users.module';
 import { Role } from '../rbac/entities/role.entity';
 import { FormField } from '../forms/entities/form-field.entity';
+import { User } from '../users/entities/user.entity';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { FormField } from '../forms/entities/form-field.entity';
       ApplicationType,
       Role,
       FormField,
+      User,
     ]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
