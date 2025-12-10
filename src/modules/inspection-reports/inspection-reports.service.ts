@@ -36,6 +36,7 @@ export class InspectionReportsService {
   ) { }
 
   private readonly uploadDir = path.join(process.cwd(), 'uploads', 'assessment-documents');
+  private readonly inspectionReportsUploadDir = path.join(process.cwd(), 'uploads', 'inspection-reports');
 
   private async ensureUploadDirectory(): Promise<void> {
     try {
@@ -45,9 +46,18 @@ export class InspectionReportsService {
     }
   }
 
+  private async ensureInspectionReportsUploadDirectory(): Promise<void> {
+    try {
+      await fs.access(this.inspectionReportsUploadDir);
+    } catch {
+      await fs.mkdir(this.inspectionReportsUploadDir, { recursive: true });
+    }
+  }
+
   async create(
     createInspectionReportDto: CreateInspectionReportDto,
     files: any[],
+    globalDocumentFile: any,
     userId?: string
   ): Promise<InspectionReport> {
     const queryRunner = this.dataSource.createQueryRunner();
@@ -55,10 +65,42 @@ export class InspectionReportsService {
     await queryRunner.startTransaction();
 
     try {
-      // Ensure upload directory exists
+      // Ensure upload directories exist
       await this.ensureUploadDirectory();
+      await this.ensureInspectionReportsUploadDirectory();
 
-      // Step 1: Create Inspection Report
+      // Step 1: Handle Global Document Upload (required)
+      if (!globalDocumentFile) {
+        throw new BadRequestException('Global document is required');
+      }
+
+      // Validate global document file type
+      const allowedExtensions = ['.pdf', '.png', '.jpg', '.jpeg', '.doc', '.docx', '.xls', '.xlsx', '.csv'];
+      const globalFileExtension = path.extname(globalDocumentFile.originalname).toLowerCase();
+
+      if (!allowedExtensions.includes(globalFileExtension)) {
+        throw new BadRequestException(
+          `Global document file type '${globalFileExtension}' is not allowed. Allowed types: ${allowedExtensions.join(', ')}`,
+        );
+      }
+
+      // Validate global document file size (max 10MB)
+      const maxSizeBytes = 10 * 1024 * 1024;
+      if (globalDocumentFile.size > maxSizeBytes) {
+        throw new BadRequestException(
+          `Global document file size ${(globalDocumentFile.size / 1024 / 1024).toFixed(2)}MB exceeds maximum allowed size of 10MB`,
+        );
+      }
+
+      // Generate unique filename for global document
+      const globalSanitizedFilename = `${uuidv4()}${globalFileExtension}`;
+      const globalFilePath = path.join(this.inspectionReportsUploadDir, globalSanitizedFilename);
+      const globalDocumentPath = `/uploads/inspection-reports/${globalSanitizedFilename}`;
+
+      // Save global document to disk
+      await fs.writeFile(globalFilePath, globalDocumentFile.buffer);
+
+      // Step 2: Create Inspection Report
       const { assessments, ...reportData } = createInspectionReportDto;
 
       const inspectionReport = this.inspectionReportRepository.create({
@@ -68,7 +110,20 @@ export class InspectionReportsService {
 
       const savedReport = await queryRunner.manager.save(InspectionReport, inspectionReport);
 
-      // Step 2: Create Assessment Submissions
+      // Step 2.5: Create Global Document as AssessmentDocument
+      const globalDocument = this.assessmentDocumentRepository.create({
+        inspectionReportId: savedReport.id,
+        fileName: globalDocumentFile.originalname,
+        filePath: globalDocumentPath,
+        fileType: globalDocumentFile.mimetype || 'application/octet-stream',
+        fileSize: globalDocumentFile.size,
+        documentType: 'global_document',
+        uploadedBy: userId,
+      });
+
+      await queryRunner.manager.save(AssessmentDocument, globalDocument);
+
+      // Step 3: Create Assessment Submissions
       const submissionMap = new Map<string, AssessmentSubmission>(); // Map assessmentId -> submission
 
       for (const assessmentData of assessments) {
@@ -112,7 +167,7 @@ export class InspectionReportsService {
         submissionMap.set(assessmentData.assessmentId, savedSubmission);
       }
 
-      // Step 3: Upload Files and Create Documents
+      // Step 4: Upload Files and Create Documents
       // Files are sent in order matching assessments array
       if (files && files.length > 0) {
         for (let i = 0; i < files.length && i < assessments.length; i++) {
@@ -235,7 +290,7 @@ export class InspectionReportsService {
       // Return report with relations
       const report = await this.inspectionReportRepository.findOne({
         where: { id: savedReport.id },
-        relations: ['assessmentSubmissions', 'assessmentSubmissions.documents'],
+        relations: ['assessmentSubmissions', 'assessmentSubmissions.documents', 'documents'],
       });
 
       if (!report) {
@@ -253,7 +308,7 @@ export class InspectionReportsService {
 
   async findAll(): Promise<InspectionReport[]> {
     return await this.inspectionReportRepository.find({
-      relations: ['createdByUser', 'warehouseOperatorApplication', 'warehouseLocation', 'assessmentSubmissions'],
+      relations: ['createdByUser', 'warehouseOperatorApplication', 'warehouseLocation', 'assessmentSubmissions', 'assessmentSubmissions.documents', 'documents'],
       order: { createdAt: 'DESC' },
     });
   }
@@ -261,14 +316,14 @@ export class InspectionReportsService {
   async findByAssessmentType(assessmentType: AssessmentCategory): Promise<InspectionReport[]> {
     return await this.inspectionReportRepository.find({
       where: { assessmentType },
-      relations: ['createdByUser', 'warehouseOperatorApplication', 'warehouseLocation', 'assessmentSubmissions', 'assessmentSubmissions.documents'],
+      relations: ['createdByUser', 'warehouseOperatorApplication', 'warehouseLocation', 'assessmentSubmissions', 'assessmentSubmissions.documents', 'documents'],
     });
   }
 
   async findOne(id: string): Promise<InspectionReport> {
     const report = await this.inspectionReportRepository.findOne({
       where: { id },
-      relations: ['createdByUser', 'warehouseOperatorApplication', 'warehouseLocation', 'assessmentSubmissions'],
+      relations: ['createdByUser', 'warehouseOperatorApplication', 'warehouseLocation', 'assessmentSubmissions', 'assessmentSubmissions.documents', 'documents'],
     });
 
     if (!report) {
@@ -368,7 +423,7 @@ export class InspectionReportsService {
           ...(assessmentId ? { id: assessmentId, createdBy: assignment?.assignedBy } : { createdBy: userId }),
         }
       ],
-      relations: ['assessmentSubmissions', 'assessmentSubmissions.documents'],
+      relations: ['assessmentSubmissions', 'assessmentSubmissions.documents', 'documents'],
     });
 
     if (!report) {

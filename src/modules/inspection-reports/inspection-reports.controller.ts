@@ -4,7 +4,7 @@ import { InspectionReportsService } from './inspection-reports.service';
 import { CreateInspectionReportDto } from './dto/create-inspection-report.dto';
 import { UpdateInspectionReportDto } from './dto/update-inspection-report.dto';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
-import { FilesInterceptor } from '@nestjs/platform-express';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { AssessmentCategory } from '../expert-assessment/entities/expert-assessment.entity';
@@ -26,7 +26,10 @@ export class InspectionReportsController {
   @ApiResponse({ status: 201, description: 'Inspection report created successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @UseInterceptors(
-    FilesInterceptor('files', 100, { // Allow up to 100 files
+    FileFieldsInterceptor([
+      { name: 'files', maxCount: 100 },
+      { name: 'globalDocument', maxCount: 1 },
+    ], {
       limits: {
         fileSize: 10 * 1024 * 1024, // 10MB per file
       },
@@ -34,7 +37,7 @@ export class InspectionReportsController {
   )
   async create(
     @Body() body: any,
-    @UploadedFiles() files: any[],
+    @UploadedFiles() files: { files?: any[]; globalDocument?: any[] },
     @Request() req: any,
   ) {
     const userId = req.user?.sub || req.user?.id;
@@ -84,7 +87,14 @@ export class InspectionReportsController {
       throw new BadRequestException(errorMessages);
     }
 
-    return this.inspectionReportsService.create(createInspectionReportDto, files || [], userId);
+    const assessmentFiles = files?.files || [];
+    const globalDocumentFile = files?.globalDocument?.[0];
+    
+    if (!globalDocumentFile) {
+      throw new BadRequestException('Global document is required');
+    }
+
+    return this.inspectionReportsService.create(createInspectionReportDto, assessmentFiles, globalDocumentFile, userId);
   }
 
   @Get()
