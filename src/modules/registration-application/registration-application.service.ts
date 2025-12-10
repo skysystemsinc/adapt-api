@@ -322,9 +322,19 @@ export class RegistrationApplicationService {
         "Please select your application type:": "applicationType",
         "CNIC Number": "cnicNumber",
         "Name of Applicant as per CNIC": "nameAsPerCNIC",
+        "Business / Applicant Name (as per CNIC)": "nameAsPerCNIC",
+        "Business Name of Partnership (as per registration)": "nameAsPerCNIC",
+        "Company Name (as per SECP Registration)": "nameAsPerCNIC",
+        "testign123": "nameAsPerCNIC",
+        "Business / Company Name": "nameAsPerCNIC",
         "Date of Issuance of CNIC of Applicant Authrotrized Signatory": "cnicIssuanceDate",
         "Registered Mobile No. of Applicant Authorized Signatory": "mobileNumber",
         "Valid Email ID of Applicant Authorized Signatory": "email",
+        "Active Filer Status of the Applicant": "activeFilerStatus",
+        "Applicant Official Bank Account / IBAN": "ibanNumber",
+        "Official Bank Account Number / IBAN": "ibanNumber",
+        "Official Bank Account Number / IBAN (in name of Firm)": "ibanNumber",
+        "Official Bank Account Number / IBAN (in name of Company)": "ibanNumber",
       };
 
       const targetLabels = Object.keys(labelToPropertyMap);
@@ -347,12 +357,9 @@ export class RegistrationApplicationService {
       const applicationId = application.id;
       const details: Record<string, string> = {};
 
-      // Add applicationType from the applicationTypeId relation if it exists
-      if (application.applicationTypeId?.name) {
-        details['applicationType'] = application.applicationTypeId.name;
-      }
-
       const fieldKeys = Object.keys(fieldKeyToPropertyMap);
+      let applicationTypeFromFormField: string | null = null;
+      
       if (fieldKeys.length > 0) {
         // Get details for this application with the specific field keys
         const applicationDetails = await this.registrationApplicationDetailsRepository.find({
@@ -366,20 +373,26 @@ export class RegistrationApplicationService {
         for (const detail of applicationDetails) {
           const propertyName = fieldKeyToPropertyMap[detail.key];
           if (propertyName) {
-            // Skip applicationType if it's from form fields - we'll use the relation value instead
-            // Form fields might contain slug (e.g., "private-limited") instead of name (e.g., "Private Limited")
+            // Store applicationType from form field as fallback
             if (propertyName === 'applicationType') {
-              continue;
+              applicationTypeFromFormField = detail.value;
+              continue; // Skip adding it now, we'll use relation value if available
             }
             details[propertyName] = detail.value;
           }
         }
       }
 
-      // Add applicationType from the applicationTypeId relation if it exists (authoritative source)
-      // This ensures we return the proper name (e.g., "Private Limited") instead of slug (e.g., "private-limited")
+      // Add applicationType - prefer relation value (name) over form field value (slug)
+      // Relation value is authoritative and contains the proper name (e.g., "Private Limited")
+      // Form field might contain slug (e.g., "private-limited")
       if (application.applicationTypeId?.name) {
         details['applicationType'] = application.applicationTypeId.name;
+      } else if (applicationTypeFromFormField) {
+        // Fallback to form field value if relation is not available
+        // if it contain - remove it and add space
+        applicationTypeFromFormField = applicationTypeFromFormField.replace(/-/g, ' ');
+        details['applicationType'] = applicationTypeFromFormField.toUpperCase();
       }
 
       // Step 5: Return the values with readable property names

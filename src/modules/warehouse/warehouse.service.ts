@@ -3957,4 +3957,32 @@ export class WarehouseService {
         : null,
     };
   }
+
+  async getWarehouseApplicationStatus(userId: string) {
+    // Get the most recent application (ordered by createdAt DESC)
+    const application = await this.warehouseOperatorRepository.findOne({
+      where: { userId },
+      order: { createdAt: 'DESC' }
+    });
+
+    if (!application) {
+      return {
+        message: 'No warehouse operator application found',
+        data: {
+          hasApplication: false,
+          status: null,
+        },
+      };
+    }
+
+    return {
+      message: 'Warehouse application status retrieved successfully',
+      data: {
+        hasApplication: true,
+        status: application.status,
+        applicationId: application.id,
+        createdAt: application.createdAt,
+      },
+    };
+  }
 }
