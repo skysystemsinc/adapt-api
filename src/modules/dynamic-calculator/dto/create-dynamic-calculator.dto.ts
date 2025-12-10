@@ -24,11 +24,5 @@ export class CreateDynamicCalculatorDto {
   @Min(0)
   @IsNotEmpty()
   accreditationFee: number;
-
-  @ApiProperty({ description: 'Sales tax value', example: 16.00, required: false })
-  @IsNumber()
-  @Type(() => Number)
-  @IsOptional()
-  salesTaxValue?: number | null;
 }
 

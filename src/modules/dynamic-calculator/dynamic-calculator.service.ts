@@ -32,6 +32,7 @@ export class DynamicCalculatorService {
     const calculator = this.dynamicCalculatorRepository.create({
       ...createDto,
       salesTaxSettingId: salesTaxSetting?.id || null,
+      salesTaxValue: salesTaxSetting ? parseFloat(salesTaxSetting.value) : null,
     });
     
     return this.dynamicCalculatorRepository.save(calculator);
@@ -61,9 +62,17 @@ export class DynamicCalculatorService {
     const calculator = await this.findOne(id);
     
     // If province is being updated, fetch the new sales tax setting
+    const provinceToUse = updateDto.province || calculator.province;
     if (updateDto.province && updateDto.province !== calculator.province) {
       const salesTaxSetting = await this.getSalesTaxSetting(updateDto.province);
       calculator.salesTaxSettingId = salesTaxSetting?.id || null;
+      calculator.salesTaxValue = salesTaxSetting ? parseFloat(salesTaxSetting.value) : null;
+    } else if (!updateDto.province) {
+      // If province is not being updated, ensure sales tax value is set from current setting
+      const salesTaxSetting = await this.getSalesTaxSetting(provinceToUse);
+      if (salesTaxSetting && !calculator.salesTaxValue) {
+        calculator.salesTaxValue = parseFloat(salesTaxSetting.value);
+      }
     }
     
     Object.assign(calculator, updateDto);
