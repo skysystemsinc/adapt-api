@@ -1,5 +1,5 @@
 import { RolePermission } from "src/modules/rbac/entities/role-permission.entity";
-import { User } from "src/modules/users/entities/user.entity";
+import { User } from "../../modules/users/entities/user.entity";
 import crypto from 'crypto';
 import { config } from 'dotenv';
 config({

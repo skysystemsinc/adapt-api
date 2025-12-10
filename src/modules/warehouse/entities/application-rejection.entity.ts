@@ -5,7 +5,7 @@ import { FinancialSoundnessChecklistEntity } from "./checklist/financial-soundne
 import { RegistrationFeeChecklistEntity } from "./checklist/registration-fee.entity";
 import { DeclarationChecklistEntity } from "./checklist/declaration.entity";
 import { WarehouseLocation } from "../../warehouse-location/entities/warehouse-location.entity";
-import { User } from "src/modules/users/entities/user.entity";
+import { User } from "../../users/entities/user.entity";
 
 @Entity('application_rejection')
 export class ApplicationRejectionEntity {

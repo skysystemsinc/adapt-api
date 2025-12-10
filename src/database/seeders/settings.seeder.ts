@@ -12,7 +12,7 @@ export class SettingsSeeder {
       .delete()
       .from(Setting)
       .execute();
-
+      
     const settings = [
       { key: 'self-assessment', value: 'https://naymatcollateral.com/' },
       { key: 're-self-assessment', value: 'https://naymatcollateral.com/' },
@@ -23,6 +23,11 @@ export class SettingsSeeder {
       { key: 'standard-operating-procedure', value: 'https://naymatcollateral.com/' },
       { key: 'cmc-regulations-2019', value: 'https://naymatcollateral.com/' },
       { key: 'accreditation-process-awareness-video', value: 'https://naymatcollateral.com/' },
+      { key: 'sindh-sales-tax', value: '15' },
+      { key: 'punjab-sales-tax', value: '16' },
+      { key: 'balochistan-sales-tax', value: '15' },
+      { key: 'kpk-sales-tax', value: '15' },
+      { key: 'gilgit-sales-tax', value: '15' },
     ];
 
     for (const setting of settings) {
