@@ -240,38 +240,38 @@ export class WarehouseAdminService {
         if (assignedResourceIds.has(hr.id)) {
           return true;
         }
-        
+
         // Check if any sub-item is assigned
         // Personal Details
         if (hr.personalDetails?.id && assignedResourceIds.has(hr.personalDetails.id)) {
           return true;
         }
-        
+
         // Academic Qualifications
         if (hr.academicQualifications?.some(aq => assignedResourceIds.has(aq.id))) {
           return true;
         }
-        
+
         // Professional Qualifications
         if (hr.professionalQualifications?.some(pq => assignedResourceIds.has(pq.id))) {
           return true;
         }
-        
+
         // Trainings
         if (hr.trainings?.some(training => assignedResourceIds.has(training.id))) {
           return true;
         }
-        
+
         // Experiences
         if (hr.experiences?.some(exp => assignedResourceIds.has(exp.id))) {
           return true;
         }
-        
+
         // Declaration
         if (hr.declaration?.id && assignedResourceIds.has(hr.declaration.id)) {
           return true;
         }
-        
+
         return false;
       }) || [];
     } else {
@@ -352,132 +352,70 @@ export class WarehouseAdminService {
         id: true,
         status: true,
         applicationId: true,
-        user: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          email: true
-        },
-        companyInformation: {
-          id: true,
-          companyName: true,
-        },
-        financialInformation: {
-          id: true,
-          auditReport: {
-            id: true,
-            documentType: true,
-            documentName: true,
-            periodStart: true,
-            periodEnd: true,
-          },
-          taxReturns: {
-            id: true,
-            documentType: true,
-            documentName: true,
-            periodStart: true,
-            periodEnd: true,
-          },
-          bankStatements: {
-            id: true,
-            documentType: true,
-            documentName: true,
-            periodStart: true,
-            periodEnd: true,
-          },
-          others: {
-            id: true,
-            documentType: true,
-            documentName: true,
-            periodStart: true,
-            periodEnd: true,
-          },
-        },
-        bankDetails: {
-          id: true,
-          name: true,
-        },
-        authorizedSignatories: {
-          id: true,
-          name: true,
-        },
-        hrs: {
-          id: true,
-          personalDetails: {
-            id: true,
-            name: true,
-            email: true
-          },
-          academicQualifications: {
-            id: true,
-            degree: true,
-          },
-          professionalQualifications: {
-            id: true,
-            certificationTitle: true,
-          },
-          trainings: {
-            id: true,
-            trainingTitle: true
-          },
-          experiences: {
-            id: true,
-            positionHeld: true,
-          },
-          declaration: {
-            id: true,
-            writeOffAvailed: true,
-            defaultOfFinance: true,
-            placementOnECL: true,
-            convictionPleaBargain: true,
-          },
-        },
-        applicantChecklist: {
-          id: true,
-          humanResources: {
-            id: true,
-            qcPersonnel: true,
-            qcPersonnelFile: true,
-          },
-          financialSoundness: {
-            id: true,
-            auditedFinancialStatements: true,
-            positiveNetWorth: true
-          },
-          registrationFee: {
-            id: true,
-            bankPaymentSlip: true,
-          },
-          declaration: {
-            id: true,
-            informationTrueComplete: true,
-            authorizeVerification: true,
-          },
-        },
+        user: true,
+        companyInformation: true,
+        financialInformation: true,
+        bankDetails: true,
+        authorizedSignatories: true,
+        hrs: true,
+        applicantChecklist: true,
       },
       relations: {
         user: true,
         authorizedSignatories: true,
-        companyInformation: true,
+        companyInformation: {
+          ntcCertificate: true,
+        },
         bankDetails: true,
         hrs: {
-          personalDetails: true,
-          academicQualifications: true,
-          professionalQualifications: true,
-          trainings: true,
-          experiences: true,
+          personalDetails: {
+            photographDocument: true,
+            designation: true,
+          },
+          academicQualifications: {
+            academicCertificateDocument: true,
+          },
+          professionalQualifications: {
+            professionalCertificateDocument: true,
+          },
+          trainings: {
+            trainingCertificateDocument: true,
+          },
+          experiences: {
+            experienceLetterDocument: true,
+          },
           declaration: true,
         },
         financialInformation: {
           auditReport: true,
-          taxReturns: true,
-          bankStatements: true,
-          others: true,
+          taxReturns: {
+            document: true,
+          },
+          bankStatements: {
+            document: true,
+          },
+          others: {
+            document: true,
+          },
         },
         applicantChecklist: {
-          humanResources: true,
-          financialSoundness: true,
-          registrationFee: true,
+          humanResources: {
+            qcPersonnelDocument: true, 
+            warehouseSupervisorDocument: true, 
+            dataEntryOperatorDocument: true, 
+          },
+          financialSoundness: {
+            auditedFinancialStatementsDocument: true, 
+            positiveNetWorthDocument: true, 
+            noLoanDefaultsDocument: true, 
+            cleanCreditHistoryDocument: true, 
+            adequateWorkingCapitalDocument: true, 
+            validInsuranceCoverageDocument: true, 
+            noFinancialFraudDocument: true, 
+          },
+          registrationFee: {
+            bankPaymentSlipDocument: true, 
+          },
           declaration: true,
         },
       }
