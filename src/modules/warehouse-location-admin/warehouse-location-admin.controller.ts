@@ -38,9 +38,10 @@ export class WarehouseLocationAdminController {
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get all warehouse location roles for assignment' })
   findAllWarehouseLocationRoles(
+    @Query('applicationId') applicationId?: string,
     @Req() req: any,
   ) {
     const userId = req.user.id;
-    return this.warehouseLocationAdminService.findAllWarehouseLocationRoles(userId);
+    return this.warehouseLocationAdminService.findAllWarehouseLocationRoles(userId, applicationId);
   }
 }
