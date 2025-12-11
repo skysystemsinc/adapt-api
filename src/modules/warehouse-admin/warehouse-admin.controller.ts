@@ -45,9 +45,10 @@ export class WarehouseAdminController {
   @ApiOperation({ summary: 'Get all warehouse roles' })
   findAllWareHouseRoles(
     @Req() req: any,
+    @Query('applicationId') applicationId?: string,
   ) {
     const userId = req.user.id;
-    return this.warehouseAdminService.findAllWareHouseRoles(userId);
+    return this.warehouseAdminService.findAllWareHouseRoles(userId, applicationId);
   }
 
   @Patch(':id')

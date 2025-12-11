@@ -504,7 +504,7 @@ export class WarehouseAdminService {
    * 
    * @returns All users grouped by role
    */
-  async findAllWareHouseRoles(userId: string) {
+  async findAllWareHouseRoles(userId: string, applicationId?: string) {
 
     const user = await this.usersRepository.findOne({
       where: { id: userId },
@@ -557,6 +557,18 @@ export class WarehouseAdminService {
       }
     } else if (hasPermission(user, Permissions.MANAGE_WAREHOUSE_APPLICATION_ASSIGNMENT)) {
       usersQuery.where(`permission.name = :name`, { name: Permissions.IS_HOD })
+    }
+
+    // If applicationId is provided, exclude users already assigned to this application
+    if (applicationId) {
+      usersQuery.andWhere(
+        `user.id NOT IN (
+          SELECT DISTINCT a."assignedTo" 
+          FROM assignment a 
+          WHERE a."applicationId" = :applicationId
+        )`,
+        { applicationId }
+      );
     }
 
     usersQuery.groupBy('role.id');
