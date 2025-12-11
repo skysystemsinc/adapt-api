@@ -64,7 +64,7 @@ export class WarehouseAdminService {
       .leftJoin(
         'assignment',
         'assignment',
-        `assignment.applicationId = application.id AND assignment."assignedTo" = :assignedToUserId AND assignment.id = ${latestAssignmentSubquery}`,{ assignedToUserId: userId }
+        `assignment.applicationId = application.id AND assignment.id = ${latestAssignmentSubquery}`
       )
       .select([
         'application.id',
@@ -84,11 +84,17 @@ export class WarehouseAdminService {
 
     queryBuilder.andWhere('application.status != :draftStatus', { draftStatus: WarehouseOperatorApplicationStatus.DRAFT });
 
-
+    // For HOD/Expert users: filter to only applications where they have ANY assignment
+    // (not just where the latest assignment is to them)
     if (user && (hasPermission(user, Permissions.IS_HOD) || hasPermission(user, Permissions.IS_EXPERT))) {
-      queryBuilder
-        // .innerJoin('assignment', 'assignment', 'assignment.applicationId = application.id')
-        .andWhere('assignment.assignedTo = :assignedToUserId', { assignedToUserId: userId });
+      queryBuilder.andWhere(
+        `application.id IN (
+          SELECT DISTINCT a."applicationId" 
+          FROM assignment a 
+          WHERE a."assignedTo" = :assignedToUserId
+        )`,
+        { assignedToUserId: userId }
+      );
     }
 
     if (status) {
