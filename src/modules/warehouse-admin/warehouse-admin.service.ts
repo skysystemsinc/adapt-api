@@ -235,45 +235,65 @@ export class WarehouseAdminService {
     // not the HR entity ID. So we need to check if any of the HR's sub-items are assigned.
     if (assignedSections.has('hrs')) {
       const assignedResourceIds = assignedSections.get('hrs')!;
-      application.hrs = application.hrs?.filter((hr) => {
-        // Check if HR entity ID is assigned (for backward compatibility)
-        if (assignedResourceIds.has(hr.id)) {
-          return true;
-        }
+      application.hrs = application.hrs
+        ?.filter((hr) => {
+          // Check if HR entity ID is assigned (for backward compatibility)
+          const hasHrId = assignedResourceIds.has(hr.id);
+          
+          // Check if any sub-item is assigned
+          const hasPersonalDetails = hr.personalDetails?.id && assignedResourceIds.has(hr.personalDetails.id);
+          const hasAcademicQualification = hr.academicQualifications?.some((aq) => assignedResourceIds.has(aq.id));
+          const hasProfessionalQualification = hr.professionalQualifications?.some((pq) => assignedResourceIds.has(pq.id));
+          const hasTraining = hr.trainings?.some((training) => assignedResourceIds.has(training.id));
+          const hasExperience = hr.experiences?.some((exp) => assignedResourceIds.has(exp.id));
+          const hasDeclaration = hr.declaration?.id && assignedResourceIds.has(hr.declaration.id);
 
-        // Check if any sub-item is assigned
-        // Personal Details
-        if (hr.personalDetails?.id && assignedResourceIds.has(hr.personalDetails.id)) {
-          return true;
-        }
+          // Keep HR if any of its items (including itself) are assigned
+          return (
+            hasHrId ||
+            hasPersonalDetails ||
+            hasAcademicQualification ||
+            hasProfessionalQualification ||
+            hasTraining ||
+            hasExperience ||
+            hasDeclaration
+          );
+        })
+        ?.map((hr) => {
+          const hasPersonalDetails = hr.personalDetails?.id && assignedResourceIds.has(hr.personalDetails.id);
+          const preservedName = hr.personalDetails?.name;
 
-        // Academic Qualifications
-        if (hr.academicQualifications?.some(aq => assignedResourceIds.has(aq.id))) {
-          return true;
-        }
+          // If personalDetails is not assigned, clear it but preserve the name for card title
+          if (!hasPersonalDetails && hr.personalDetails) {
+            // Preserve only the name field for display purposes
+            hr.personalDetails = {
+              id: hr.personalDetails.id,
+              name: preservedName || '',
+            } as any;
+          }
 
-        // Professional Qualifications
-        if (hr.professionalQualifications?.some(pq => assignedResourceIds.has(pq.id))) {
-          return true;
-        }
-
-        // Trainings
-        if (hr.trainings?.some(training => assignedResourceIds.has(training.id))) {
-          return true;
-        }
-
-        // Experiences
-        if (hr.experiences?.some(exp => assignedResourceIds.has(exp.id))) {
-          return true;
-        }
-
-        // Declaration
-        if (hr.declaration?.id && assignedResourceIds.has(hr.declaration.id)) {
-          return true;
-        }
-
-        return false;
-      }) || [];
+          // Filter sub-item arrays to only include assigned ones
+          if (hr.academicQualifications) {
+            hr.academicQualifications = hr.academicQualifications.filter((aq) =>
+              assignedResourceIds.has(aq.id),
+            );
+          }
+          if (hr.professionalQualifications) {
+            hr.professionalQualifications = hr.professionalQualifications.filter((pq) =>
+              assignedResourceIds.has(pq.id),
+            );
+          }
+          if (hr.trainings) {
+            hr.trainings = hr.trainings.filter((training) => assignedResourceIds.has(training.id));
+          }
+          if (hr.experiences) {
+            hr.experiences = hr.experiences.filter((exp) => assignedResourceIds.has(exp.id));
+          }
+          if (hr.declaration && !assignedResourceIds.has(hr.declaration.id)) {
+            hr.declaration = null as any;
+          }
+          return hr;
+        }) || [];
     } else {
       application.hrs = [];
     }
