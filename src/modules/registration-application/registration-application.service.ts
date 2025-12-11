@@ -173,11 +173,12 @@ export class RegistrationApplicationService {
       queryBuilder.andWhere('application.applicationTypeIdId = :applicationTypeId', { applicationTypeId });
     }
 
-    // Search in details (applicant name, email, etc.)
+    // Search in details (applicant name, email, etc.) and applicationId - case insensitive
     if (search) {
+      const searchTerm = search.trim().toLowerCase();
       queryBuilder.andWhere(
-        '(details.value LIKE :search)',
-        { search: `%${search}%` }
+        '(LOWER(details.value) LIKE LOWER(:search) OR LOWER(application.applicationId) LIKE LOWER(:search))',
+        { search: `%${searchTerm}%` }
       );
     }
 
