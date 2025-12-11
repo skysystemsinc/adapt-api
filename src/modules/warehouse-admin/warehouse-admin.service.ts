@@ -270,24 +270,133 @@ export class WarehouseAdminService {
               id: hr.personalDetails.id,
               name: preservedName || '',
             } as any;
+          } else if (hasPersonalDetails && hr.personalDetails) {
+            // Check if "Photograph" field is assigned
+            const personalDetailsKey = `hrs-${hr.personalDetails.id}`;
+            const personalDetailsFields = assignedFields.get(personalDetailsKey);
+            if (personalDetailsFields && personalDetailsFields.size > 0) {
+              const normalizeFieldName = (str: string): string => {
+                return str
+                  .toLowerCase()
+                  .replace(/[^a-z0-9-]/g, '-')
+                  .replace(/-+/g, '-')
+                  .replace(/^-+|-+$/g, '');
+              };
+              const normalizedPhotograph = 'photograph';
+              const isPhotographAssigned = Array.from(personalDetailsFields).some(field => 
+                normalizeFieldName(field).includes(normalizedPhotograph) || 
+                normalizedPhotograph.includes(normalizeFieldName(field))
+              );
+              if (!isPhotographAssigned) {
+                hr.personalDetails.photographDocument = null as any;
+              }
+            }
           }
 
           // Filter sub-item arrays to only include assigned ones
           if (hr.academicQualifications) {
-            hr.academicQualifications = hr.academicQualifications.filter((aq) =>
-              assignedResourceIds.has(aq.id),
-            );
+            hr.academicQualifications = hr.academicQualifications
+              .filter((aq) => assignedResourceIds.has(aq.id))
+              .map((aq) => {
+                const aqKey = `hrs-${aq.id}`;
+                const aqFields = assignedFields.get(aqKey);
+                if (aqFields && aqFields.size > 0) {
+                  const normalizeFieldName = (str: string): string => {
+                    return str
+                      .toLowerCase()
+                      .replace(/[^a-z0-9-]/g, '-')
+                      .replace(/-+/g, '-')
+                      .replace(/^-+|-+$/g, '');
+                  };
+                  const normalizedAcademicCert = 'academic-certificate';
+                  const isAcademicCertAssigned = Array.from(aqFields).some(field => 
+                    normalizeFieldName(field).includes(normalizedAcademicCert) || 
+                    normalizedAcademicCert.includes(normalizeFieldName(field))
+                  );
+                  if (!isAcademicCertAssigned) {
+                    aq.academicCertificateDocument = null as any;
+                  }
+                }
+                return aq;
+              });
           }
           if (hr.professionalQualifications) {
-            hr.professionalQualifications = hr.professionalQualifications.filter((pq) =>
-              assignedResourceIds.has(pq.id),
-            );
+            hr.professionalQualifications = hr.professionalQualifications
+              .filter((pq) => assignedResourceIds.has(pq.id))
+              .map((pq) => {
+                const pqKey = `hrs-${pq.id}`;
+                const pqFields = assignedFields.get(pqKey);
+                if (pqFields && pqFields.size > 0) {
+                  const normalizeFieldName = (str: string): string => {
+                    return str
+                      .toLowerCase()
+                      .replace(/[^a-z0-9-]/g, '-')
+                      .replace(/-+/g, '-')
+                      .replace(/^-+|-+$/g, '');
+                  };
+                  const normalizedProfCert = 'professional-certificate';
+                  const isProfCertAssigned = Array.from(pqFields).some(field => 
+                    normalizeFieldName(field).includes(normalizedProfCert) || 
+                    normalizedProfCert.includes(normalizeFieldName(field))
+                  );
+                  if (!isProfCertAssigned) {
+                    pq.professionalCertificateDocument = null as any;
+                  }
+                }
+                return pq;
+              });
           }
           if (hr.trainings) {
-            hr.trainings = hr.trainings.filter((training) => assignedResourceIds.has(training.id));
+            hr.trainings = hr.trainings
+              .filter((training) => assignedResourceIds.has(training.id))
+              .map((training) => {
+                const trainingKey = `hrs-${training.id}`;
+                const trainingFields = assignedFields.get(trainingKey);
+                if (trainingFields && trainingFields.size > 0) {
+                  const normalizeFieldName = (str: string): string => {
+                    return str
+                      .toLowerCase()
+                      .replace(/[^a-z0-9-]/g, '-')
+                      .replace(/-+/g, '-')
+                      .replace(/^-+|-+$/g, '');
+                  };
+                  const normalizedTrainingCert = 'training-certificate';
+                  const isTrainingCertAssigned = Array.from(trainingFields).some(field => 
+                    normalizeFieldName(field).includes(normalizedTrainingCert) || 
+                    normalizedTrainingCert.includes(normalizeFieldName(field))
+                  );
+                  if (!isTrainingCertAssigned) {
+                    training.trainingCertificateDocument = null as any;
+                  }
+                }
+                return training;
+              });
           }
           if (hr.experiences) {
-            hr.experiences = hr.experiences.filter((exp) => assignedResourceIds.has(exp.id));
+            hr.experiences = hr.experiences
+              .filter((exp) => assignedResourceIds.has(exp.id))
+              .map((exp) => {
+                const expKey = `hrs-${exp.id}`;
+                const expFields = assignedFields.get(expKey);
+                if (expFields && expFields.size > 0) {
+                  const normalizeFieldName = (str: string): string => {
+                    return str
+                      .toLowerCase()
+                      .replace(/[^a-z0-9-]/g, '-')
+                      .replace(/-+/g, '-')
+                      .replace(/^-+|-+$/g, '');
+                  };
+                  const normalizedExpLetter = 'experience-letter';
+                  const isExpLetterAssigned = Array.from(expFields).some(field => 
+                    normalizeFieldName(field).includes(normalizedExpLetter) || 
+                    normalizedExpLetter.includes(normalizeFieldName(field))
+                  );
+                  if (!isExpLetterAssigned) {
+                    exp.experienceLetterDocument = null as any;
+                  }
+                }
+                return exp;
+              });
           }
           if (hr.declaration && !assignedResourceIds.has(hr.declaration.id)) {
             hr.declaration = null as any;

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Req, UseGuards, Query } from '@nestjs/common';
 import { AssignmentService } from './assignment.service';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { UpdateAssignmentDto } from './dto/update-assignment.dto';
@@ -21,8 +21,16 @@ export class AssignmentController {
 
   @ApiOperation({ summary: 'Get all assignments for a warehouse operator application' })
   @Get('/application/:applicationId/assignments')
-  async getAssignmentsByApplicationId(@Param('applicationId') applicationId: string) {
-    return await this.assignmentService.getAssignmentsByApplicationId(applicationId);
+  async getAssignmentsByApplicationId(
+    @Req() req: any,
+    @Param('applicationId') applicationId: string,
+    @Query('all') all?: string,
+  ) {
+    const userId = req.user?.sub || req.user?.id;
+    // If 'all=true' query param is provided, return all assignments (for admin view)
+    // Otherwise, filter by current user's ID (for HOD/Expert to get their assignment)
+    const filterUserId = all === 'true' ? undefined : userId;
+    return await this.assignmentService.getAssignmentsByApplicationId(applicationId, filterUserId);
   }
 
   @ApiOperation({ summary: 'Get all assignments for a warehouse location application' })
