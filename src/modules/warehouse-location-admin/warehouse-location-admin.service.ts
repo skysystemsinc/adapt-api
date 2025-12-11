@@ -616,8 +616,18 @@ export class WarehouseLocationAdminService {
       application.jurisdiction = null as any;
     }
 
-    // Filter security and fire safety (combined in section 4)
-    if (!assignedSections.has('security_fire_safety')) {
+    // Filter security and fire safety (section 4 - filter individually)
+    if (assignedSections.has('security_fire_safety')) {
+      const assignedResourceIds = assignedSections.get('security_fire_safety')!;
+      // Filter security individually
+      if (application.security && !assignedResourceIds.has(application.security.id)) {
+        application.security = null as any;
+      }
+      // Filter fire safety individually
+      if (application.fireSafety && !assignedResourceIds.has(application.fireSafety.id)) {
+        application.fireSafety = null as any;
+      }
+    } else {
       application.security = null as any;
       application.fireSafety = null as any;
     }
@@ -633,17 +643,79 @@ export class WarehouseLocationAdminService {
     }
 
     // Filter human resources
+    // Note: HR assignments use sub-item IDs (personalDetails.id, academicQualifications[].id, etc.) as resourceId,
+    // not the HR entity ID. So we need to check if any of the HR's sub-items are assigned.
     if (assignedSections.has('human_resources')) {
       const assignedResourceIds = assignedSections.get('human_resources')!;
-      application.humanResources = application.humanResources?.filter(
-        (hr) => assignedResourceIds.has(hr.id)
-      ) || [];
+      application.humanResources = application.humanResources?.filter((hr) => {
+        // Check if HR entity ID is assigned (used for personalDetails sub-item)
+        if (assignedResourceIds.has(hr.id)) {
+          return true;
+        }
+
+        // Check if any sub-item is assigned
+        // Academic Qualifications
+        if (hr.academicQualifications?.some(aq => assignedResourceIds.has(aq.id))) {
+          return true;
+        }
+
+        // Professional Qualifications
+        if (hr.professionalQualifications?.some(pq => assignedResourceIds.has(pq.id))) {
+          return true;
+        }
+
+        // Trainings
+        if (hr.trainings?.some(training => assignedResourceIds.has(training.id))) {
+          return true;
+        }
+
+        // Professional Experiences
+        if (hr.professionalExperiences?.some(exp => assignedResourceIds.has(exp.id))) {
+          return true;
+        }
+
+        // Declaration
+        if (hr.declaration?.id && assignedResourceIds.has(hr.declaration.id)) {
+          return true;
+        }
+
+        return false;
+      }) || [];
     } else {
       application.humanResources = [];
     }
 
     // Filter checklist (section 8)
-    if (!assignedSections.has('checklist')) {
+    if (assignedSections.has('checklist')) {
+      const assignedResourceIds = assignedSections.get('checklist')!;
+      if (application.warehouseLocationChecklist) {
+        // Filter each checklist subsection individually
+        if (application.warehouseLocationChecklist.ownershipLegalDocuments && !assignedResourceIds.has(application.warehouseLocationChecklist.ownershipLegalDocuments.id)) {
+          application.warehouseLocationChecklist.ownershipLegalDocuments = null as any;
+        }
+        if (application.warehouseLocationChecklist.humanResourcesKey && !assignedResourceIds.has(application.warehouseLocationChecklist.humanResourcesKey.id)) {
+          application.warehouseLocationChecklist.humanResourcesKey = null as any;
+        }
+        if (application.warehouseLocationChecklist.locationRisk && !assignedResourceIds.has(application.warehouseLocationChecklist.locationRisk.id)) {
+          application.warehouseLocationChecklist.locationRisk = null as any;
+        }
+        if (application.warehouseLocationChecklist.securityPerimeter && !assignedResourceIds.has(application.warehouseLocationChecklist.securityPerimeter.id)) {
+          application.warehouseLocationChecklist.securityPerimeter = null as any;
+        }
+        if (application.warehouseLocationChecklist.infrastructureUtilities && !assignedResourceIds.has(application.warehouseLocationChecklist.infrastructureUtilities.id)) {
+          application.warehouseLocationChecklist.infrastructureUtilities = null as any;
+        }
+        if (application.warehouseLocationChecklist.storageFacilities && !assignedResourceIds.has(application.warehouseLocationChecklist.storageFacilities.id)) {
+          application.warehouseLocationChecklist.storageFacilities = null as any;
+        }
+        if (application.warehouseLocationChecklist.registrationFee && !assignedResourceIds.has(application.warehouseLocationChecklist.registrationFee.id)) {
+          application.warehouseLocationChecklist.registrationFee = null as any;
+        }
+        if (application.warehouseLocationChecklist.declaration && !assignedResourceIds.has(application.warehouseLocationChecklist.declaration.id)) {
+          application.warehouseLocationChecklist.declaration = null as any;
+        }
+      }
+    } else {
       application.warehouseLocationChecklist = null as any;
     }
   }
