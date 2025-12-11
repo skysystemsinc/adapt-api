@@ -64,7 +64,7 @@ export class WarehouseAdminService {
       .leftJoin(
         'assignment',
         'assignment',
-        `assignment.applicationId = application.id AND assignment.id = ${latestAssignmentSubquery}`
+        `assignment.applicationId = application.id AND assignment."assignedTo" = :assignedToUserId AND assignment.id = ${latestAssignmentSubquery}`,{ assignedToUserId: userId }
       )
       .select([
         'application.id',
