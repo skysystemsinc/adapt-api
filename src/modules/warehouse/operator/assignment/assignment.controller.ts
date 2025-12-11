@@ -5,6 +5,7 @@ import { UpdateAssignmentDto } from './dto/update-assignment.dto';
 import { User } from 'src/modules/users/entities/user.entity';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
+import { RejectApplicationDto } from './dto/reject-application.dto';
 
 @Controller('warehouse/assignment')
 @ApiTags('Assignment')
@@ -42,6 +43,20 @@ export class AssignmentController {
       throw new Error('User ID not found in request. Authentication may have failed.');
     }
     return await this.assignmentService.assign(applicationId, createAssignmentDto, userId as string);
+  }
+
+  @ApiOperation({ summary: 'Reject an assignment for a warehouse operator application' })
+  @ApiBody({ type: RejectApplicationDto })
+  @Post('/application/:applicationId/reject')
+  async reject(@Body() rejectApplicationDto: RejectApplicationDto,
+    @Req() req: any,
+    @Param('applicationId') applicationId: string) {
+    // JWT payload typically has 'sub' field containing the user ID
+    const userId = req.user?.sub || req.user?.id;
+    if (!userId) {
+      throw new Error('User ID not found in request. Authentication may have failed.');
+    }
+    return await this.assignmentService.rejectApplication(applicationId, rejectApplicationDto, userId as string);
   }
 
   @ApiOperation({ summary: 'Assign an assignment to a user for warehouse location application' })

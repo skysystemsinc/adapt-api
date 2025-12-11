@@ -9,6 +9,8 @@ import { AssignmentSection } from './entities/assignment-section.entity';
 import { AssignmentSectionField } from './entities/assignment-section-field.entity';
 import { Permissions } from 'src/modules/rbac/constants/permissions.constants';
 import { hasPermission } from 'src/common/utils/helper.utils';
+import { RejectApplicationDto } from './dto/reject-application.dto';
+import { WarehouseOperatorApplicationRequest } from '../../entities/warehouse-operator-application-request.entity';
 
 @Injectable()
 export class AssignmentService {
@@ -126,6 +128,107 @@ export class AssignmentService {
     }
   }
 
+
+  async rejectApplication(applicationId: string, rejectApplicationDto: RejectApplicationDto, assignedById: string) {
+    // GET USER WHO IS REJECTING THE APPLICATION
+    const user = await this.userRepository.findOne({
+      where: { id: assignedById },
+      relations: [
+        'userRoles',
+        'userRoles.role',
+        'userRoles.role.rolePermissions',
+        'userRoles.role.rolePermissions.permission',
+      ],
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    if (!user.isActive) {
+      throw new ConflictException('User is not active. Please contact the administrator.');
+    }
+    const isHOD = hasPermission(user, Permissions.IS_HOD);
+
+    // ONLY HOD CAN REJECT THE APPLICATION
+    if (!isHOD) {
+      throw new ForbiddenException('You are not authorized to perform this action.');
+    }
+
+    const application = await this.dataSource.getRepository(WarehouseOperatorApplicationRequest).findOne({
+      where: { id: applicationId },
+    });
+
+    if(!application) {
+      throw new NotFoundException('Application not found');
+    }
+
+    // GET USER WHO IS THE APPLICANT
+    const assignedTo = await this.userRepository.findOne({
+      where: { id: application.userId },
+      relations: [
+        'userRoles',
+        'userRoles.role',
+        'userRoles.role.rolePermissions',
+        'userRoles.role.rolePermissions.permission',
+      ],
+    });
+
+    if (!assignedTo) {
+      throw new NotFoundException('User not found');
+    }
+    if (!assignedTo.isActive) {
+      throw new ConflictException('User is not active. Please contact the administrator.');
+    }
+
+    try {
+      // TRANSACTION START
+      const assignment = await this.dataSource.transaction(async (transactionalEntityManager) => {
+        // Create assignment entity
+        const assignmentEntity = transactionalEntityManager.create(Assignment, {
+          applicationId: applicationId,
+          assignedBy: assignedById,
+          assignedTo: application.userId,
+          level: AssignmentLevel.HOD_TO_APPLICANT,
+        });
+
+        // Save assignment first to get the ID
+        const savedAssignment = await transactionalEntityManager.save(Assignment, assignmentEntity);
+
+        // Create and save sections with their fields
+        for (const section of rejectApplicationDto.sections) {
+          const sectionEntity = transactionalEntityManager.create(AssignmentSection, {
+            assignmentId: savedAssignment.id,
+            sectionType: section.sectionType,
+            resourceId: section.resourceId,
+            resourceType: section.resourceType,
+          });
+
+          const savedSection = await transactionalEntityManager.save(AssignmentSection, sectionEntity);
+
+          // Create and save fields for this section
+          for (const field of section.fields) {
+            const fieldEntity = transactionalEntityManager.create(AssignmentSectionField, {
+              assignmentSectionId: savedSection.id,
+              fieldName: field.fieldName,
+              remarks: field.remarks,
+            });
+
+            await transactionalEntityManager.save(AssignmentSectionField, fieldEntity);
+          }
+        }
+
+        return savedAssignment;
+      });
+
+      return {
+        message: 'Application rejected successfully',
+        assignment: assignment.id,
+      };
+    } catch (error) {
+      console.error('Error rejecting application:', error);
+      throw new ConflictException('Failed to reject application', error);
+    }
+  }
+
   findAll() {
     return `This action returns all assignment`;
   }
@@ -176,9 +279,9 @@ export class AssignmentService {
 
   async getAssignmentByApplicationId(applicationId: string, userId: string) {
     const assignment = await this.dataSource.getRepository(Assignment).findOne({
-      where: { 
+      where: {
         applicationId: applicationId,
-        assignedTo: userId 
+        assignedTo: userId
       },
       relations: [
         'sections',
@@ -299,9 +402,9 @@ export class AssignmentService {
 
   async getAssignmentByLocationId(applicationLocationId: string, userId: string) {
     const assignment = await this.dataSource.getRepository(Assignment).findOne({
-      where: { 
+      where: {
         applicationLocationId: applicationLocationId,
-        assignedTo: userId 
+        assignedTo: userId
       },
       relations: [
         'sections',

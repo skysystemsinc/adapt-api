@@ -27,6 +27,7 @@ export enum AssignmentLevel {
     OFFICER_TO_HOD = 'OFFICER_TO_HOD',
     HOD_TO_EXPERT = 'HOD_TO_EXPERT',
     EXPERT_TO_HOD = 'EXPERT_TO_HOD',
+    HOD_TO_APPLICANT = 'HOD_TO_APPLICANT',
 }
 
 @Entity('assignment')
