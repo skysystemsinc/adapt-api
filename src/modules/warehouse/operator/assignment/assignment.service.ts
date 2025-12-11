@@ -4,7 +4,7 @@ import { UpdateAssignmentDto } from './dto/update-assignment.dto';
 import { DataSource, Repository } from 'typeorm';
 import { User } from 'src/modules/users/entities/user.entity';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Assignment, AssignmentLevel } from './entities/assignment.entity';
+import { Assignment, AssignmentLevel, AssignmentStatus } from './entities/assignment.entity';
 import { AssignmentSection } from './entities/assignment-section.entity';
 import { AssignmentSectionField } from './entities/assignment-section-field.entity';
 import { Permissions } from 'src/modules/rbac/constants/permissions.constants';
@@ -188,6 +188,7 @@ export class AssignmentService {
           assignedBy: assignedById,
           assignedTo: application.userId,
           level: AssignmentLevel.HOD_TO_APPLICANT,
+          status: AssignmentStatus.REJECTED,
         });
 
         // Save assignment first to get the ID
