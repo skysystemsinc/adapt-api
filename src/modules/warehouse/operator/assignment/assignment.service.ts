@@ -11,6 +11,7 @@ import { Permissions } from 'src/modules/rbac/constants/permissions.constants';
 import { hasPermission } from 'src/common/utils/helper.utils';
 import { RejectApplicationDto } from './dto/reject-application.dto';
 import { WarehouseOperatorApplicationRequest } from '../../entities/warehouse-operator-application-request.entity';
+import { ApplicationRejectionEntity } from '../../entities/application-rejection.entity';
 
 @Injectable()
 export class AssignmentService {
@@ -157,7 +158,7 @@ export class AssignmentService {
       where: { id: applicationId },
     });
 
-    if(!application) {
+    if (!application) {
       throw new NotFoundException('Application not found');
     }
 
@@ -194,6 +195,7 @@ export class AssignmentService {
         // Save assignment first to get the ID
         const savedAssignment = await transactionalEntityManager.save(Assignment, assignmentEntity);
 
+
         // Create and save sections with their fields
         for (const section of rejectApplicationDto.sections) {
           const sectionEntity = transactionalEntityManager.create(AssignmentSection, {
@@ -216,6 +218,17 @@ export class AssignmentService {
             await transactionalEntityManager.save(AssignmentSectionField, fieldEntity);
           }
         }
+
+        // Create application rejection entity
+        const applicationRejectionEntity = transactionalEntityManager.create(ApplicationRejectionEntity, {
+          applicationId: applicationId,
+          rejectionBy: assignedById,
+          rejectionReason: rejectApplicationDto.remarks,
+          unlockedSections: rejectApplicationDto.sections.map(section => section.sectionType),
+        });
+
+        // Save application rejection entity
+        await transactionalEntityManager.save(ApplicationRejectionEntity, applicationRejectionEntity);
 
         return savedAssignment;
       });
