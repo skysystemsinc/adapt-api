@@ -1,12 +1,22 @@
 import { DataSource } from 'typeorm';
 import { Setting } from '../../modules/settings/entities/setting.entity';
+import { DynamicCalculator } from '../../modules/dynamic-calculator/entities/dynamic-calculator.entity';
 
 export class SettingsSeeder {
   public async run(dataSource: DataSource): Promise<void> {
     const settingsRepository = dataSource.getRepository(Setting);
+    const calculatorRepository = dataSource.getRepository(DynamicCalculator);
 
     console.log('🌱 Seeding settings...\n');
 
+    // First, set salesTaxSettingId to NULL in dynamic_calculator to break foreign key references
+    await calculatorRepository
+      .createQueryBuilder()
+      .update(DynamicCalculator)
+      .set({ salesTaxSettingId: null })
+      .execute();
+
+    // Now we can safely delete all settings
     await settingsRepository
       .createQueryBuilder()
       .delete()
