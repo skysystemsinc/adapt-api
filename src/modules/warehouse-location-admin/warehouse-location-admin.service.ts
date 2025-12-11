@@ -643,44 +643,74 @@ export class WarehouseLocationAdminService {
     }
 
     // Filter human resources
-    // Note: HR assignments use sub-item IDs (personalDetails.id, academicQualifications[].id, etc.) as resourceId,
-    // not the HR entity ID. So we need to check if any of the HR's sub-items are assigned.
+    // Keep HR if the HR entity itself (hr.id) is assigned OR any sub-item is assigned.
+    // Then filter sub-item arrays to only include assigned items.
+    // If hr.id is not assigned, clear personalDetails fields (Basic Facility Information).
     if (assignedSections.has('human_resources')) {
       const assignedResourceIds = assignedSections.get('human_resources')!;
-      application.humanResources = application.humanResources?.filter((hr) => {
-        // Check if HR entity ID is assigned (used for personalDetails sub-item)
-        if (assignedResourceIds.has(hr.id)) {
-          return true;
-        }
+      application.humanResources = application.humanResources
+        ?.filter((hr) => {
+          const hasPersonalDetails = assignedResourceIds.has(hr.id); // personalDetails uses hr.id
+          const hasAcademicQualification = hr.academicQualifications?.some((aq) => assignedResourceIds.has(aq.id));
+          const hasProfessionalQualification = hr.professionalQualifications?.some((pq) => assignedResourceIds.has(pq.id));
+          const hasTraining = hr.trainings?.some((training) => assignedResourceIds.has(training.id));
+          const hasExperience = hr.professionalExperiences?.some((exp) => assignedResourceIds.has(exp.id));
+          const hasDeclaration = hr.declaration?.id && assignedResourceIds.has(hr.declaration.id);
 
-        // Check if any sub-item is assigned
-        // Academic Qualifications
-        if (hr.academicQualifications?.some(aq => assignedResourceIds.has(aq.id))) {
-          return true;
-        }
+          // Keep HR if any of its items (including itself) are assigned
+          return (
+            hasPersonalDetails ||
+            hasAcademicQualification ||
+            hasProfessionalQualification ||
+            hasTraining ||
+            hasExperience ||
+            hasDeclaration
+          );
+        })
+        ?.map((hr) => {
+          const hasPersonalDetails = assignedResourceIds.has(hr.id);
 
-        // Professional Qualifications
-        if (hr.professionalQualifications?.some(pq => assignedResourceIds.has(pq.id))) {
-          return true;
-        }
+          // If personalDetails (hr.id) is not assigned, clear personalDetails fields
+          // This prevents "Basic Facility Information" from being shown
+          // Keep fullName for HR card title display
+          if (!hasPersonalDetails) {
+            hr.fathersHusbandsName = null as any;
+            hr.cnicPassport = null as any;
+            hr.nationality = null as any;
+            hr.dateOfBirth = null as any;
+            hr.residentialAddress = null as any;
+            hr.businessAddress = null as any;
+            hr.telephoneNumber = null as any;
+            hr.mobileNumber = null as any;
+            hr.email = null as any;
+            hr.hrNationalTaxNumber = null as any;
+            hr.photograph = null as any;
+          }
 
-        // Trainings
-        if (hr.trainings?.some(training => assignedResourceIds.has(training.id))) {
-          return true;
-        }
-
-        // Professional Experiences
-        if (hr.professionalExperiences?.some(exp => assignedResourceIds.has(exp.id))) {
-          return true;
-        }
-
-        // Declaration
-        if (hr.declaration?.id && assignedResourceIds.has(hr.declaration.id)) {
-          return true;
-        }
-
-        return false;
-      }) || [];
+          // Filter sub-item arrays to only include assigned ones
+          if (hr.academicQualifications) {
+            hr.academicQualifications = hr.academicQualifications.filter((aq) =>
+              assignedResourceIds.has(aq.id),
+            );
+          }
+          if (hr.professionalQualifications) {
+            hr.professionalQualifications = hr.professionalQualifications.filter((pq) =>
+              assignedResourceIds.has(pq.id),
+            );
+          }
+          if (hr.trainings) {
+            hr.trainings = hr.trainings.filter((training) => assignedResourceIds.has(training.id));
+          }
+          if (hr.professionalExperiences) {
+            hr.professionalExperiences = hr.professionalExperiences.filter((exp) =>
+              assignedResourceIds.has(exp.id),
+            );
+          }
+          if (hr.declaration && !assignedResourceIds.has(hr.declaration.id)) {
+            hr.declaration = null as any;
+          }
+          return hr;
+        }) || [];
     } else {
       application.humanResources = [];
     }
