@@ -1304,6 +1304,12 @@ export class WarehouseService {
     if (!application) {
       throw new NotFoundException('Warehouse operator application not found');
     }
+    let isUnlocked = false;
+
+    if (application.rejections.length > 0) {
+      // check if unlockedSections has any section named "1. Authorize Signatory Information"
+      isUnlocked = application.rejections.some((rejection) => rejection.unlockedSections.includes('1. Authorize Signatory Information'));
+    }
 
     return {
       message: 'Warehouse application retrieved successfully',
@@ -1313,7 +1319,8 @@ export class WarehouseService {
         applicationType: application.applicationType,
         status: application.status,
         authorizedSignatories: application.authorizedSignatories || [],
-        rejections: application.rejections || [],
+        // rejections: application.rejections || [],
+        isUnlocked,
       },
     };
   }
