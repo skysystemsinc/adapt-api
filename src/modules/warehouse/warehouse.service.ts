@@ -1413,6 +1413,7 @@ export class WarehouseService {
   async getBankDetails(applicationId: string, userId: string) {
     const application = await this.warehouseOperatorRepository.findOne({
       where: { id: applicationId, userId },
+      relations: ['rejections'],
     });
 
     if (!application) {
@@ -1429,6 +1430,11 @@ export class WarehouseService {
         data: null,
       };
     }
+    let isUnlocked = false;
+    if (application.rejections.length > 0) {
+      // check if unlockedSections has any section named "3. Bank Details"
+      isUnlocked = application.rejections.some((rejection) => rejection.unlockedSections.includes('3. Bank Details'));
+    }
 
     return {
       message: 'Bank details retrieved successfully',
@@ -1440,6 +1446,7 @@ export class WarehouseService {
         accountType: bankDetails.accountType,
         branchAddress: bankDetails.branchAddress,
         status: bankDetails.status,
+        isUnlocked,
       },
     };
   }
