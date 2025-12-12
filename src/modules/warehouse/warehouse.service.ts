@@ -45,8 +45,8 @@ import { AssignmentSection } from './operator/assignment/entities/assignment-sec
 import { AuthorizedSignatoryHistory } from './entities/authorized-signatories-history.entity';
 import { CompanyInformationHistory } from './entities/company-information-history.entity';
 import { BankDetailsHistory } from './entities/bank-details-history.entity';
+import { PersonalDetailsHistoryEntity } from './entities/hr/personal-details.entity/personal-details-history.entity';
 
-@Injectable()
 export class WarehouseService {
   private readonly uploadDir = 'uploads';
 
@@ -84,6 +84,8 @@ export class WarehouseService {
     private readonly companyInformationHistoryRepository: Repository<CompanyInformationHistory>,
     @InjectRepository(BankDetailsHistory)
     private readonly bankDetailsHistoryRepository: Repository<BankDetailsHistory>,
+    @InjectRepository(PersonalDetailsHistoryEntity)
+    private readonly personalDetailsHistoryRepository: Repository<PersonalDetailsHistoryEntity>,
   ) {
     // Ensure upload directory exists
     this.ensureUploadDirectory();
@@ -556,10 +558,10 @@ export class WarehouseService {
           landlineNumber: signatory.landlineNumber,
           isActive: false,
         });
-        
+
         // Preserve the original createdAt timestamp from the authorized signatory record
         historyRecord.createdAt = signatory.createdAt;
-        
+
         await historyRepo.save(historyRecord);
       }
 
@@ -768,10 +770,10 @@ export class WarehouseService {
           salesTaxRegistrationNumber: companyInfo.salesTaxRegistrationNumber,
           isActive: false,
         });
-        
+
         // Preserve the original createdAt timestamp from the company information record
         historyRecord.createdAt = companyInfo.createdAt;
-        
+
         await historyRepo.save(historyRecord);
       }
 
@@ -1713,6 +1715,10 @@ export class WarehouseService {
       throw new NotFoundException('Warehouse operator application not found. Please create an application first.');
     }
 
+    if (![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(application.status)) {
+      throw new BadRequestException('Cannot update personal details after application is approved or submitted');
+    }
+
     // Find or create HR context
     let hr: HrEntity | null = null;
 
@@ -1753,6 +1759,9 @@ export class WarehouseService {
       const personalRepo = manager.getRepository(PersonalDetailsEntity);
       const designationRepo = manager.getRepository(Designation);
       const documentRepo = manager.getRepository(WarehouseDocument);
+      const historyRepo = manager.getRepository(PersonalDetailsHistoryEntity);
+      const appRepo = manager.getRepository(WarehouseOperatorApplicationRequest);
+
 
       const resolveDesignationId = async (input?: string | null): Promise<string | null> => {
         if (!input) {
@@ -1829,6 +1838,42 @@ export class WarehouseService {
       });
 
       if (currentHr?.personalDetails) {
+        const appInTransaction = await appRepo.findOne({
+          where: { id: applicationId, userId },
+        });
+        if (!appInTransaction) {
+          throw new NotFoundException('Application not found');
+        }
+
+        if (![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(appInTransaction.status)) {
+          throw new BadRequestException('Cannot update personal details after application is approved or submitted');
+        }
+
+        // save history of personal details if application is rejected
+        if (appInTransaction?.status === WarehouseOperatorApplicationStatus.REJECTED) {
+          await historyRepo.save( 
+            historyRepo.create({
+              id: undefined,
+              personalDetailsId: currentHr.personalDetails.id,
+              designationId: currentHr.personalDetails.designationId ?? undefined,
+              name: currentHr.personalDetails.name,
+              fathersHusbandName: currentHr.personalDetails.fathersHusbandName,
+              cnicPassport: currentHr.personalDetails.cnicPassport,
+              nationality: currentHr.personalDetails.nationality,
+              dateOfBirth: currentHr.personalDetails.dateOfBirth,
+              residentialAddress: currentHr.personalDetails.residentialAddress,
+              businessAddress: currentHr.personalDetails.businessAddress ?? undefined,
+              telephone: currentHr.personalDetails.telephone ?? undefined,
+              mobileNumber: currentHr.personalDetails.mobileNumber,
+              email: currentHr.personalDetails.email,
+              nationalTaxNumber: currentHr.personalDetails.nationalTaxNumber ?? undefined,
+              photograph: currentHr.personalDetails.photograph ?? undefined,
+              isActive: false,
+              createdAt: currentHr.personalDetails.createdAt,
+            })
+          );
+        }
+
         // Update existing personal details
         Object.assign(currentHr.personalDetails, {
           ...dto,
@@ -3840,10 +3885,10 @@ export class WarehouseService {
           status: bankDetailsInTransaction.status,
           isActive: false,
         });
-        
+
         // Preserve the original createdAt timestamp from the bank details record
         historyRecord.createdAt = bankDetailsInTransaction.createdAt;
-        
+
         await historyRepo.save(historyRecord);
       }
 
