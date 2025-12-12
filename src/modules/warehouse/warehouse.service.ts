@@ -1298,7 +1298,7 @@ export class WarehouseService {
   async getWarehouseApplication(applicationId: string, userId: string) {
     const application = await this.warehouseOperatorRepository.findOne({
       where: { id: applicationId, userId },
-      relations: ['authorizedSignatories'],
+      relations: ['authorizedSignatories', 'rejections'],
     });
 
     if (!application) {
@@ -1313,6 +1313,7 @@ export class WarehouseService {
         applicationType: application.applicationType,
         status: application.status,
         authorizedSignatories: application.authorizedSignatories || [],
+        rejections: application.rejections || [],
       },
     };
   }
@@ -3693,6 +3694,7 @@ export class WarehouseService {
       relations: ['authorizedSignatories' as 'Authorized Signatory', 'rejections']
     });
 
+    console.log('warehouseOperatorApplication------', warehouseOperatorApplication);
     if (!warehouseOperatorApplication) {
       throw new NotFoundException('Warehouse operator application not found');
     }
