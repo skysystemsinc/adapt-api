@@ -3839,6 +3839,20 @@ export class WarehouseService {
   }
 
   private async mapFinancialInformationEntityToResponse(financialInfo: FinancialInformationEntity) {
+    // Get all documents for audit report if it exists
+    let auditReportDocuments: any[] = [];
+    if (financialInfo.auditReport) {
+      auditReportDocuments = await this.warehouseDocumentRepository.find({
+        where: {
+          documentableType: 'AuditReport',
+          documentableId: financialInfo.auditReport.id,
+        },
+        order: {
+          createdAt: 'ASC',
+        },
+      });
+    }
+
     // Get all documents for tax return if it exists
     let taxReturnDocuments: any[] = [];
     if (financialInfo.taxReturns?.[0]) {
@@ -3868,6 +3882,20 @@ export class WarehouseService {
           revenue: financialInfo.auditReport.revenue,
           netProfitLoss: financialInfo.auditReport.netProfitLoss,
           remarks: financialInfo.auditReport.remarks ?? null,
+          // Keep single document for backward compatibility
+          document: financialInfo.auditReport.document && financialInfo.auditReport.document.id
+            ? {
+                documentId: financialInfo.auditReport.document.id,
+                originalFileName: financialInfo.auditReport.document.originalFileName ?? undefined,
+              }
+            : null,
+          // Include all documents array
+          documents: auditReportDocuments.length > 0
+            ? auditReportDocuments.map((doc) => ({
+                documentId: doc.id,
+                originalFileName: doc.originalFileName ?? undefined,
+              }))
+            : undefined,
         }
         : null,
       taxReturn: financialInfo.taxReturns?.[0]

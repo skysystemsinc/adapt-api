@@ -954,10 +954,10 @@ export class WarehouseController {
 
     const user = request.user as User;
     
-    // For tax-return, use multiple files; for others, use first file (backward compatibility)
+    // For tax-return and audit-report, use multiple files; for others, use first file (backward compatibility)
     let documentFile: any = undefined;
-    if (sectionType === 'tax-return') {
-      // Multiple files for tax-return
+    if (sectionType === 'tax-return' || sectionType === 'audit-report') {
+      // Multiple files for tax-return and audit-report
       documentFile = documentFiles && documentFiles.length > 0 ? documentFiles : undefined;
     } else {
       // Single file for other sections (backward compatibility)
@@ -1008,10 +1008,10 @@ export class WarehouseController {
 
     const user = request.user as User;
     
-    // For tax-return, use multiple files; for others, use first file (backward compatibility)
+    // For tax-return and audit-report, use multiple files; for others, use first file (backward compatibility)
     let documentFile: any = undefined;
-    if (sectionType === 'tax-return') {
-      // Multiple files for tax-return
+    if (sectionType === 'tax-return' || sectionType === 'audit-report') {
+      // Multiple files for tax-return and audit-report
       documentFile = documentFiles && documentFiles.length > 0 ? documentFiles : undefined;
     } else {
       // Single file for other sections (backward compatibility)

@@ -82,22 +82,58 @@ export class FinancialInformationService {
 
   /**
    * Save or update audit report
+   * Supports multiple documents for audit-report
    */
   private async saveAuditReport(
     financialInfo: FinancialInformationEntity,
     dto: any,
     userId: string,
     id?: string,
-    documentFile?: any,
+    documentFiles?: any, // Can be single file, array of files, or array of document IDs
   ) {
     const savedResult = await this.dataSource.transaction(async (manager) => {
       const auditReportRepo = manager.getRepository(AuditReportEntity);
       const documentRepo = manager.getRepository(WarehouseDocument);
 
+      // Normalize documentFiles to array
+      let filesToUpload: any[] = [];
+      let documentIdsToKeep: string[] = [];
+      
+      if (documentFiles) {
+        if (Array.isArray(documentFiles)) {
+          // Check if array contains files or document IDs
+          documentFiles.forEach((item) => {
+            if (item && typeof item === 'object' && item.buffer) {
+              // It's a file
+              filesToUpload.push(item);
+            } else if (typeof item === 'string') {
+              // It's a document ID
+              documentIdsToKeep.push(item);
+            }
+          });
+        } else if (documentFiles.buffer) {
+          // Single file
+          filesToUpload = [documentFiles];
+        } else if (typeof documentFiles === 'string') {
+          // Single document ID
+          documentIdsToKeep = [documentFiles];
+        }
+      }
+
+      // Also check dto.documents for document IDs (from frontend)
+      if (dto.documents && Array.isArray(dto.documents)) {
+        dto.documents.forEach((docId: string) => {
+          if (typeof docId === 'string' && !documentIdsToKeep.includes(docId)) {
+            documentIdsToKeep.push(docId);
+          }
+        });
+      }
+
       if (id) {
         // Update existing
         const existing = await auditReportRepo.findOne({
           where: { id, financialInformationId: financialInfo.id },
+          relations: ['document'],
         });
 
         if (!existing) {
@@ -116,6 +152,56 @@ export class FinancialInformationService {
           netProfitLoss: dto.netProfitLoss,
           remarks: dto.remarks ?? null,
         });
+
+        // Handle multiple documents
+        if (filesToUpload.length > 0 || documentIdsToKeep.length > 0) {
+          // Delete old documents that are not in the keep list
+          // Find all existing documents for this audit report
+          const existingDocuments = await documentRepo.find({
+            where: {
+              documentableType: 'AuditReport',
+              documentableId: existing.id,
+            },
+          });
+
+          // Delete documents that are not in the keep list
+          const documentsToDelete = existingDocuments.filter(
+            (doc) => !documentIdsToKeep.includes(doc.id)
+          );
+          if (documentsToDelete.length > 0) {
+            await documentRepo.remove(documentsToDelete);
+          }
+
+          // Upload new files
+          let firstDocument: WarehouseDocument | null = null;
+          for (const file of filesToUpload) {
+            const doc = await this.warehouseService.uploadWarehouseDocument(
+              file,
+              userId,
+              'AuditReport',
+              existing.id,
+              'document',
+            );
+            const documentEntity = await documentRepo.findOne({ where: { id: doc.id } });
+            if (documentEntity) {
+              if (!firstDocument) {
+                firstDocument = documentEntity;
+              }
+            }
+          }
+
+          // Set the first document (or first from keep list) as the primary document for backward compatibility
+          if (firstDocument) {
+            existing.document = firstDocument;
+          } else if (documentIdsToKeep.length > 0) {
+            const firstDocToKeep = await documentRepo.findOne({
+              where: { id: documentIdsToKeep[0] },
+            });
+            if (firstDocToKeep) {
+              existing.document = firstDocToKeep;
+            }
+          }
+        }
 
         await auditReportRepo.save(existing);
         return existing;
@@ -140,9 +226,56 @@ export class FinancialInformationService {
         financialInfo.auditReportId = auditReport.id;
         await manager.getRepository(FinancialInformationEntity).save(financialInfo);
 
+        // Upload new files
+        let firstDocument: WarehouseDocument | null = null;
+        for (const file of filesToUpload) {
+          const doc = await this.warehouseService.uploadWarehouseDocument(
+            file,
+            userId,
+            'AuditReport',
+            auditReport.id,
+            'document',
+          );
+          const documentEntity = await documentRepo.findOne({ where: { id: doc.id } });
+          if (documentEntity) {
+            if (!firstDocument) {
+              firstDocument = documentEntity;
+            }
+          }
+        }
+
+        // Set the first document as the primary document for backward compatibility
+        if (firstDocument) {
+          auditReport.document = firstDocument;
+          await auditReportRepo.save(auditReport);
+        }
+
         return auditReport;
       }
     });
+
+    // Reload the entity with document relation to return complete data
+    const resultWithDocument = await this.dataSource.getRepository(AuditReportEntity).findOne({
+      where: { id: savedResult.id },
+      relations: ['document'],
+    });
+
+    // Get all documents for this audit report (polymorphic relationship)
+    const allDocuments = await this.dataSource.getRepository(WarehouseDocument).find({
+      where: {
+        documentableType: 'AuditReport',
+        documentableId: savedResult.id,
+      },
+      order: {
+        createdAt: 'ASC', // Order by creation time
+      },
+    });
+
+    // Map documents to response format
+    const documentsArray = allDocuments.map((doc) => ({
+      documentId: doc.id,
+      originalFileName: doc.originalFileName ?? undefined,
+    }));
 
     return {
       message: id ? 'Audit report updated successfully' : 'Audit report saved successfully',
@@ -158,6 +291,15 @@ export class FinancialInformationService {
         revenue: savedResult.revenue,
         netProfitLoss: savedResult.netProfitLoss,
         remarks: savedResult.remarks ?? null,
+        // Keep single document for backward compatibility
+        document: resultWithDocument?.document && resultWithDocument.document.id
+          ? {
+              documentId: resultWithDocument.document.id,
+              originalFileName: resultWithDocument.document.originalFileName ?? undefined,
+            }
+          : null,
+        // Include all documents array
+        documents: documentsArray.length > 0 ? documentsArray : undefined,
         createdAt: savedResult.createdAt.toISOString(),
         updatedAt: savedResult.updatedAt.toISOString(),
       },
