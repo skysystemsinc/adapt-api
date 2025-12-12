@@ -163,7 +163,7 @@ export class WarehouseController {
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     type: CreateCompanyInformationRequestDto,
-    description: 'Company information data with optional NTC certificate file'
+    description: 'Company information data with optional NTN certificate file'
   })
   @UseInterceptors(
     FileInterceptor('ntcCertificate', {

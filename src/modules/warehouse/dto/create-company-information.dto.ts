@@ -85,7 +85,7 @@ export class CreateCompanyInformationRequestDto {
     @ApiProperty({
         type: 'string',
         format: 'binary',
-        description: 'NTC certificate file (PDF, PNG, JPG, JPEG, DOC, DOCX). Max size: 100MB',
+        description: 'NTN certificate file (PDF, PNG, JPG, JPEG, DOC, DOCX). Max size: 100MB',
         required: false,
     })
     @Transform(({ value }) => {
@@ -146,7 +146,7 @@ export class CompanyInformationResponseDto {
     salesTaxRegistrationNumber!: string;
 
     @ApiPropertyOptional({ 
-        description: 'NTC certificate document ID from warehouse_documents table',
+        description: 'NTN certificate document ID from warehouse_documents table',
         example: 'd1ac02a6-a483-4a80-8a62-1f2de08dfaca',
     })
     ntcCertificate?: string;
