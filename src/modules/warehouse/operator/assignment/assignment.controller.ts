@@ -35,8 +35,17 @@ export class AssignmentController {
 
   @ApiOperation({ summary: 'Get all assignments for a warehouse location application' })
   @Get('/location/:applicationLocationId/assignments')
-  async getAssignmentsByLocationId(@Param('applicationLocationId') applicationLocationId: string) {
-    return await this.assignmentService.getAssignmentsByLocationId(applicationLocationId);
+  async getAssignmentsByLocationId(
+    @Param('applicationLocationId') applicationLocationId: string,
+    @Req() req: any,
+    @Query('all') all?: string
+  ) {
+    const userId = req.user?.sub || req.user?.id;
+    // If 'all' is true, return all assignments (for admin). Otherwise, filter by current user.
+    return await this.assignmentService.getAssignmentsByLocationId(
+      applicationLocationId,
+      all === 'true' ? undefined : (userId as string)
+    );
   }
 
   @ApiOperation({ summary: 'Assign an assignment to a user for warehouse operator application' })

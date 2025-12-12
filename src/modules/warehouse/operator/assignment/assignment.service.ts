@@ -435,11 +435,14 @@ export class AssignmentService {
    * Get all assignments for a specific location application
    * Returns list of assignments with assignedTo user IDs
    */
-  async getAssignmentsByLocationId(applicationLocationId: string) {
+  async getAssignmentsByLocationId(applicationLocationId: string, userId?: string) {
+    const whereClause: any = { applicationLocationId: applicationLocationId };
+    if (userId) {
+      whereClause.assignedTo = userId;
+    }
     const assignments = await this.dataSource.getRepository(Assignment).find({
-      where: { applicationLocationId: applicationLocationId },
-      select: ['id', 'assignedTo', 'assignedBy', 'level', 'status', 'createdAt'],
-      relations: ['assignedToUser'],
+      where: whereClause,
+      relations: ['assignedToUser', 'sections', 'sections.fields'],
     });
     return assignments;
   }
