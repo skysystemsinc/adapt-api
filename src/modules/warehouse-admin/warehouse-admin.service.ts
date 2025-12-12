@@ -10,6 +10,7 @@ import { DataSource } from 'typeorm';
 import { Permissions } from '../rbac/constants/permissions.constants';
 import { hasPermission } from 'src/common/utils/helper.utils';
 import { Assignment } from '../warehouse/operator/assignment/entities/assignment.entity';
+import { WarehouseDocument } from '../warehouse/entities/warehouse-document.entity';
 
 @Injectable()
 export class WarehouseAdminService {
@@ -19,6 +20,8 @@ export class WarehouseAdminService {
     private warehouseOperatorApplicationRequestRepository: Repository<WarehouseOperatorApplicationRequest>,
     @InjectRepository(User)
     private usersRepository: Repository<User>,
+    @InjectRepository(WarehouseDocument)
+    private warehouseDocumentRepository: Repository<WarehouseDocument>,
     private dataSource: DataSource,
   ) { }
 
@@ -523,9 +526,7 @@ export class WarehouseAdminService {
         },
         financialInformation: {
           auditReport: true,
-          taxReturns: {
-            document: true,
-          },
+          taxReturns: true,
           bankStatements: {
             document: true,
           },
@@ -587,6 +588,11 @@ export class WarehouseAdminService {
       }
     }
 
+    // Enrich financial information with polymorphic documents
+    if (warehouseOperatorApplication.financialInformation) {
+      await this.enrichFinancialInformationWithDocuments(warehouseOperatorApplication.financialInformation);
+    }
+
     const totalCount =
       (warehouseOperatorApplication.authorizedSignatories?.length || 0) +
       (warehouseOperatorApplication.hrs?.length || 0) +
@@ -605,6 +611,86 @@ export class WarehouseAdminService {
       ...warehouseOperatorApplication,
       totalCount,
     };
+  }
+
+  /**
+   * Enrich financial information entities with polymorphic documents
+   * Adds 'documents' array while keeping 'document' for backward compatibility
+   */
+  private async enrichFinancialInformationWithDocuments(financialInformation: any) {
+    // Enrich audit report with polymorphic documents
+    if (financialInformation.auditReport) {
+      const auditReportDocuments = await this.warehouseDocumentRepository.find({
+        where: {
+          documentableType: 'AuditReport',
+          documentableId: financialInformation.auditReport.id,
+        },
+        order: {
+          createdAt: 'ASC',
+        },
+      });
+
+      // Map documents to the expected format
+      const documentsArray = auditReportDocuments.map((doc) => ({
+        id: doc.id,
+        documentId: doc.id,
+        originalFileName: doc.originalFileName,
+        filePath: doc.filePath,
+        mimeType: doc.mimeType,
+      }));
+
+      // Add documents array while keeping document for backward compatibility
+      (financialInformation.auditReport as any).documents = documentsArray.length > 0 ? documentsArray : undefined;
+      
+      // Ensure document field is properly formatted if it exists
+      if (financialInformation.auditReport.document) {
+        (financialInformation.auditReport.document as any) = {
+          id: financialInformation.auditReport.document.id,
+          documentId: financialInformation.auditReport.document.id,
+          originalFileName: financialInformation.auditReport.document.originalFileName,
+          filePath: financialInformation.auditReport.document.filePath,
+          mimeType: financialInformation.auditReport.document.mimeType,
+        };
+      }
+    }
+
+    // Enrich tax returns with polymorphic documents
+    if (financialInformation.taxReturns && Array.isArray(financialInformation.taxReturns)) {
+      for (const taxReturn of financialInformation.taxReturns) {
+        const taxReturnDocuments = await this.warehouseDocumentRepository.find({
+          where: {
+            documentableType: 'TaxReturn',
+            documentableId: taxReturn.id,
+          },
+          order: {
+            createdAt: 'ASC',
+          },
+        });
+
+        // Map documents to the expected format
+        const documentsArray = taxReturnDocuments.map((doc) => ({
+          id: doc.id,
+          documentId: doc.id,
+          originalFileName: doc.originalFileName,
+          filePath: doc.filePath,
+          mimeType: doc.mimeType,
+        }));
+
+        // Add documents array while keeping document for backward compatibility
+        (taxReturn as any).documents = documentsArray.length > 0 ? documentsArray : undefined;
+        
+        // Ensure document field is properly formatted if it exists
+        if (taxReturn.document) {
+          (taxReturn.document as any) = {
+            id: taxReturn.document.id,
+            documentId: taxReturn.document.id,
+            originalFileName: taxReturn.document.originalFileName,
+            filePath: taxReturn.document.filePath,
+            mimeType: taxReturn.document.mimeType,
+          };
+        }
+      }
+    }
   }
 
   update(id: number, updateWarehouseAdminDto: UpdateWarehouseAdminDto) {
