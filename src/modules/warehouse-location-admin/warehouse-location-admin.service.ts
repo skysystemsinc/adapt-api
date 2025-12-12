@@ -587,6 +587,8 @@ export class WarehouseLocationAdminService {
 
     // Create a map of assigned sections by entity name and resourceId
     const assignedSections = new Map<string, Set<string>>();
+    // Create a map of assigned fields by section and resourceId
+    const assignedFields = new Map<string, Set<string>>();
 
     assignment.sections.forEach((section) => {
       const entityName = getEntityNameFromSectionType(section.sectionType);
@@ -599,6 +601,17 @@ export class WarehouseLocationAdminService {
         assignedSections.set(entityName, new Set());
       }
       assignedSections.get(entityName)!.add(section.resourceId || 'default');
+
+      // Store assigned fields for this section
+      if (section.fields && section.fields.length > 0) {
+        const fieldKey = `${entityName}-${section.resourceId || 'default'}`;
+        if (!assignedFields.has(fieldKey)) {
+          assignedFields.set(fieldKey, new Set());
+        }
+        section.fields.forEach((field) => {
+          assignedFields.get(fieldKey)!.add(field.fieldName);
+        });
+      }
     });
 
     // Filter facility
@@ -633,7 +646,33 @@ export class WarehouseLocationAdminService {
     }
 
     // Filter weighing
-    if (!assignedSections.has('weighing')) {
+    if (assignedSections.has('weighing')) {
+      const assignedResourceIds = assignedSections.get('weighing')!;
+      if (application.weighing && !assignedResourceIds.has(application.weighing.id)) {
+        application.weighing = null as any;
+      } else if (application.weighing) {
+        // Check if "Weighbridge Calibration Certificate" field is assigned
+        const weighingKey = `weighing-${application.weighing.id}`;
+        const weighingFields = assignedFields.get(weighingKey);
+        if (weighingFields && weighingFields.size > 0) {
+          const normalizeFieldName = (str: string): string => {
+            return str
+              .toLowerCase()
+              .replace(/[^a-z0-9-]/g, '-')
+              .replace(/-+/g, '-')
+              .replace(/^-+|-+$/g, '');
+          };
+          const normalizedWeighbridgeCert = 'weighbridge-calibration-certificate';
+          const isWeighbridgeCertAssigned = Array.from(weighingFields).some(field => 
+            normalizeFieldName(field).includes(normalizedWeighbridgeCert) || 
+            normalizedWeighbridgeCert.includes(normalizeFieldName(field))
+          );
+          if (!isWeighbridgeCertAssigned) {
+            application.weighing.weighbridgeCalibrationCertificate = null as any;
+          }
+        }
+      }
+    } else {
       application.weighing = null as any;
     }
 
@@ -685,26 +724,133 @@ export class WarehouseLocationAdminService {
             hr.email = null as any;
             hr.hrNationalTaxNumber = null as any;
             hr.photograph = null as any;
+          } else {
+            // Check if "Photograph" field is assigned
+            const personalDetailsKey = `human_resources-${hr.id}`;
+            const personalDetailsFields = assignedFields.get(personalDetailsKey);
+            if (personalDetailsFields && personalDetailsFields.size > 0) {
+              const normalizeFieldName = (str: string): string => {
+                return str
+                  .toLowerCase()
+                  .replace(/[^a-z0-9-]/g, '-')
+                  .replace(/-+/g, '-')
+                  .replace(/^-+|-+$/g, '');
+              };
+              const normalizedPhotograph = 'photograph';
+              const isPhotographAssigned = Array.from(personalDetailsFields).some(field => 
+                normalizeFieldName(field).includes(normalizedPhotograph) || 
+                normalizedPhotograph.includes(normalizeFieldName(field))
+              );
+              if (!isPhotographAssigned) {
+                hr.photograph = null as any;
+              }
+            }
           }
 
           // Filter sub-item arrays to only include assigned ones
           if (hr.academicQualifications) {
-            hr.academicQualifications = hr.academicQualifications.filter((aq) =>
-              assignedResourceIds.has(aq.id),
-            );
+            hr.academicQualifications = hr.academicQualifications
+              .filter((aq) => assignedResourceIds.has(aq.id))
+              .map((aq) => {
+                const aqKey = `human_resources-${aq.id}`;
+                const aqFields = assignedFields.get(aqKey);
+                if (aqFields && aqFields.size > 0) {
+                  const normalizeFieldName = (str: string): string => {
+                    return str
+                      .toLowerCase()
+                      .replace(/[^a-z0-9-]/g, '-')
+                      .replace(/-+/g, '-')
+                      .replace(/^-+|-+$/g, '');
+                  };
+                  const normalizedAcademicCert = 'academic-certificate';
+                  const isAcademicCertAssigned = Array.from(aqFields).some(field => 
+                    normalizeFieldName(field).includes(normalizedAcademicCert) || 
+                    normalizedAcademicCert.includes(normalizeFieldName(field))
+                  );
+                  if (!isAcademicCertAssigned) {
+                    aq.academicCertificate = null as any;
+                  }
+                }
+                return aq;
+              });
           }
           if (hr.professionalQualifications) {
-            hr.professionalQualifications = hr.professionalQualifications.filter((pq) =>
-              assignedResourceIds.has(pq.id),
-            );
+            hr.professionalQualifications = hr.professionalQualifications
+              .filter((pq) => assignedResourceIds.has(pq.id))
+              .map((pq) => {
+                const pqKey = `human_resources-${pq.id}`;
+                const pqFields = assignedFields.get(pqKey);
+                if (pqFields && pqFields.size > 0) {
+                  const normalizeFieldName = (str: string): string => {
+                    return str
+                      .toLowerCase()
+                      .replace(/[^a-z0-9-]/g, '-')
+                      .replace(/-+/g, '-')
+                      .replace(/^-+|-+$/g, '');
+                  };
+                  const normalizedProfCert = 'professional-certificate';
+                  const isProfCertAssigned = Array.from(pqFields).some(field => 
+                    normalizeFieldName(field).includes(normalizedProfCert) || 
+                    normalizedProfCert.includes(normalizeFieldName(field))
+                  );
+                  if (!isProfCertAssigned) {
+                    pq.professionalCertificate = null as any;
+                  }
+                }
+                return pq;
+              });
           }
           if (hr.trainings) {
-            hr.trainings = hr.trainings.filter((training) => assignedResourceIds.has(training.id));
+            hr.trainings = hr.trainings
+              .filter((training) => assignedResourceIds.has(training.id))
+              .map((training) => {
+                const trainingKey = `human_resources-${training.id}`;
+                const trainingFields = assignedFields.get(trainingKey);
+                if (trainingFields && trainingFields.size > 0) {
+                  const normalizeFieldName = (str: string): string => {
+                    return str
+                      .toLowerCase()
+                      .replace(/[^a-z0-9-]/g, '-')
+                      .replace(/-+/g, '-')
+                      .replace(/^-+|-+$/g, '');
+                  };
+                  const normalizedTrainingCert = 'training-certificate';
+                  const isTrainingCertAssigned = Array.from(trainingFields).some(field => 
+                    normalizeFieldName(field).includes(normalizedTrainingCert) || 
+                    normalizedTrainingCert.includes(normalizeFieldName(field))
+                  );
+                  if (!isTrainingCertAssigned) {
+                    training.trainingCertificate = null as any;
+                  }
+                }
+                return training;
+              });
           }
           if (hr.professionalExperiences) {
-            hr.professionalExperiences = hr.professionalExperiences.filter((exp) =>
-              assignedResourceIds.has(exp.id),
-            );
+            hr.professionalExperiences = hr.professionalExperiences
+              .filter((exp) => assignedResourceIds.has(exp.id))
+              .map((exp) => {
+                const expKey = `human_resources-${exp.id}`;
+                const expFields = assignedFields.get(expKey);
+                if (expFields && expFields.size > 0) {
+                  const normalizeFieldName = (str: string): string => {
+                    return str
+                      .toLowerCase()
+                      .replace(/[^a-z0-9-]/g, '-')
+                      .replace(/-+/g, '-')
+                      .replace(/^-+|-+$/g, '');
+                  };
+                  const normalizedExpLetter = 'experience-letter';
+                  const isExpLetterAssigned = Array.from(expFields).some(field => 
+                    normalizeFieldName(field).includes(normalizedExpLetter) || 
+                    normalizedExpLetter.includes(normalizeFieldName(field))
+                  );
+                  if (!isExpLetterAssigned) {
+                    exp.experienceLetter = null as any;
+                  }
+                }
+                return exp;
+              });
           }
           if (hr.declaration && !assignedResourceIds.has(hr.declaration.id)) {
             hr.declaration = null as any;
@@ -719,28 +865,181 @@ export class WarehouseLocationAdminService {
     if (assignedSections.has('checklist')) {
       const assignedResourceIds = assignedSections.get('checklist')!;
       if (application.warehouseLocationChecklist) {
+        const normalizeFieldName = (str: string): string => {
+          return str
+            .toLowerCase()
+            .replace(/[^a-z0-9-]/g, '-')
+            .replace(/-+/g, '-')
+            .replace(/^-+|-+$/g, '');
+        };
+
         // Filter each checklist subsection individually
         if (application.warehouseLocationChecklist.ownershipLegalDocuments && !assignedResourceIds.has(application.warehouseLocationChecklist.ownershipLegalDocuments.id)) {
           application.warehouseLocationChecklist.ownershipLegalDocuments = null as any;
+        } else if (application.warehouseLocationChecklist.ownershipLegalDocuments) {
+          // Filter ownership documents based on field assignments
+          const ownershipKey = `checklist-${application.warehouseLocationChecklist.ownershipLegalDocuments.id}`;
+          const ownershipFields = assignedFields.get(ownershipKey);
+          if (ownershipFields && ownershipFields.size > 0) {
+            // Filter each document field
+            const documentFields = [
+              { field: 'ownership-deed', doc: 'ownershipDeedDocument' },
+              { field: 'mutation-deed', doc: 'mutationDeedDocument' },
+              { field: 'noc-nec', doc: 'nocNecDocument' },
+              { field: 'factory-layout', doc: 'factoryLayoutDocument' },
+              { field: 'lease-agreement', doc: 'leaseAgreementDocument' },
+              { field: 'property-warranty', doc: 'propertyWarrantyDocument' },
+              { field: 'agreement-undertaking', doc: 'agreementUndertakingDocument' },
+            ];
+            documentFields.forEach(({ field, doc }) => {
+              const isAssigned = Array.from(ownershipFields).some(f => 
+                normalizeFieldName(f).includes(field) || field.includes(normalizeFieldName(f))
+              );
+              if (!isAssigned) {
+                (application.warehouseLocationChecklist.ownershipLegalDocuments as any)[doc] = null;
+              }
+            });
+          }
         }
+
         if (application.warehouseLocationChecklist.humanResourcesKey && !assignedResourceIds.has(application.warehouseLocationChecklist.humanResourcesKey.id)) {
           application.warehouseLocationChecklist.humanResourcesKey = null as any;
+        } else if (application.warehouseLocationChecklist.humanResourcesKey) {
+          const hrKeyKey = `checklist-${application.warehouseLocationChecklist.humanResourcesKey.id}`;
+          const hrKeyFields = assignedFields.get(hrKeyKey);
+          if (hrKeyFields && hrKeyFields.size > 0) {
+            const documentFields = [
+              { field: 'qc-personnel', doc: 'qcPersonnelDocument' },
+              { field: 'warehouse-supervisor', doc: 'warehouseSupervisorDocument' },
+              { field: 'data-entry-operator', doc: 'dataEntryOperatorDocument' },
+            ];
+            documentFields.forEach(({ field, doc }) => {
+              const isAssigned = Array.from(hrKeyFields).some(f => 
+                normalizeFieldName(f).includes(field) || field.includes(normalizeFieldName(f))
+              );
+              if (!isAssigned) {
+                (application.warehouseLocationChecklist.humanResourcesKey as any)[doc] = null;
+              }
+            });
+          }
         }
+
         if (application.warehouseLocationChecklist.locationRisk && !assignedResourceIds.has(application.warehouseLocationChecklist.locationRisk.id)) {
           application.warehouseLocationChecklist.locationRisk = null as any;
+        } else if (application.warehouseLocationChecklist.locationRisk) {
+          const locationRiskKey = `checklist-${application.warehouseLocationChecklist.locationRisk.id}`;
+          const locationRiskFields = assignedFields.get(locationRiskKey);
+          if (locationRiskFields && locationRiskFields.size > 0) {
+            const isAssigned = Array.from(locationRiskFields).some(f => 
+              normalizeFieldName(f).includes('warehouse-outside-flooding-area') || 
+              'warehouse-outside-flooding-area'.includes(normalizeFieldName(f))
+            );
+            if (!isAssigned) {
+              application.warehouseLocationChecklist.locationRisk.warehouseOutsideFloodingAreaDocument = null as any;
+            }
+          }
         }
+
         if (application.warehouseLocationChecklist.securityPerimeter && !assignedResourceIds.has(application.warehouseLocationChecklist.securityPerimeter.id)) {
           application.warehouseLocationChecklist.securityPerimeter = null as any;
+        } else if (application.warehouseLocationChecklist.securityPerimeter) {
+          const securityPerimeterKey = `checklist-${application.warehouseLocationChecklist.securityPerimeter.id}`;
+          const securityPerimeterFields = assignedFields.get(securityPerimeterKey);
+          if (securityPerimeterFields && securityPerimeterFields.size > 0) {
+            const documentFields = [
+              { field: 'secured-boundary-wall', doc: 'securedBoundaryWallDocument' },
+              { field: 'reinforced-barbed-wire', doc: 'reinforcedBarbedWireDocument' },
+              { field: 'fully-gated', doc: 'fullyGatedDocument' },
+              { field: 'security-guards-24x7', doc: 'securityGuards24x7Document' },
+              { field: 'cctv-cameras', doc: 'cctvCamerasDocument' },
+            ];
+            documentFields.forEach(({ field, doc }) => {
+              const isAssigned = Array.from(securityPerimeterFields).some(f => 
+                normalizeFieldName(f).includes(field) || field.includes(normalizeFieldName(f))
+              );
+              if (!isAssigned) {
+                (application.warehouseLocationChecklist.securityPerimeter as any)[doc] = null;
+              }
+            });
+          }
         }
+
         if (application.warehouseLocationChecklist.infrastructureUtilities && !assignedResourceIds.has(application.warehouseLocationChecklist.infrastructureUtilities.id)) {
           application.warehouseLocationChecklist.infrastructureUtilities = null as any;
+        } else if (application.warehouseLocationChecklist.infrastructureUtilities) {
+          const infraKey = `checklist-${application.warehouseLocationChecklist.infrastructureUtilities.id}`;
+          const infraFields = assignedFields.get(infraKey);
+          if (infraFields && infraFields.size > 0) {
+            const documentFields = [
+              { field: 'functional-weighbridge', doc: 'functionalWeighbridgeDocument' },
+              { field: 'sampling-testing-area', doc: 'samplingTestingAreaDocument' },
+              { field: 'calibrated-instruments', doc: 'calibratedInstrumentsDocument' },
+              { field: 'functional-office', doc: 'functionalOfficeDocument' },
+              { field: 'operational-toilets', doc: 'operationalToiletsDocument' },
+              { field: 'electricity-gas-utilities', doc: 'electricityGasUtilitiesDocument' },
+              { field: 'backup-generator', doc: 'backupGeneratorDocument' },
+              { field: 'adequate-residential-arrangements', doc: 'adequateResidentialArrangementsDocument' },
+              { field: 'axial-aeration-fans', doc: 'axialAerationFansDocument' },
+              { field: 'vents-exhaust-fans', doc: 'ventsExhaustFansDocument' },
+              { field: 'technical-drawing', doc: 'technicalDrawingDocument' },
+              { field: 'drying-facility', doc: 'dryingFacilityDocument' },
+              { field: 'temperature-sensor-cables', doc: 'temperatureSensorCablesDocument' },
+            ];
+            documentFields.forEach(({ field, doc }) => {
+              const isAssigned = Array.from(infraFields).some(f => 
+                normalizeFieldName(f).includes(field) || field.includes(normalizeFieldName(f))
+              );
+              if (!isAssigned) {
+                (application.warehouseLocationChecklist.infrastructureUtilities as any)[doc] = null;
+              }
+            });
+          }
         }
+
         if (application.warehouseLocationChecklist.storageFacilities && !assignedResourceIds.has(application.warehouseLocationChecklist.storageFacilities.id)) {
           application.warehouseLocationChecklist.storageFacilities = null as any;
+        } else if (application.warehouseLocationChecklist.storageFacilities) {
+          const storageKey = `checklist-${application.warehouseLocationChecklist.storageFacilities.id}`;
+          const storageFields = assignedFields.get(storageKey);
+          if (storageFields && storageFields.size > 0) {
+            const documentFields = [
+              { field: 'secured-doors', doc: 'securedDoorsDocument' },
+              { field: 'plastered-flooring', doc: 'plasteredFlooringDocument' },
+              { field: 'plastered-walls', doc: 'plasteredWallsDocument' },
+              { field: 'intact-ceiling', doc: 'intactCeilingDocument' },
+              { field: 'functional-windows', doc: 'functionalWindowsDocument' },
+              { field: 'protective-netting', doc: 'protectiveNettingDocument' },
+              { field: 'functional-exhaust-fans', doc: 'functionalExhaustFansDocument' },
+              { field: 'free-from-pests', doc: 'freeFromPestsDocument' },
+              { field: 'fire-safety-measures', doc: 'fireSafetyMeasuresDocument' },
+            ];
+            documentFields.forEach(({ field, doc }) => {
+              const isAssigned = Array.from(storageFields).some(f => 
+                normalizeFieldName(f).includes(field) || field.includes(normalizeFieldName(f))
+              );
+              if (!isAssigned) {
+                (application.warehouseLocationChecklist.storageFacilities as any)[doc] = null;
+              }
+            });
+          }
         }
+
         if (application.warehouseLocationChecklist.registrationFee && !assignedResourceIds.has(application.warehouseLocationChecklist.registrationFee.id)) {
           application.warehouseLocationChecklist.registrationFee = null as any;
+        } else if (application.warehouseLocationChecklist.registrationFee) {
+          const regFeeKey = `checklist-${application.warehouseLocationChecklist.registrationFee.id}`;
+          const regFeeFields = assignedFields.get(regFeeKey);
+          if (regFeeFields && regFeeFields.size > 0) {
+            const isAssigned = Array.from(regFeeFields).some(f => 
+              normalizeFieldName(f).includes('bank-payment-slip') || 
+              'bank-payment-slip'.includes(normalizeFieldName(f))
+            );
+            if (!isAssigned) {
+              application.warehouseLocationChecklist.registrationFee.bankPaymentSlipDocument = null as any;
+            }
+          }
         }
+
         if (application.warehouseLocationChecklist.declaration && !assignedResourceIds.has(application.warehouseLocationChecklist.declaration.id)) {
           application.warehouseLocationChecklist.declaration = null as any;
         }
