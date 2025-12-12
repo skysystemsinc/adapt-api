@@ -1319,7 +1319,6 @@ export class WarehouseService {
         applicationType: application.applicationType,
         status: application.status,
         authorizedSignatories: application.authorizedSignatories || [],
-        // rejections: application.rejections || [],
         isUnlocked,
       },
     };
@@ -1328,6 +1327,7 @@ export class WarehouseService {
   async getCompanyInformation(applicationId: string, userId: string) {
     const application = await this.warehouseOperatorRepository.findOne({
       where: { id: applicationId, userId },
+      relations: ['rejections'],
     });
 
     if (!application) {
@@ -1344,6 +1344,12 @@ export class WarehouseService {
         message: 'Company information not found',
         data: null,
       };
+    }
+
+    let isUnlocked = false;
+    if (application.rejections.length > 0) {
+      // check if unlockedSections has any section named "2. Company Information"
+      isUnlocked = application.rejections.some((rejection) => rejection.unlockedSections.includes('2. Company Information'));
     }
 
     return {
@@ -1365,6 +1371,7 @@ export class WarehouseService {
             originalFileName: companyInformation.ntcCertificate.originalFileName ?? undefined,
           }
           : null,
+        isUnlocked,
       },
     };
   }
