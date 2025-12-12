@@ -6,7 +6,7 @@ import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiTags, ApiConsumes, ApiParam, ApiResponse } from '@nestjs/swagger';
 import { AuthService } from '../auth/auth.service';
 import { User } from '../users/entities/user.entity';
-import { FileInterceptor, FileFieldsInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FileFieldsInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { UpdateBankDetailsDto } from './dto/create-bank-details.dto';
 import { UpsertHrInformationDto, HrPersonalDetailsDto, HrDeclarationDto, HrAcademicQualificationDto, HrProfessionalQualificationDto, HrTrainingDto, HrExperienceDto } from './dto/create-hr-information.dto';
 import { CreateFinancialInformationDto, OthersDto } from './dto/create-financial-information.dto';
@@ -927,9 +927,9 @@ export class WarehouseController {
   @ApiConsumes('multipart/form-data')
   @ApiParam({ name: 'sectionType', enum: ['audit-report', 'tax-return', 'bank-statement', 'other'] })
   @UseInterceptors(
-    FileInterceptor('document', {
+    FilesInterceptor('documents', 10, {
       limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB max
+        fileSize: 10 * 1024 * 1024, // 10MB max per file
       },
     }),
   )
@@ -938,7 +938,7 @@ export class WarehouseController {
     @Param('applicationId') applicationId: string,
     @Param('sectionType') sectionType: 'audit-report' | 'tax-return' | 'bank-statement' | 'other',
     @Body('data') dataString: string,
-    @UploadedFile() documentFile: any,
+    @UploadedFiles() documentFiles: any,
     @Request() request: any,
   ) {
     if (!dataString) {
@@ -953,6 +953,18 @@ export class WarehouseController {
     }
 
     const user = request.user as User;
+    
+    // For tax-return and audit-report, use multiple files; for others, use first file (backward compatibility)
+    let documentFile: any = undefined;
+    if (sectionType === 'tax-return' || sectionType === 'audit-report') {
+      // Multiple files for tax-return and audit-report
+      documentFile = documentFiles && documentFiles.length > 0 ? documentFiles : undefined;
+    } else {
+      // Single file for other sections (backward compatibility)
+      // Also check for 'document' field in case frontend sends single file
+      documentFile = documentFiles && documentFiles.length > 0 ? documentFiles[0] : request.body?.document;
+    }
+    
     return this.warehouseService.saveFinancialSubsection(
       sectionType,
       applicationId,
@@ -968,9 +980,9 @@ export class WarehouseController {
   @ApiConsumes('multipart/form-data')
   @ApiParam({ name: 'sectionType', enum: ['audit-report', 'tax-return', 'bank-statement', 'other'] })
   @UseInterceptors(
-    FileInterceptor('document', {
+    FilesInterceptor('documents', 10, {
       limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB max
+        fileSize: 10 * 1024 * 1024, // 10MB max per file
       },
     }),
   )
@@ -980,7 +992,7 @@ export class WarehouseController {
     @Param('sectionType') sectionType: 'audit-report' | 'tax-return' | 'bank-statement' | 'other',
     @Param('id') id: string,
     @Body('data') dataString: string,
-    @UploadedFile() documentFile: any,
+    @UploadedFiles() documentFiles: any,
     @Request() request: any,
   ) {
     if (!dataString) {
@@ -995,6 +1007,17 @@ export class WarehouseController {
     }
 
     const user = request.user as User;
+    
+    // For tax-return and audit-report, use multiple files; for others, use first file (backward compatibility)
+    let documentFile: any = undefined;
+    if (sectionType === 'tax-return' || sectionType === 'audit-report') {
+      // Multiple files for tax-return and audit-report
+      documentFile = documentFiles && documentFiles.length > 0 ? documentFiles : undefined;
+    } else {
+      // Single file for other sections (backward compatibility)
+      documentFile = documentFiles && documentFiles.length > 0 ? documentFiles[0] : request.body?.document;
+    }
+    
     return this.warehouseService.saveFinancialSubsection(
       sectionType,
       applicationId,

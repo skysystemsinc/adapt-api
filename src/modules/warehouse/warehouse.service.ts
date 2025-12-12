@@ -1482,7 +1482,7 @@ export class WarehouseService {
 
     return {
       message: 'Financial information retrieved successfully',
-      data: this.mapFinancialInformationEntityToResponse(financialInfo),
+      data: await this.mapFinancialInformationEntityToResponse(financialInfo),
     };
   }
 
@@ -2663,7 +2663,7 @@ export class WarehouseService {
 
     return {
       message: 'Financial information saved successfully',
-      data: this.mapFinancialInformationEntityToResponse(hydratedFinancialInfo!),
+      data: await this.mapFinancialInformationEntityToResponse(hydratedFinancialInfo!),
     };
   }
 
@@ -3838,7 +3838,35 @@ export class WarehouseService {
     };
   }
 
-  private mapFinancialInformationEntityToResponse(financialInfo: FinancialInformationEntity) {
+  private async mapFinancialInformationEntityToResponse(financialInfo: FinancialInformationEntity) {
+    // Get all documents for audit report if it exists
+    let auditReportDocuments: any[] = [];
+    if (financialInfo.auditReport) {
+      auditReportDocuments = await this.warehouseDocumentRepository.find({
+        where: {
+          documentableType: 'AuditReport',
+          documentableId: financialInfo.auditReport.id,
+        },
+        order: {
+          createdAt: 'ASC',
+        },
+      });
+    }
+
+    // Get all documents for tax return if it exists
+    let taxReturnDocuments: any[] = [];
+    if (financialInfo.taxReturns?.[0]) {
+      taxReturnDocuments = await this.warehouseDocumentRepository.find({
+        where: {
+          documentableType: 'TaxReturn',
+          documentableId: financialInfo.taxReturns[0].id,
+        },
+        order: {
+          createdAt: 'ASC',
+        },
+      });
+    }
+
     return {
       id: financialInfo.id,
       auditReport: financialInfo.auditReport
@@ -3854,23 +3882,45 @@ export class WarehouseService {
           revenue: financialInfo.auditReport.revenue,
           netProfitLoss: financialInfo.auditReport.netProfitLoss,
           remarks: financialInfo.auditReport.remarks ?? null,
+          // Keep single document for backward compatibility
+          document: financialInfo.auditReport.document && financialInfo.auditReport.document.id
+            ? {
+                documentId: financialInfo.auditReport.document.id,
+                originalFileName: financialInfo.auditReport.document.originalFileName ?? undefined,
+              }
+            : null,
+          // Include all documents array
+          documents: auditReportDocuments.length > 0
+            ? auditReportDocuments.map((doc) => ({
+                documentId: doc.id,
+                originalFileName: doc.originalFileName ?? undefined,
+              }))
+            : undefined,
         }
         : null,
       taxReturn: financialInfo.taxReturns?.[0]
         ? {
-          id: financialInfo.taxReturns[0].id,
-          documentType: financialInfo.taxReturns[0].documentType,
-          documentName: financialInfo.taxReturns[0].documentName,
-          periodStart: financialInfo.taxReturns[0].periodStart,
-          periodEnd: financialInfo.taxReturns[0].periodEnd,
-          remarks: financialInfo.taxReturns[0].remarks ?? null,
-          taxDocument: financialInfo.taxReturns[0].document && financialInfo.taxReturns[0].document.id
-            ? {
-              documentId: financialInfo.taxReturns[0].document.id,
-              originalFileName: financialInfo.taxReturns[0].document.originalFileName ?? undefined,
-            }
-            : null,
-        }
+            id: financialInfo.taxReturns[0].id,
+            documentType: financialInfo.taxReturns[0].documentType,
+            documentName: financialInfo.taxReturns[0].documentName,
+            periodStart: financialInfo.taxReturns[0].periodStart,
+            periodEnd: financialInfo.taxReturns[0].periodEnd,
+            remarks: financialInfo.taxReturns[0].remarks ?? null,
+            // Keep single document for backward compatibility
+            document: financialInfo.taxReturns[0].document && financialInfo.taxReturns[0].document.id
+              ? {
+                  documentId: financialInfo.taxReturns[0].document.id,
+                  originalFileName: financialInfo.taxReturns[0].document.originalFileName ?? undefined,
+                }
+              : null,
+            // Include all documents array
+            documents: taxReturnDocuments.length > 0
+              ? taxReturnDocuments.map((doc) => ({
+                  documentId: doc.id,
+                  originalFileName: doc.originalFileName ?? undefined,
+                }))
+              : undefined,
+          }
         : null,
       bankStatement: financialInfo.bankStatements?.[0]
         ? {

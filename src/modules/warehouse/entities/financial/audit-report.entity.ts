@@ -1,5 +1,6 @@
 import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { FinancialInformationEntity } from "../financial-information.entity";
+import { WarehouseDocument } from "../warehouse-document.entity";
 
 @Entity('audit_report')
 export class AuditReportEntity {
@@ -35,6 +36,10 @@ export class AuditReportEntity {
 
     @Column({ type: 'varchar', length: 100, nullable: true })
     remarks: string;
+
+    @ManyToOne(() => WarehouseDocument, { onDelete: 'SET NULL', nullable: true })
+    @JoinColumn({ name: 'document' })
+    document?: WarehouseDocument;
 
     @Column({ nullable: true })
     financialInformationId: string;
