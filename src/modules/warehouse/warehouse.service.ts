@@ -44,6 +44,7 @@ import { Assignment, AssignmentLevel } from './operator/assignment/entities/assi
 import { AssignmentSection } from './operator/assignment/entities/assignment-section.entity';
 import { AuthorizedSignatoryHistory } from './entities/authorized-signatories-history.entity';
 import { CompanyInformationHistory } from './entities/company-information-history.entity';
+import { BankDetailsHistory } from './entities/bank-details-history.entity';
 
 @Injectable()
 export class WarehouseService {
@@ -81,6 +82,8 @@ export class WarehouseService {
     private readonly authorizedSignatoryHistoryRepository: Repository<AuthorizedSignatoryHistory>,
     @InjectRepository(CompanyInformationHistory)
     private readonly companyInformationHistoryRepository: Repository<CompanyInformationHistory>,
+    @InjectRepository(BankDetailsHistory)
+    private readonly bankDetailsHistoryRepository: Repository<BankDetailsHistory>,
   ) {
     // Ensure upload directory exists
     this.ensureUploadDirectory();
@@ -3781,6 +3784,7 @@ export class WarehouseService {
     updateBankDetailsDto: UpdateBankDetailsDto,
     userId: string
   ) {
+    // First, validate the record exists and user has access (outside transaction for early validation)
     const application = await this.warehouseOperatorRepository.findOne({ where: { id: applicationId, userId } });
     if (!application) {
       throw new NotFoundException('Application not found');
@@ -3795,17 +3799,73 @@ export class WarehouseService {
       throw new NotFoundException('Bank details not found');
     }
 
-    bankDetails.name = updateBankDetailsDto.name;
-    bankDetails.accountTitle = updateBankDetailsDto.accountTitle;
-    bankDetails.iban = updateBankDetailsDto.iban;
-    bankDetails.accountType = updateBankDetailsDto.accountType as AccountType;
-    bankDetails.branchAddress = updateBankDetailsDto.branchAddress || '';
+    // Use transaction to ensure atomicity: history save and update must both succeed or both fail
+    const result = await this.dataSource.transaction(async (manager) => {
+      const bankDetailsRepo = manager.getRepository(BankDetails);
+      const historyRepo = manager.getRepository(BankDetailsHistory);
+      const appRepo = manager.getRepository(WarehouseOperatorApplicationRequest);
 
-    const updatedBankDetails = await this.bankDetailsRepository.save(bankDetails);
+      // Reload within transaction to ensure we have the latest data
+      const appInTransaction = await appRepo.findOne({
+        where: { id: applicationId, userId },
+      });
+
+      if (!appInTransaction) {
+        throw new NotFoundException('Application not found');
+      }
+
+      // Re-validate application status inside transaction to prevent race conditions
+      if (![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(appInTransaction.status)) {
+        throw new BadRequestException('Cannot update bank details after application is approved or submitted');
+      }
+
+      const bankDetailsInTransaction = await bankDetailsRepo.findOne({
+        where: { id: bankDetailsId, applicationId: appInTransaction.id },
+      });
+
+      if (!bankDetailsInTransaction) {
+        throw new NotFoundException('Bank details not found');
+      }
+
+      // Save history of bank details if application is rejected (before overwriting)
+      if (appInTransaction.status === WarehouseOperatorApplicationStatus.REJECTED) {
+        const historyRecord = historyRepo.create({
+          applicationId: bankDetailsInTransaction.applicationId,
+          bankDetailsId: bankDetailsInTransaction.id,
+          name: bankDetailsInTransaction.name,
+          accountTitle: bankDetailsInTransaction.accountTitle,
+          iban: bankDetailsInTransaction.iban,
+          accountType: bankDetailsInTransaction.accountType,
+          branchAddress: bankDetailsInTransaction.branchAddress,
+          status: bankDetailsInTransaction.status,
+          isActive: false,
+        });
+        
+        // Preserve the original createdAt timestamp from the bank details record
+        historyRecord.createdAt = bankDetailsInTransaction.createdAt;
+        
+        await historyRepo.save(historyRecord);
+      }
+
+      // Overwrite existing bank details with new information
+      bankDetailsInTransaction.name = updateBankDetailsDto.name;
+      bankDetailsInTransaction.accountTitle = updateBankDetailsDto.accountTitle;
+      bankDetailsInTransaction.iban = updateBankDetailsDto.iban;
+      bankDetailsInTransaction.accountType = updateBankDetailsDto.accountType as AccountType;
+      bankDetailsInTransaction.branchAddress = updateBankDetailsDto.branchAddress ?? '';
+
+      const updatedBankDetails = await bankDetailsRepo.save(bankDetailsInTransaction);
+
+      return {
+        bankDetails: updatedBankDetails,
+        applicationId: appInTransaction.applicationId,
+      };
+    });
 
     return {
       message: 'Bank details updated successfully',
-      bankDetails: updatedBankDetails,
+      bankDetails: result.bankDetails,
+      applicationId: result.applicationId,
     };
   }
 
