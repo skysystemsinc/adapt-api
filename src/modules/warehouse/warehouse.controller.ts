@@ -3,7 +3,7 @@ import { WarehouseService } from './warehouse.service';
 import { CreateBankDetailsDto, CreateCompanyInformationRequestDto, CreateWarehouseOperatorApplicationRequestDto } from './dto/create-warehouse.dto';
 import { UpdateWarehouseDto } from './dto/update-warehouse.dto';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
-import { ApiBearerAuth, ApiBody, ApiOperation, ApiTags, ApiConsumes, ApiParam, ApiResponse } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiOperation, ApiTags, ApiConsumes, ApiParam, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { AuthService } from '../auth/auth.service';
 import { User } from '../users/entities/user.entity';
 import { FileInterceptor, FileFieldsInterceptor, FilesInterceptor } from '@nestjs/platform-express';
@@ -1160,5 +1160,17 @@ export class WarehouseController {
   getWarehouseApplicationStatus(@Request() request: any) {
     const user = request.user as User;
     return this.warehouseService.getWarehouseApplicationStatus(user.id);
+  }
+
+  @ApiOperation({ summary: 'Get resource status for a warehouse operator application' })
+  @ApiParam({ name: 'applicationId', description: 'The ID of the warehouse operator application' })
+  @ApiQuery({ name: 'resourceType', enum: ['hr', 'authorized-signatories'] })
+  @ApiResponse({ status: 200, description: 'Resource status retrieved successfully', type: Object, example: { message: 'Resource status retrieved successfully', data: { unlockedSections: ['1. Authorized Signatories', '4. HR Information'] } } })
+  @Get('/operator/application/:applicationId/resource/status')
+  getResourceStatus(@Param('applicationId') applicationId: string, @Request() request: any,
+    @Query('resourceType') resourceType: 'hr' | 'authorized-signatories'
+  ) {
+    const user = request.user as User;
+    return this.warehouseService.getResourceStatus(applicationId, user.id, resourceType);
   }
 }

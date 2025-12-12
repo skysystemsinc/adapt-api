@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { AuthorizedSignatoryDto, CreateCompanyInformationRequestDto, CreateBankDetailsDto, CreateWarehouseOperatorApplicationRequestDto } from './dto/create-warehouse.dto';
 import { UpdateWarehouseDto } from './dto/update-warehouse.dto';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { WarehouseOperatorApplicationRequest, WarehouseOperatorApplicationStatus } from './entities/warehouse-operator-application-request.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { AuthorizedSignatory } from './entities/authorized-signatories.entity';
@@ -40,6 +40,8 @@ import { forwardRef, Inject } from '@nestjs/common';
 import { FinancialInformationService } from './financial-information.service';
 import { WarehouseOperator } from './entities/warehouse-operator.entity';
 import { ResubmitOperatorApplicationDto } from './dto/resubmit-warehouse.dto';
+import { Assignment, AssignmentLevel } from './operator/assignment/entities/assignment.entity';
+import { AssignmentSection } from './operator/assignment/entities/assignment-section.entity';
 
 @Injectable()
 export class WarehouseService {
@@ -69,6 +71,10 @@ export class WarehouseService {
     private readonly financialInformationService: FinancialInformationService,
     @InjectRepository(WarehouseOperator)
     private readonly warehouseOperatorsRepository: Repository<WarehouseOperator>,
+    @InjectRepository(Assignment)
+    private readonly assignmentRepository: Repository<Assignment>,
+    @InjectRepository(AssignmentSection)
+    private readonly assignmentSectionRepository: Repository<AssignmentSection>,
   ) {
     // Ensure upload directory exists
     this.ensureUploadDirectory();
@@ -222,7 +228,7 @@ export class WarehouseService {
     let warehouseOperatorApplication: WarehouseOperatorApplicationRequest | undefined;
     let attempts = 0;
     const maxAttempts = 5;
-    
+
     while (attempts < maxAttempts) {
       try {
         const newApplication = this.warehouseOperatorRepository.create({
@@ -289,7 +295,7 @@ export class WarehouseService {
     if (application.status !== WarehouseOperatorApplicationStatus.REJECTED) {
       throw new BadRequestException('Application is not in rejected status.');
     }
-    
+
     const rejections = application.rejections;
     if (rejections.length === 0) {
       throw new BadRequestException('No rejection found.');
@@ -305,7 +311,7 @@ export class WarehouseService {
     if (unlockedSections.length === 0) {
       throw new BadRequestException('No unlocked sections found.');
     }
-    
+
 
 
 
@@ -3685,22 +3691,22 @@ export class WarehouseService {
     const count = await this.warehouseOperatorRepository.count();
     let attempt = 0;
     const maxAttempts = 100;
-    
+
     while (attempt < maxAttempts) {
       const applicationId = `WHO-${String(count + attempt + 1).padStart(6, '0')}`;
-      
+
       // Check if this ID already exists
       const existing = await this.warehouseOperatorRepository.findOne({
         where: { applicationId },
       });
-      
+
       if (!existing) {
         return applicationId;
       }
-      
+
       attempt++;
     }
-    
+
     // Fallback: use timestamp if all attempts fail (shouldn't happen)
     const timestamp = Date.now();
     return `WHO-${timestamp.toString().slice(-6)}`;
@@ -3885,42 +3891,42 @@ export class WarehouseService {
           // Keep single document for backward compatibility
           document: financialInfo.auditReport.document && financialInfo.auditReport.document.id
             ? {
-                documentId: financialInfo.auditReport.document.id,
-                originalFileName: financialInfo.auditReport.document.originalFileName ?? undefined,
-              }
+              documentId: financialInfo.auditReport.document.id,
+              originalFileName: financialInfo.auditReport.document.originalFileName ?? undefined,
+            }
             : null,
           // Include all documents array
           documents: auditReportDocuments.length > 0
             ? auditReportDocuments.map((doc) => ({
-                documentId: doc.id,
-                originalFileName: doc.originalFileName ?? undefined,
-              }))
+              documentId: doc.id,
+              originalFileName: doc.originalFileName ?? undefined,
+            }))
             : undefined,
         }
         : null,
       taxReturn: financialInfo.taxReturns?.[0]
         ? {
-            id: financialInfo.taxReturns[0].id,
-            documentType: financialInfo.taxReturns[0].documentType,
-            documentName: financialInfo.taxReturns[0].documentName,
-            periodStart: financialInfo.taxReturns[0].periodStart,
-            periodEnd: financialInfo.taxReturns[0].periodEnd,
-            remarks: financialInfo.taxReturns[0].remarks ?? null,
-            // Keep single document for backward compatibility
-            document: financialInfo.taxReturns[0].document && financialInfo.taxReturns[0].document.id
-              ? {
-                  documentId: financialInfo.taxReturns[0].document.id,
-                  originalFileName: financialInfo.taxReturns[0].document.originalFileName ?? undefined,
-                }
-              : null,
-            // Include all documents array
-            documents: taxReturnDocuments.length > 0
-              ? taxReturnDocuments.map((doc) => ({
-                  documentId: doc.id,
-                  originalFileName: doc.originalFileName ?? undefined,
-                }))
-              : undefined,
-          }
+          id: financialInfo.taxReturns[0].id,
+          documentType: financialInfo.taxReturns[0].documentType,
+          documentName: financialInfo.taxReturns[0].documentName,
+          periodStart: financialInfo.taxReturns[0].periodStart,
+          periodEnd: financialInfo.taxReturns[0].periodEnd,
+          remarks: financialInfo.taxReturns[0].remarks ?? null,
+          // Keep single document for backward compatibility
+          document: financialInfo.taxReturns[0].document && financialInfo.taxReturns[0].document.id
+            ? {
+              documentId: financialInfo.taxReturns[0].document.id,
+              originalFileName: financialInfo.taxReturns[0].document.originalFileName ?? undefined,
+            }
+            : null,
+          // Include all documents array
+          documents: taxReturnDocuments.length > 0
+            ? taxReturnDocuments.map((doc) => ({
+              documentId: doc.id,
+              originalFileName: doc.originalFileName ?? undefined,
+            }))
+            : undefined,
+        }
         : null,
       bankStatement: financialInfo.bankStatements?.[0]
         ? {
@@ -4085,6 +4091,66 @@ export class WarehouseService {
         status: application.status,
         applicationId: application.id,
         createdAt: application.createdAt,
+      },
+    };
+  }
+
+  async getResourceStatus(applicationId: string, userId: string, resourceType: 'hr' | 'authorized-signatories') {
+    if (!resourceType || !['hr', 'authorized-signatories'].includes(resourceType)) {
+      throw new BadRequestException('Invalid resource type.');
+    }
+    const application = await this.warehouseOperatorRepository.findOne({
+      where: {
+        id: applicationId, userId
+      },
+      select: {
+        id: true
+      }
+    });
+    if (!application) {
+      throw new NotFoundException('Application not found');
+    }
+
+    // check for assignments for the user and application
+    const assignments = await this.assignmentRepository.find({
+      where: {
+        applicationId,
+        assignedTo: userId,
+        level: AssignmentLevel.HOD_TO_APPLICANT
+      }
+    });
+
+    let unlockedSections: string[] = [];
+    if (assignments && assignments.length > 0) {
+      // check in assignmentSection table against assignment
+      const assignmentSections = await this.assignmentSectionRepository.find({
+        where: {
+          assignment: In(assignments.map((assignment) => assignment.id))
+        },
+        select: {
+          resourceId: true,
+          resourceType: true,
+        }
+      });
+
+
+      // get all sections
+      const filteredSections = assignmentSections.filter(section => {
+        if (resourceType === 'hr') {
+          return section.resourceType === '4. HR Information'
+        } else if (resourceType === 'authorized-signatories') {
+          return section.resourceType === '1. Authorized Signatories'
+        }
+        return false;
+      });
+
+      unlockedSections = filteredSections.map((section) => section.resourceId as string).filter((id): id is string => id !== null && id !== undefined);
+    }
+    
+    return {
+      message: 'Resource status retrieved successfully',
+      data: {
+        unlockedSections: unlockedSections,
       },
     };
   }
