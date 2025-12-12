@@ -1,0 +1,76 @@
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
+import { WarehouseOperatorApplicationRequest } from './warehouse-operator-application-request.entity';
+import { WarehouseDocument } from './warehouse-document.entity';
+import { WarehouseApplicantVerification } from '../warehouse-applicant-verification/entities/warehouse-applicant-verification.entity';
+import { CompanyInformation } from './company-information.entity';
+
+@Entity('company_information_history')
+export class CompanyInformationHistory {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column({ nullable: true })
+  applicationId: string;
+
+  @ManyToOne(() => WarehouseOperatorApplicationRequest, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'applicationId' })
+  warehouseOperatorApplicationRequest: WarehouseOperatorApplicationRequest;
+
+  @Column({ type: 'uuid', nullable: false })
+  companyInformationId: string;
+
+  @ManyToOne(() => CompanyInformation, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'companyInformationId' })
+  companyInformation: CompanyInformation;
+
+  @Column({ type: 'varchar', length: 200, nullable: false })
+  companyName: string;
+
+  @Column({ type: 'varchar', length: 200, nullable: false })
+  secpRegistrationNumber: string;
+
+  @Column({ type: 'boolean', nullable: false })
+  activeFilerStatus: boolean;
+
+  @Column({ type: 'date', nullable: false })
+  dateOfIncorporation: Date;
+
+  @Column({ type: 'date', nullable: true })
+  businessCommencementDate: Date;
+
+  @Column({ type: 'text', nullable: false })
+  registeredOfficeAddress: string;
+
+  @Column({ type: 'varchar', length: 10, nullable: true })
+  postalCode: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: false })
+  nationalTaxNumber: string;
+
+  @ManyToOne(() => WarehouseDocument, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'ntcCertificate' })
+  ntcCertificate?: WarehouseDocument;
+
+  @Column({ type: 'varchar', length: 100, nullable: false })
+  salesTaxRegistrationNumber: string;
+
+  @Column({ default: true })
+  isActive: boolean;
+
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
+
+  verifications?: WarehouseApplicantVerification[];
+}
+

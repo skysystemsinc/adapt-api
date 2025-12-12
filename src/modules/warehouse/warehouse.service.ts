@@ -43,6 +43,7 @@ import { ResubmitOperatorApplicationDto } from './dto/resubmit-warehouse.dto';
 import { Assignment, AssignmentLevel } from './operator/assignment/entities/assignment.entity';
 import { AssignmentSection } from './operator/assignment/entities/assignment-section.entity';
 import { AuthorizedSignatoryHistory } from './entities/authorized-signatories-history.entity';
+import { CompanyInformationHistory } from './entities/company-information-history.entity';
 
 @Injectable()
 export class WarehouseService {
@@ -78,6 +79,8 @@ export class WarehouseService {
     private readonly assignmentSectionRepository: Repository<AssignmentSection>,
     @InjectRepository(AuthorizedSignatoryHistory)
     private readonly authorizedSignatoryHistoryRepository: Repository<AuthorizedSignatoryHistory>,
+    @InjectRepository(CompanyInformationHistory)
+    private readonly companyInformationHistoryRepository: Repository<CompanyInformationHistory>,
   ) {
     // Ensure upload directory exists
     this.ensureUploadDirectory();
@@ -694,7 +697,7 @@ export class WarehouseService {
     companyInformationId: string,
     ntcCertificateFile?: any
   ) {
-    // Find existing warehouse operator application for this user
+    // First, validate the record exists and user has access (outside transaction for early validation)
     const existingApplication = await this.warehouseOperatorRepository.findOne({
       where: { userId, id: applicationId },
     });
@@ -717,27 +720,86 @@ export class WarehouseService {
       throw new NotFoundException('Company information not found');
     }
 
-    // Update company information fields
-    existingCompanyInfo.companyName = createCompanyInformationDto.companyName;
-    existingCompanyInfo.secpRegistrationNumber = createCompanyInformationDto.secpRegistrationNumber;
-    existingCompanyInfo.activeFilerStatus = createCompanyInformationDto.activeFilerStatus;
-    existingCompanyInfo.dateOfIncorporation = createCompanyInformationDto.dateOfIncorporation;
-    existingCompanyInfo.businessCommencementDate = createCompanyInformationDto.businessCommencementDate ?? existingCompanyInfo.businessCommencementDate ?? null;
-    existingCompanyInfo.registeredOfficeAddress = createCompanyInformationDto.registeredOfficeAddress;
-    existingCompanyInfo.postalCode = createCompanyInformationDto.postalCode ?? existingCompanyInfo.postalCode ?? null;
-    existingCompanyInfo.nationalTaxNumber = createCompanyInformationDto.nationalTaxNumber;
-    existingCompanyInfo.salesTaxRegistrationNumber = createCompanyInformationDto.salesTaxRegistrationNumber;
+    // Use transaction to ensure atomicity: history save and update must both succeed or both fail
+    const result = await this.dataSource.transaction(async (manager) => {
+      const companyInfoRepo = manager.getRepository(CompanyInformation);
+      const historyRepo = manager.getRepository(CompanyInformationHistory);
+      const appRepo = manager.getRepository(WarehouseOperatorApplicationRequest);
 
-    const savedCompanyInformation = await this.companyInformationRepository.save(existingCompanyInfo);
+      // Reload within transaction to ensure we have the latest data
+      const application = await appRepo.findOne({
+        where: { id: applicationId, userId },
+      });
 
-    // If ntcCertificate file is provided, upload it and link to company information
+      if (!application) {
+        throw new NotFoundException('Warehouse operator application not found. Please create an application first.');
+      }
+
+      // Re-validate application status inside transaction to prevent race conditions
+      if (![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(application.status)) {
+        throw new BadRequestException('Cannot update company information after application is approved or submitted');
+      }
+
+      const companyInfo = await companyInfoRepo.findOne({
+        where: { id: companyInformationId, applicationId: application.id },
+        relations: ['ntcCertificate'],
+      });
+
+      if (!companyInfo) {
+        throw new NotFoundException('Company information not found');
+      }
+
+      // Save history of company information if application is rejected (before overwriting)
+      if (application.status === WarehouseOperatorApplicationStatus.REJECTED) {
+        const historyRecord = historyRepo.create({
+          applicationId: companyInfo.applicationId,
+          companyInformationId: companyInfo.id,
+          companyName: companyInfo.companyName,
+          secpRegistrationNumber: companyInfo.secpRegistrationNumber,
+          activeFilerStatus: companyInfo.activeFilerStatus,
+          dateOfIncorporation: companyInfo.dateOfIncorporation,
+          businessCommencementDate: companyInfo.businessCommencementDate,
+          registeredOfficeAddress: companyInfo.registeredOfficeAddress,
+          postalCode: companyInfo.postalCode,
+          nationalTaxNumber: companyInfo.nationalTaxNumber,
+          salesTaxRegistrationNumber: companyInfo.salesTaxRegistrationNumber,
+          isActive: false,
+        });
+        
+        // Preserve the original createdAt timestamp from the company information record
+        historyRecord.createdAt = companyInfo.createdAt;
+        
+        await historyRepo.save(historyRecord);
+      }
+
+      // Overwrite existing company information with new information
+      companyInfo.companyName = createCompanyInformationDto.companyName;
+      companyInfo.secpRegistrationNumber = createCompanyInformationDto.secpRegistrationNumber;
+      companyInfo.activeFilerStatus = createCompanyInformationDto.activeFilerStatus;
+      companyInfo.dateOfIncorporation = createCompanyInformationDto.dateOfIncorporation;
+      companyInfo.businessCommencementDate = createCompanyInformationDto.businessCommencementDate ?? (null as any);
+      companyInfo.registeredOfficeAddress = createCompanyInformationDto.registeredOfficeAddress;
+      companyInfo.postalCode = createCompanyInformationDto.postalCode ?? (null as any);
+      companyInfo.nationalTaxNumber = createCompanyInformationDto.nationalTaxNumber;
+      companyInfo.salesTaxRegistrationNumber = createCompanyInformationDto.salesTaxRegistrationNumber;
+
+      const savedCompanyInformation = await companyInfoRepo.save(companyInfo);
+
+      return {
+        companyInfo: savedCompanyInformation,
+        applicationId: application.applicationId,
+        existingNtcCertificate: companyInfo.ntcCertificate,
+      };
+    });
+
+    // Handle file upload outside transaction (file operations are not transactional)
     let ntcCertificateDocumentId: string | undefined;
     if (ntcCertificateFile) {
       const documentResult = await this.uploadWarehouseDocument(
         ntcCertificateFile,
         userId,
         'CompanyInformation',
-        savedCompanyInformation.id,
+        result.companyInfo.id,
         'ntcCertificate'
       );
       ntcCertificateDocumentId = documentResult.id;
@@ -748,18 +810,18 @@ export class WarehouseService {
       });
 
       if (ntcCertificateDocument) {
-        savedCompanyInformation.ntcCertificate = ntcCertificateDocument;
-        await this.companyInformationRepository.save(savedCompanyInformation);
+        result.companyInfo.ntcCertificate = ntcCertificateDocument;
+        await this.companyInformationRepository.save(result.companyInfo);
       }
-    } else if (existingCompanyInfo.ntcCertificate) {
+    } else if (result.existingNtcCertificate) {
       // Keep existing certificate if no new file is provided
-      ntcCertificateDocumentId = existingCompanyInfo.ntcCertificate.id;
+      ntcCertificateDocumentId = result.existingNtcCertificate.id;
     }
 
     return {
       message: 'Company information updated successfully',
-      companyInformationId: savedCompanyInformation.id,
-      applicationId: existingApplication.applicationId,
+      companyInformationId: result.companyInfo.id,
+      applicationId: result.applicationId,
       ntcCertificate: ntcCertificateDocumentId,
     };
   }
