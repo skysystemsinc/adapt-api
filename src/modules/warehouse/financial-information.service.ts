@@ -166,17 +166,52 @@ export class FinancialInformationService {
 
   /**
    * Save or update tax return
+   * Supports multiple documents for tax-return
    */
   private async saveTaxReturn(
     financialInfo: FinancialInformationEntity,
     dto: any,
     userId: string,
     id?: string,
-    documentFile?: any,
+    documentFiles?: any, // Can be single file, array of files, or array of document IDs
   ) {
     const savedResult = await this.dataSource.transaction(async (manager) => {
       const taxReturnRepo = manager.getRepository(TaxReturnEntity);
       const documentRepo = manager.getRepository(WarehouseDocument);
+
+      // Normalize documentFiles to array
+      let filesToUpload: any[] = [];
+      let documentIdsToKeep: string[] = [];
+      
+      if (documentFiles) {
+        if (Array.isArray(documentFiles)) {
+          // Check if array contains files or document IDs
+          documentFiles.forEach((item) => {
+            if (item && typeof item === 'object' && item.buffer) {
+              // It's a file
+              filesToUpload.push(item);
+            } else if (typeof item === 'string') {
+              // It's a document ID
+              documentIdsToKeep.push(item);
+            }
+          });
+        } else if (documentFiles.buffer) {
+          // Single file
+          filesToUpload = [documentFiles];
+        } else if (typeof documentFiles === 'string') {
+          // Single document ID
+          documentIdsToKeep = [documentFiles];
+        }
+      }
+
+      // Also check dto.documents for document IDs (from frontend)
+      if (dto.documents && Array.isArray(dto.documents)) {
+        dto.documents.forEach((docId: string) => {
+          if (typeof docId === 'string' && !documentIdsToKeep.includes(docId)) {
+            documentIdsToKeep.push(docId);
+          }
+        });
+      }
 
       if (id) {
         // Update existing
@@ -197,31 +232,62 @@ export class FinancialInformationService {
           remarks: dto.remarks ?? null,
         });
 
-        // Handle document upload/update
-        // If file is provided, overwrite the old document
-        // If string (documentId) is provided in dto.document, ignore it (keep existing document)
-        if (documentFile) {
-          // Upload new document (replace existing if any)
-          const doc = await this.warehouseService.uploadWarehouseDocument(
-            documentFile,
-            userId,
-            'TaxReturn',
-            existing.id,
-            'document',
+        // Handle multiple documents
+        if (filesToUpload.length > 0 || documentIdsToKeep.length > 0) {
+          // Delete old documents that are not in the keep list
+          // Find all existing documents for this tax return
+          const existingDocuments = await documentRepo.find({
+            where: {
+              documentableType: 'TaxReturn',
+              documentableId: existing.id,
+            },
+          });
+
+          // Delete documents that are not in the keep list
+          const documentsToDelete = existingDocuments.filter(
+            (doc) => !documentIdsToKeep.includes(doc.id)
           );
-          const documentEntity = await documentRepo.findOne({ where: { id: doc.id } });
-          if (documentEntity) {
-            existing.document = documentEntity;
+          if (documentsToDelete.length > 0) {
+            await documentRepo.remove(documentsToDelete);
+          }
+
+          // Upload new files
+          let firstDocument: WarehouseDocument | null = null;
+          for (const file of filesToUpload) {
+            const doc = await this.warehouseService.uploadWarehouseDocument(
+              file,
+              userId,
+              'TaxReturn',
+              existing.id,
+              'document',
+            );
+            const documentEntity = await documentRepo.findOne({ where: { id: doc.id } });
+            if (documentEntity) {
+              if (!firstDocument) {
+                firstDocument = documentEntity;
+              }
+            }
+          }
+
+          // Set the first document (or first from keep list) as the primary document for backward compatibility
+          if (firstDocument) {
+            existing.document = firstDocument;
+          } else if (documentIdsToKeep.length > 0) {
+            const firstDocToKeep = await documentRepo.findOne({
+              where: { id: documentIdsToKeep[0] },
+            });
+            if (firstDocToKeep) {
+              existing.document = firstDocToKeep;
+            }
           }
         }
-        // If documentId (string) is provided in dto.document, ignore it - keep existing document relationship
 
         await taxReturnRepo.save(existing);
         return existing;
       } else {
-        // Create new - document is required
-        if (!documentFile) {
-          throw new BadRequestException('Document is required for tax return. Please upload a document.');
+        // Create new - at least one document is required
+        if (filesToUpload.length === 0 && documentIdsToKeep.length === 0) {
+          throw new BadRequestException('At least one document is required for tax return. Please upload a document.');
         }
 
         const taxReturn = taxReturnRepo.create({
@@ -234,17 +300,27 @@ export class FinancialInformationService {
         });
         await taxReturnRepo.save(taxReturn);
 
-        // Handle document upload after creating the entity
-        const doc = await this.warehouseService.uploadWarehouseDocument(
-          documentFile,
-          userId,
-          'TaxReturn',
-          taxReturn.id,
-          'document',
-        );
-        const documentEntity = await documentRepo.findOne({ where: { id: doc.id } });
-        if (documentEntity) {
-          taxReturn.document = documentEntity;
+        // Upload new files
+        let firstDocument: WarehouseDocument | null = null;
+        for (const file of filesToUpload) {
+          const doc = await this.warehouseService.uploadWarehouseDocument(
+            file,
+            userId,
+            'TaxReturn',
+            taxReturn.id,
+            'document',
+          );
+          const documentEntity = await documentRepo.findOne({ where: { id: doc.id } });
+          if (documentEntity) {
+            if (!firstDocument) {
+              firstDocument = documentEntity;
+            }
+          }
+        }
+
+        // Set the first document as the primary document for backward compatibility
+        if (firstDocument) {
+          taxReturn.document = firstDocument;
           await taxReturnRepo.save(taxReturn);
         }
 
@@ -258,6 +334,23 @@ export class FinancialInformationService {
       relations: ['document'],
     });
 
+    // Get all documents for this tax return (polymorphic relationship)
+    const allDocuments = await this.dataSource.getRepository(WarehouseDocument).find({
+      where: {
+        documentableType: 'TaxReturn',
+        documentableId: savedResult.id,
+      },
+      order: {
+        createdAt: 'ASC', // Order by creation time
+      },
+    });
+
+    // Map documents to response format
+    const documentsArray = allDocuments.map((doc) => ({
+      documentId: doc.id,
+      originalFileName: doc.originalFileName ?? undefined,
+    }));
+
     return {
       message: id ? 'Tax return updated successfully' : 'Tax return saved successfully',
       data: {
@@ -267,12 +360,15 @@ export class FinancialInformationService {
         periodStart: savedResult.periodStart,
         periodEnd: savedResult.periodEnd,
         remarks: savedResult.remarks ?? null,
+        // Keep single document for backward compatibility
         document: resultWithDocument?.document && resultWithDocument.document.id
           ? {
               documentId: resultWithDocument.document.id,
               originalFileName: resultWithDocument.document.originalFileName ?? undefined,
             }
           : null,
+        // Include all documents array
+        documents: documentsArray.length > 0 ? documentsArray : undefined,
         createdAt: savedResult.createdAt.toISOString(),
         updatedAt: savedResult.updatedAt.toISOString(),
       },
