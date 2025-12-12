@@ -39,6 +39,7 @@ import { CreateAuthorizedSignatoryDto } from './dto/create-authorized-signatory.
 import { forwardRef, Inject } from '@nestjs/common';
 import { FinancialInformationService } from './financial-information.service';
 import { WarehouseOperator } from './entities/warehouse-operator.entity';
+import { ResubmitOperatorApplicationDto } from './dto/resubmit-warehouse.dto';
 
 @Injectable()
 export class WarehouseService {
@@ -280,6 +281,35 @@ export class WarehouseService {
     };
   }
 
+  async resubmitOperatorApplication(resubmitOperatorApplicationDto: ResubmitOperatorApplicationDto, userId: string) {
+    const application = await this.warehouseOperatorRepository.findOne({ where: { userId } });
+    if (!application) {
+      throw new NotFoundException('Warehouse operator application not found. Please create an application first.');
+    }
+    if (application.status !== WarehouseOperatorApplicationStatus.REJECTED) {
+      throw new BadRequestException('Application is not in rejected status.');
+    }
+    
+    const rejections = application.rejections;
+    if (rejections.length === 0) {
+      throw new BadRequestException('No rejection found.');
+    }
+
+    const __unlockedSections = rejections.map((rejection) => rejection.unlockedSections).flat();
+    if (__unlockedSections.length === 0) {
+      throw new BadRequestException('No unlocked sections found.');
+    }
+
+    //unlocked sections is jsonb array of strings
+    const unlockedSections = __unlockedSections.map((section) => JSON.parse(section));
+    if (unlockedSections.length === 0) {
+      throw new BadRequestException('No unlocked sections found.');
+    }
+    
+
+
+
+  }
 
   async getApplicationEntityById(
     entityType: string,
@@ -3660,7 +3690,7 @@ export class WarehouseService {
         id,
         userId
       },
-      relations: ['authorizedSignatories' as 'Authorized Signatory']
+      relations: ['authorizedSignatories' as 'Authorized Signatory', 'rejections']
     });
 
     if (!warehouseOperatorApplication) {

@@ -18,6 +18,7 @@ import { BankDetails } from './bank-details.entity';
 import { ApplicantChecklistEntity } from './applicant-checklist.entity';
 import { WarehouseApplicantVerification } from '../warehouse-applicant-verification/entities/warehouse-applicant-verification.entity';
 import { AssessmentSubmission } from '../../expert-assessment/assessment-submission/entities/assessment-submission.entity';
+import { ApplicationRejectionEntity } from './application-rejection.entity';
 
 export enum WarehouseOperatorApplicationStatus {
   PENDING = 'PENDING',
@@ -81,6 +82,10 @@ export class WarehouseOperatorApplicationRequest {
 
   @Column({ type: 'text', nullable: true })
   remarks: string | null;
+
+  // relation to application rejection entity
+  @OneToMany(() => ApplicationRejectionEntity, (rejection) => rejection.application)
+  rejections: ApplicationRejectionEntity[];
 
   @Column({ type: 'jsonb', nullable: true })
   metadata: any;

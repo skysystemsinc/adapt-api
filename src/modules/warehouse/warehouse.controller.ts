@@ -29,6 +29,7 @@ import {
 } from './swagger/authorized-signatory.swagger';
 import { ListWarehouseOperatorApplicationDto } from './dto/list-warehouse.dto';
 import { CreateAuthorizedSignatoryDto } from './dto/create-authorized-signatory.dto';
+import { ResubmitOperatorApplicationDto } from './dto/resubmit-warehouse.dto';
 
 
 @ApiTags('Warehouse')
@@ -62,6 +63,18 @@ export class WarehouseController {
   ) {
     const user = request.user as User;
     return this.warehouseService.createOperatorApplication(createWarehouseDto, user.id);
+  }
+
+  @ApiOperation({ summary: 'Resubmit a warehouse operator application' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiBody({ type: ResubmitOperatorApplicationDto })
+  @Patch('/operator/application/resubmit')
+  resubmitOperatorApplication(
+    @Body() resubmitOperatorApplicationDto: ResubmitOperatorApplicationDto,
+    @Request() request: any
+  ) {
+    const user = request.user as User;
+    return this.warehouseService.resubmitOperatorApplication(resubmitOperatorApplicationDto, user.id);
   }
 
   @ApiOperation({ summary: 'Get application entity data by type and id' })
