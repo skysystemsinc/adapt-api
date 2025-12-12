@@ -36,6 +36,7 @@ import { ReviewModule } from './review/review.module';
 import { WarehouseOperator } from './entities/warehouse-operator.entity';
 import { AssignmentSection } from './operator/assignment/entities/assignment-section.entity';
 import { Assignment } from './operator/assignment/entities/assignment.entity';
+import { AuthorizedSignatoryHistory } from './entities/authorized-signatories-history.entity';
 
 @Module({
   controllers: [WarehouseController],
@@ -69,6 +70,7 @@ import { Assignment } from './operator/assignment/entities/assignment.entity';
       WarehouseOperator,
       AssignmentSection,
       Assignment,
+      AuthorizedSignatoryHistory,
     ]),
     forwardRef(() => AuthModule),
     JwtModule.registerAsync({

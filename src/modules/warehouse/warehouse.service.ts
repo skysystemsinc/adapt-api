@@ -42,6 +42,7 @@ import { WarehouseOperator } from './entities/warehouse-operator.entity';
 import { ResubmitOperatorApplicationDto } from './dto/resubmit-warehouse.dto';
 import { Assignment, AssignmentLevel } from './operator/assignment/entities/assignment.entity';
 import { AssignmentSection } from './operator/assignment/entities/assignment-section.entity';
+import { AuthorizedSignatoryHistory } from './entities/authorized-signatories-history.entity';
 
 @Injectable()
 export class WarehouseService {
@@ -75,6 +76,8 @@ export class WarehouseService {
     private readonly assignmentRepository: Repository<Assignment>,
     @InjectRepository(AssignmentSection)
     private readonly assignmentSectionRepository: Repository<AssignmentSection>,
+    @InjectRepository(AuthorizedSignatoryHistory)
+    private readonly authorizedSignatoryHistoryRepository: Repository<AuthorizedSignatoryHistory>,
   ) {
     // Ensure upload directory exists
     this.ensureUploadDirectory();
@@ -481,6 +484,7 @@ export class WarehouseService {
     updateAuthorizedSignatoryDto: CreateAuthorizedSignatoryDto,
     userId: string
   ) {
+    // First, validate the record exists and user has access (outside transaction for early validation)
     const authorizedSignatory = await this.authorizedSignatoryRepository.findOne({
       where: { id: authorizedSignatoryId },
       relations: ['warehouseOperatorApplicationRequest'],
@@ -495,31 +499,92 @@ export class WarehouseService {
       throw new NotFoundException('Authorized signatory not found or access denied');
     }
 
+    // Validate application status allows updates
     if (![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(application.status)) {
       throw new BadRequestException('Cannot update authorized signatory after application is approved or submitted');
     }
 
-    authorizedSignatory.authorizedSignatoryName = updateAuthorizedSignatoryDto.authorizedSignatoryName;
-    authorizedSignatory.name = updateAuthorizedSignatoryDto.name;
-    authorizedSignatory.cnic = updateAuthorizedSignatoryDto.cnic.toString();
-    authorizedSignatory.passport = updateAuthorizedSignatoryDto.passport ?? authorizedSignatory.passport;
-    authorizedSignatory.issuanceDateOfCnic = updateAuthorizedSignatoryDto.issuanceDateOfCnic;
-    authorizedSignatory.expiryDateOfCnic = updateAuthorizedSignatoryDto.expiryDateOfCnic;
-    authorizedSignatory.mailingAddress = updateAuthorizedSignatoryDto.mailingAddress;
-    authorizedSignatory.city = updateAuthorizedSignatoryDto.city;
-    authorizedSignatory.country = updateAuthorizedSignatoryDto.country;
-    authorizedSignatory.postalCode = updateAuthorizedSignatoryDto.postalCode;
-    authorizedSignatory.designation = updateAuthorizedSignatoryDto.designation;
-    authorizedSignatory.mobileNumber = updateAuthorizedSignatoryDto.mobileNumber;
-    authorizedSignatory.email = updateAuthorizedSignatoryDto.email;
-    authorizedSignatory.landlineNumber = updateAuthorizedSignatoryDto.landlineNumber || '';
+    // Use transaction to ensure atomicity: history save and update must both succeed or both fail
+    const result = await this.dataSource.transaction(async (manager) => {
+      const signatoryRepo = manager.getRepository(AuthorizedSignatory);
+      const historyRepo = manager.getRepository(AuthorizedSignatoryHistory);
 
-    const updated = await this.authorizedSignatoryRepository.save(authorizedSignatory);
+      // Reload within transaction to ensure we have the latest data
+      const signatory = await signatoryRepo.findOne({
+        where: { id: authorizedSignatoryId },
+        relations: ['warehouseOperatorApplicationRequest'],
+      });
+
+      if (!signatory) {
+        throw new NotFoundException('Authorized signatory not found');
+      }
+
+      const appInTransaction = signatory.warehouseOperatorApplicationRequest;
+      if (!appInTransaction || appInTransaction.userId !== userId) {
+        throw new NotFoundException('Authorized signatory not found or access denied');
+      }
+
+      // Re-validate application status inside transaction to prevent race conditions
+      if (![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(appInTransaction.status)) {
+        throw new BadRequestException('Cannot update authorized signatory after application is approved or submitted');
+      }
+
+      // Save history of authorized signatory if application is rejected (before overwriting)
+      if (appInTransaction.status === WarehouseOperatorApplicationStatus.REJECTED) {
+        const historyRecord = historyRepo.create({
+          authorizedSignatoryId: signatory.id,
+          warehouseOperatorApplicationRequestId: signatory.warehouseOperatorApplicationRequestId,
+          name: signatory.name,
+          authorizedSignatoryName: signatory.authorizedSignatoryName,
+          cnic: signatory.cnic,
+          passport: signatory.passport,
+          issuanceDateOfCnic: signatory.issuanceDateOfCnic,
+          expiryDateOfCnic: signatory.expiryDateOfCnic,
+          mailingAddress: signatory.mailingAddress,
+          city: signatory.city,
+          country: signatory.country,
+          postalCode: signatory.postalCode,
+          designation: signatory.designation,
+          mobileNumber: signatory.mobileNumber,
+          email: signatory.email,
+          landlineNumber: signatory.landlineNumber,
+          isActive: false,
+        });
+        
+        // Preserve the original createdAt timestamp from the authorized signatory record
+        historyRecord.createdAt = signatory.createdAt;
+        
+        await historyRepo.save(historyRecord);
+      }
+
+      // Overwrite existing authorized signatory with new information
+      signatory.authorizedSignatoryName = updateAuthorizedSignatoryDto.authorizedSignatoryName;
+      signatory.name = updateAuthorizedSignatoryDto.name;
+      signatory.cnic = updateAuthorizedSignatoryDto.cnic.toString();
+      signatory.passport = updateAuthorizedSignatoryDto.passport ?? '';
+      signatory.issuanceDateOfCnic = updateAuthorizedSignatoryDto.issuanceDateOfCnic;
+      signatory.expiryDateOfCnic = updateAuthorizedSignatoryDto.expiryDateOfCnic;
+      signatory.mailingAddress = updateAuthorizedSignatoryDto.mailingAddress;
+      signatory.city = updateAuthorizedSignatoryDto.city;
+      signatory.country = updateAuthorizedSignatoryDto.country;
+      signatory.postalCode = updateAuthorizedSignatoryDto.postalCode;
+      signatory.designation = updateAuthorizedSignatoryDto.designation;
+      signatory.mobileNumber = updateAuthorizedSignatoryDto.mobileNumber;
+      signatory.email = updateAuthorizedSignatoryDto.email;
+      signatory.landlineNumber = updateAuthorizedSignatoryDto.landlineNumber ?? '';
+
+      const updated = await signatoryRepo.save(signatory);
+
+      return {
+        signatory: updated,
+        applicationId: appInTransaction.applicationId,
+      };
+    });
 
     return {
       message: 'Authorized signatory updated successfully',
-      authorizedSignatoryId: updated.id,
-      applicationId: application.applicationId,
+      authorizedSignatoryId: result.signatory.id,
+      applicationId: result.applicationId,
     };
   }
 
@@ -4133,7 +4198,6 @@ export class WarehouseService {
         }
       });
 
-
       // get all sections
       const filteredSections = assignmentSections.filter(section => {
         switch (resourceType) {
@@ -4154,7 +4218,7 @@ export class WarehouseService {
 
       unlockedSections = filteredSections.map((section) => section.resourceId as string).filter((id): id is string => id !== null && id !== undefined);
     }
-    
+
     return {
       message: 'Resource status retrieved successfully',
       data: {
