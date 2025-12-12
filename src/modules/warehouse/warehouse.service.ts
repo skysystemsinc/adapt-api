@@ -4125,30 +4125,29 @@ export class WarehouseService {
       // check in assignmentSection table against assignment
       const assignmentSections = await this.assignmentSectionRepository.find({
         where: {
-          assignment: In(assignments.map((assignment) => assignment.id))
+          assignmentId: In(assignments.map((assignment) => assignment.id))
         },
         select: {
           resourceId: true,
-          resourceType: true,
+          sectionType: true,
         }
       });
-
 
       // get all sections
       const filteredSections = assignmentSections.filter(section => {
         switch (resourceType) {
           case 'hr':
-            return section.resourceType === '4-hr-information';
+            return section.sectionType === '4-hr-information';
           case 'authorized-signatories':
-            return section.resourceType === '1-authorize-signatory-information';
+            return section.sectionType === '1-authorize-signatory-information';
           case 'bank-statement':
-            return section.resourceType === '3-bank-details';
+            return section.sectionType === '3-bank-details';
           case 'company-information':
-            return section.resourceType === '2-company-information';
+            return section.sectionType === '2-company-information';
           case 'financial-information':
-            return section.resourceType === '5-financial-information';
+            return section.sectionType === '5-financial-information';
           case 'applicant-checklist':
-            return section.resourceType === '6-application-checklist-questionnaire';
+            return section.sectionType === '6-application-checklist-questionnaire';
         }
       });
 
