@@ -42,6 +42,9 @@ import { WarehouseOperator } from './entities/warehouse-operator.entity';
 import { ResubmitOperatorApplicationDto } from './dto/resubmit-warehouse.dto';
 import { Assignment, AssignmentLevel } from './operator/assignment/entities/assignment.entity';
 import { AssignmentSection } from './operator/assignment/entities/assignment-section.entity';
+import { AuthorizedSignatoryHistory } from './entities/authorized-signatories-history.entity';
+import { CompanyInformationHistory } from './entities/company-information-history.entity';
+import { BankDetailsHistory } from './entities/bank-details-history.entity';
 
 @Injectable()
 export class WarehouseService {
@@ -75,6 +78,12 @@ export class WarehouseService {
     private readonly assignmentRepository: Repository<Assignment>,
     @InjectRepository(AssignmentSection)
     private readonly assignmentSectionRepository: Repository<AssignmentSection>,
+    @InjectRepository(AuthorizedSignatoryHistory)
+    private readonly authorizedSignatoryHistoryRepository: Repository<AuthorizedSignatoryHistory>,
+    @InjectRepository(CompanyInformationHistory)
+    private readonly companyInformationHistoryRepository: Repository<CompanyInformationHistory>,
+    @InjectRepository(BankDetailsHistory)
+    private readonly bankDetailsHistoryRepository: Repository<BankDetailsHistory>,
   ) {
     // Ensure upload directory exists
     this.ensureUploadDirectory();
@@ -481,6 +490,7 @@ export class WarehouseService {
     updateAuthorizedSignatoryDto: CreateAuthorizedSignatoryDto,
     userId: string
   ) {
+    // First, validate the record exists and user has access (outside transaction for early validation)
     const authorizedSignatory = await this.authorizedSignatoryRepository.findOne({
       where: { id: authorizedSignatoryId },
       relations: ['warehouseOperatorApplicationRequest'],
@@ -495,31 +505,92 @@ export class WarehouseService {
       throw new NotFoundException('Authorized signatory not found or access denied');
     }
 
+    // Validate application status allows updates
     if (![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(application.status)) {
       throw new BadRequestException('Cannot update authorized signatory after application is approved or submitted');
     }
 
-    authorizedSignatory.authorizedSignatoryName = updateAuthorizedSignatoryDto.authorizedSignatoryName;
-    authorizedSignatory.name = updateAuthorizedSignatoryDto.name;
-    authorizedSignatory.cnic = updateAuthorizedSignatoryDto.cnic.toString();
-    authorizedSignatory.passport = updateAuthorizedSignatoryDto.passport ?? authorizedSignatory.passport;
-    authorizedSignatory.issuanceDateOfCnic = updateAuthorizedSignatoryDto.issuanceDateOfCnic;
-    authorizedSignatory.expiryDateOfCnic = updateAuthorizedSignatoryDto.expiryDateOfCnic;
-    authorizedSignatory.mailingAddress = updateAuthorizedSignatoryDto.mailingAddress;
-    authorizedSignatory.city = updateAuthorizedSignatoryDto.city;
-    authorizedSignatory.country = updateAuthorizedSignatoryDto.country;
-    authorizedSignatory.postalCode = updateAuthorizedSignatoryDto.postalCode;
-    authorizedSignatory.designation = updateAuthorizedSignatoryDto.designation;
-    authorizedSignatory.mobileNumber = updateAuthorizedSignatoryDto.mobileNumber;
-    authorizedSignatory.email = updateAuthorizedSignatoryDto.email;
-    authorizedSignatory.landlineNumber = updateAuthorizedSignatoryDto.landlineNumber || '';
+    // Use transaction to ensure atomicity: history save and update must both succeed or both fail
+    const result = await this.dataSource.transaction(async (manager) => {
+      const signatoryRepo = manager.getRepository(AuthorizedSignatory);
+      const historyRepo = manager.getRepository(AuthorizedSignatoryHistory);
 
-    const updated = await this.authorizedSignatoryRepository.save(authorizedSignatory);
+      // Reload within transaction to ensure we have the latest data
+      const signatory = await signatoryRepo.findOne({
+        where: { id: authorizedSignatoryId },
+        relations: ['warehouseOperatorApplicationRequest'],
+      });
+
+      if (!signatory) {
+        throw new NotFoundException('Authorized signatory not found');
+      }
+
+      const appInTransaction = signatory.warehouseOperatorApplicationRequest;
+      if (!appInTransaction || appInTransaction.userId !== userId) {
+        throw new NotFoundException('Authorized signatory not found or access denied');
+      }
+
+      // Re-validate application status inside transaction to prevent race conditions
+      if (![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(appInTransaction.status)) {
+        throw new BadRequestException('Cannot update authorized signatory after application is approved or submitted');
+      }
+
+      // Save history of authorized signatory if application is rejected (before overwriting)
+      if (appInTransaction.status === WarehouseOperatorApplicationStatus.REJECTED) {
+        const historyRecord = historyRepo.create({
+          authorizedSignatoryId: signatory.id,
+          warehouseOperatorApplicationRequestId: signatory.warehouseOperatorApplicationRequestId,
+          name: signatory.name,
+          authorizedSignatoryName: signatory.authorizedSignatoryName,
+          cnic: signatory.cnic,
+          passport: signatory.passport,
+          issuanceDateOfCnic: signatory.issuanceDateOfCnic,
+          expiryDateOfCnic: signatory.expiryDateOfCnic,
+          mailingAddress: signatory.mailingAddress,
+          city: signatory.city,
+          country: signatory.country,
+          postalCode: signatory.postalCode,
+          designation: signatory.designation,
+          mobileNumber: signatory.mobileNumber,
+          email: signatory.email,
+          landlineNumber: signatory.landlineNumber,
+          isActive: false,
+        });
+        
+        // Preserve the original createdAt timestamp from the authorized signatory record
+        historyRecord.createdAt = signatory.createdAt;
+        
+        await historyRepo.save(historyRecord);
+      }
+
+      // Overwrite existing authorized signatory with new information
+      signatory.authorizedSignatoryName = updateAuthorizedSignatoryDto.authorizedSignatoryName;
+      signatory.name = updateAuthorizedSignatoryDto.name;
+      signatory.cnic = updateAuthorizedSignatoryDto.cnic.toString();
+      signatory.passport = updateAuthorizedSignatoryDto.passport ?? '';
+      signatory.issuanceDateOfCnic = updateAuthorizedSignatoryDto.issuanceDateOfCnic;
+      signatory.expiryDateOfCnic = updateAuthorizedSignatoryDto.expiryDateOfCnic;
+      signatory.mailingAddress = updateAuthorizedSignatoryDto.mailingAddress;
+      signatory.city = updateAuthorizedSignatoryDto.city;
+      signatory.country = updateAuthorizedSignatoryDto.country;
+      signatory.postalCode = updateAuthorizedSignatoryDto.postalCode;
+      signatory.designation = updateAuthorizedSignatoryDto.designation;
+      signatory.mobileNumber = updateAuthorizedSignatoryDto.mobileNumber;
+      signatory.email = updateAuthorizedSignatoryDto.email;
+      signatory.landlineNumber = updateAuthorizedSignatoryDto.landlineNumber ?? '';
+
+      const updated = await signatoryRepo.save(signatory);
+
+      return {
+        signatory: updated,
+        applicationId: appInTransaction.applicationId,
+      };
+    });
 
     return {
       message: 'Authorized signatory updated successfully',
-      authorizedSignatoryId: updated.id,
-      applicationId: application.applicationId,
+      authorizedSignatoryId: result.signatory.id,
+      applicationId: result.applicationId,
     };
   }
 
@@ -629,7 +700,7 @@ export class WarehouseService {
     companyInformationId: string,
     ntcCertificateFile?: any
   ) {
-    // Find existing warehouse operator application for this user
+    // First, validate the record exists and user has access (outside transaction for early validation)
     const existingApplication = await this.warehouseOperatorRepository.findOne({
       where: { userId, id: applicationId },
     });
@@ -652,27 +723,86 @@ export class WarehouseService {
       throw new NotFoundException('Company information not found');
     }
 
-    // Update company information fields
-    existingCompanyInfo.companyName = createCompanyInformationDto.companyName;
-    existingCompanyInfo.secpRegistrationNumber = createCompanyInformationDto.secpRegistrationNumber;
-    existingCompanyInfo.activeFilerStatus = createCompanyInformationDto.activeFilerStatus;
-    existingCompanyInfo.dateOfIncorporation = createCompanyInformationDto.dateOfIncorporation;
-    existingCompanyInfo.businessCommencementDate = createCompanyInformationDto.businessCommencementDate ?? existingCompanyInfo.businessCommencementDate ?? null;
-    existingCompanyInfo.registeredOfficeAddress = createCompanyInformationDto.registeredOfficeAddress;
-    existingCompanyInfo.postalCode = createCompanyInformationDto.postalCode ?? existingCompanyInfo.postalCode ?? null;
-    existingCompanyInfo.nationalTaxNumber = createCompanyInformationDto.nationalTaxNumber;
-    existingCompanyInfo.salesTaxRegistrationNumber = createCompanyInformationDto.salesTaxRegistrationNumber;
+    // Use transaction to ensure atomicity: history save and update must both succeed or both fail
+    const result = await this.dataSource.transaction(async (manager) => {
+      const companyInfoRepo = manager.getRepository(CompanyInformation);
+      const historyRepo = manager.getRepository(CompanyInformationHistory);
+      const appRepo = manager.getRepository(WarehouseOperatorApplicationRequest);
 
-    const savedCompanyInformation = await this.companyInformationRepository.save(existingCompanyInfo);
+      // Reload within transaction to ensure we have the latest data
+      const application = await appRepo.findOne({
+        where: { id: applicationId, userId },
+      });
 
-    // If ntcCertificate file is provided, upload it and link to company information
+      if (!application) {
+        throw new NotFoundException('Warehouse operator application not found. Please create an application first.');
+      }
+
+      // Re-validate application status inside transaction to prevent race conditions
+      if (![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(application.status)) {
+        throw new BadRequestException('Cannot update company information after application is approved or submitted');
+      }
+
+      const companyInfo = await companyInfoRepo.findOne({
+        where: { id: companyInformationId, applicationId: application.id },
+        relations: ['ntcCertificate'],
+      });
+
+      if (!companyInfo) {
+        throw new NotFoundException('Company information not found');
+      }
+
+      // Save history of company information if application is rejected (before overwriting)
+      if (application.status === WarehouseOperatorApplicationStatus.REJECTED) {
+        const historyRecord = historyRepo.create({
+          applicationId: companyInfo.applicationId,
+          companyInformationId: companyInfo.id,
+          companyName: companyInfo.companyName,
+          secpRegistrationNumber: companyInfo.secpRegistrationNumber,
+          activeFilerStatus: companyInfo.activeFilerStatus,
+          dateOfIncorporation: companyInfo.dateOfIncorporation,
+          businessCommencementDate: companyInfo.businessCommencementDate,
+          registeredOfficeAddress: companyInfo.registeredOfficeAddress,
+          postalCode: companyInfo.postalCode,
+          nationalTaxNumber: companyInfo.nationalTaxNumber,
+          salesTaxRegistrationNumber: companyInfo.salesTaxRegistrationNumber,
+          isActive: false,
+        });
+        
+        // Preserve the original createdAt timestamp from the company information record
+        historyRecord.createdAt = companyInfo.createdAt;
+        
+        await historyRepo.save(historyRecord);
+      }
+
+      // Overwrite existing company information with new information
+      companyInfo.companyName = createCompanyInformationDto.companyName;
+      companyInfo.secpRegistrationNumber = createCompanyInformationDto.secpRegistrationNumber;
+      companyInfo.activeFilerStatus = createCompanyInformationDto.activeFilerStatus;
+      companyInfo.dateOfIncorporation = createCompanyInformationDto.dateOfIncorporation;
+      companyInfo.businessCommencementDate = createCompanyInformationDto.businessCommencementDate ?? (null as any);
+      companyInfo.registeredOfficeAddress = createCompanyInformationDto.registeredOfficeAddress;
+      companyInfo.postalCode = createCompanyInformationDto.postalCode ?? (null as any);
+      companyInfo.nationalTaxNumber = createCompanyInformationDto.nationalTaxNumber;
+      companyInfo.salesTaxRegistrationNumber = createCompanyInformationDto.salesTaxRegistrationNumber;
+
+      const savedCompanyInformation = await companyInfoRepo.save(companyInfo);
+
+      return {
+        companyInfo: savedCompanyInformation,
+        applicationId: application.applicationId,
+        existingNtcCertificate: companyInfo.ntcCertificate,
+      };
+    });
+
+    // Handle file upload outside transaction (file operations are not transactional)
     let ntcCertificateDocumentId: string | undefined;
     if (ntcCertificateFile) {
       const documentResult = await this.uploadWarehouseDocument(
         ntcCertificateFile,
         userId,
         'CompanyInformation',
-        savedCompanyInformation.id,
+        result.companyInfo.id,
         'ntcCertificate'
       );
       ntcCertificateDocumentId = documentResult.id;
@@ -683,18 +813,18 @@ export class WarehouseService {
       });
 
       if (ntcCertificateDocument) {
-        savedCompanyInformation.ntcCertificate = ntcCertificateDocument;
-        await this.companyInformationRepository.save(savedCompanyInformation);
+        result.companyInfo.ntcCertificate = ntcCertificateDocument;
+        await this.companyInformationRepository.save(result.companyInfo);
       }
-    } else if (existingCompanyInfo.ntcCertificate) {
+    } else if (result.existingNtcCertificate) {
       // Keep existing certificate if no new file is provided
-      ntcCertificateDocumentId = existingCompanyInfo.ntcCertificate.id;
+      ntcCertificateDocumentId = result.existingNtcCertificate.id;
     }
 
     return {
       message: 'Company information updated successfully',
-      companyInformationId: savedCompanyInformation.id,
-      applicationId: existingApplication.applicationId,
+      companyInformationId: result.companyInfo.id,
+      applicationId: result.applicationId,
       ntcCertificate: ntcCertificateDocumentId,
     };
   }
@@ -3654,6 +3784,7 @@ export class WarehouseService {
     updateBankDetailsDto: UpdateBankDetailsDto,
     userId: string
   ) {
+    // First, validate the record exists and user has access (outside transaction for early validation)
     const application = await this.warehouseOperatorRepository.findOne({ where: { id: applicationId, userId } });
     if (!application) {
       throw new NotFoundException('Application not found');
@@ -3668,17 +3799,73 @@ export class WarehouseService {
       throw new NotFoundException('Bank details not found');
     }
 
-    bankDetails.name = updateBankDetailsDto.name;
-    bankDetails.accountTitle = updateBankDetailsDto.accountTitle;
-    bankDetails.iban = updateBankDetailsDto.iban;
-    bankDetails.accountType = updateBankDetailsDto.accountType as AccountType;
-    bankDetails.branchAddress = updateBankDetailsDto.branchAddress || '';
+    // Use transaction to ensure atomicity: history save and update must both succeed or both fail
+    const result = await this.dataSource.transaction(async (manager) => {
+      const bankDetailsRepo = manager.getRepository(BankDetails);
+      const historyRepo = manager.getRepository(BankDetailsHistory);
+      const appRepo = manager.getRepository(WarehouseOperatorApplicationRequest);
 
-    const updatedBankDetails = await this.bankDetailsRepository.save(bankDetails);
+      // Reload within transaction to ensure we have the latest data
+      const appInTransaction = await appRepo.findOne({
+        where: { id: applicationId, userId },
+      });
+
+      if (!appInTransaction) {
+        throw new NotFoundException('Application not found');
+      }
+
+      // Re-validate application status inside transaction to prevent race conditions
+      if (![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(appInTransaction.status)) {
+        throw new BadRequestException('Cannot update bank details after application is approved or submitted');
+      }
+
+      const bankDetailsInTransaction = await bankDetailsRepo.findOne({
+        where: { id: bankDetailsId, applicationId: appInTransaction.id },
+      });
+
+      if (!bankDetailsInTransaction) {
+        throw new NotFoundException('Bank details not found');
+      }
+
+      // Save history of bank details if application is rejected (before overwriting)
+      if (appInTransaction.status === WarehouseOperatorApplicationStatus.REJECTED) {
+        const historyRecord = historyRepo.create({
+          applicationId: bankDetailsInTransaction.applicationId,
+          bankDetailsId: bankDetailsInTransaction.id,
+          name: bankDetailsInTransaction.name,
+          accountTitle: bankDetailsInTransaction.accountTitle,
+          iban: bankDetailsInTransaction.iban,
+          accountType: bankDetailsInTransaction.accountType,
+          branchAddress: bankDetailsInTransaction.branchAddress,
+          status: bankDetailsInTransaction.status,
+          isActive: false,
+        });
+        
+        // Preserve the original createdAt timestamp from the bank details record
+        historyRecord.createdAt = bankDetailsInTransaction.createdAt;
+        
+        await historyRepo.save(historyRecord);
+      }
+
+      // Overwrite existing bank details with new information
+      bankDetailsInTransaction.name = updateBankDetailsDto.name;
+      bankDetailsInTransaction.accountTitle = updateBankDetailsDto.accountTitle;
+      bankDetailsInTransaction.iban = updateBankDetailsDto.iban;
+      bankDetailsInTransaction.accountType = updateBankDetailsDto.accountType as AccountType;
+      bankDetailsInTransaction.branchAddress = updateBankDetailsDto.branchAddress ?? '';
+
+      const updatedBankDetails = await bankDetailsRepo.save(bankDetailsInTransaction);
+
+      return {
+        bankDetails: updatedBankDetails,
+        applicationId: appInTransaction.applicationId,
+      };
+    });
 
     return {
       message: 'Bank details updated successfully',
-      bankDetails: updatedBankDetails,
+      bankDetails: result.bankDetails,
+      applicationId: result.applicationId,
     };
   }
 
@@ -4153,7 +4340,7 @@ export class WarehouseService {
 
       unlockedSections = filteredSections.map((section) => section.resourceId as string).filter((id): id is string => id !== null && id !== undefined);
     }
-    
+
     return {
       message: 'Resource status retrieved successfully',
       data: {
