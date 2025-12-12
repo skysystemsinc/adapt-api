@@ -4095,8 +4095,8 @@ export class WarehouseService {
     };
   }
 
-  async getResourceStatus(applicationId: string, userId: string, resourceType: 'hr' | 'authorized-signatories') {
-    if (!resourceType || !['hr', 'authorized-signatories'].includes(resourceType)) {
+  async getResourceStatus(applicationId: string, userId: string, resourceType: 'bank-statement' | 'company-information' | 'tax-return' | 'other' | 'hr' | 'authorized-signatories' | 'financial-information' | 'applicant-checklist') {
+    if (!resourceType || !['bank-statement', 'company-information', 'tax-return', 'other', 'hr', 'authorized-signatories', 'financial-information', 'applicant-checklist'].includes(resourceType)) {
       throw new BadRequestException('Invalid resource type.');
     }
     const application = await this.warehouseOperatorRepository.findOne({
@@ -4136,12 +4136,20 @@ export class WarehouseService {
 
       // get all sections
       const filteredSections = assignmentSections.filter(section => {
-        if (resourceType === 'hr') {
-          return section.resourceType === '4. HR Information'
-        } else if (resourceType === 'authorized-signatories') {
-          return section.resourceType === '1. Authorized Signatories'
+        switch (resourceType) {
+          case 'hr':
+            return section.resourceType === '4-hr-information';
+          case 'authorized-signatories':
+            return section.resourceType === '1-authorize-signatory-information';
+          case 'bank-statement':
+            return section.resourceType === '3-bank-details';
+          case 'company-information':
+            return section.resourceType === '2-company-information';
+          case 'financial-information':
+            return section.resourceType === '5-financial-information';
+          case 'applicant-checklist':
+            return section.resourceType === '6-application-checklist-questionnaire';
         }
-        return false;
       });
 
       unlockedSections = filteredSections.map((section) => section.resourceId as string).filter((id): id is string => id !== null && id !== undefined);

@@ -1168,7 +1168,7 @@ export class WarehouseController {
   @ApiResponse({ status: 200, description: 'Resource status retrieved successfully', type: Object, example: { message: 'Resource status retrieved successfully', data: { unlockedSections: ['1. Authorized Signatories', '4. HR Information'] } } })
   @Get('/operator/application/:applicationId/resource/status')
   getResourceStatus(@Param('applicationId') applicationId: string, @Request() request: any,
-    @Query('resourceType') resourceType: 'hr' | 'authorized-signatories'
+    @Query('resourceType') resourceType: 'bank-statement' | 'company-information' | 'hr' | 'authorized-signatories' | 'financial-information' | 'applicant-checklist'
   ) {
     const user = request.user as User;
     return this.warehouseService.getResourceStatus(applicationId, user.id, resourceType);
