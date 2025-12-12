@@ -83,7 +83,7 @@ export class CreateWarehouseDocumentDto {
 
 //   @ApiPropertyOptional({
 //     description: 'Optional description or notes about the document',
-//     example: 'NTC Certificate for company registration',
+//     example: 'NTN Certificate for company registration',
 //   })
 //   @IsOptional()
 //   @IsString()
@@ -104,7 +104,7 @@ export class CreateWarehouseDocumentDto {
 export class UpdateWarehouseDocumentDto {
   @ApiPropertyOptional({
     description: 'Optional description or notes about the document',
-    example: 'Updated NTC Certificate',
+    example: 'Updated NTN Certificate',
   })
   @IsOptional()
   @IsString()
