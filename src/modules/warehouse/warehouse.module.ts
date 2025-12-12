@@ -34,6 +34,8 @@ import { WarehouseApplicantVerificationModule } from './warehouse-applicant-veri
 import { AssignmentModule } from './operator/assignment/assignment.module';
 import { ReviewModule } from './review/review.module';
 import { WarehouseOperator } from './entities/warehouse-operator.entity';
+import { AssignmentSection } from './operator/assignment/entities/assignment-section.entity';
+import { Assignment } from './operator/assignment/entities/assignment.entity';
 
 @Module({
   controllers: [WarehouseController],
@@ -65,6 +67,8 @@ import { WarehouseOperator } from './entities/warehouse-operator.entity';
       RegistrationFeeChecklistEntity,
       DeclarationChecklistEntity,
       WarehouseOperator,
+      AssignmentSection,
+      Assignment,
     ]),
     forwardRef(() => AuthModule),
     JwtModule.registerAsync({

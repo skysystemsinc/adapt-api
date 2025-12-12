@@ -953,7 +953,7 @@ export class WarehouseController {
     }
 
     const user = request.user as User;
-    
+
     // For tax-return and audit-report, use multiple files; for others, use first file (backward compatibility)
     let documentFile: any = undefined;
     if (sectionType === 'tax-return' || sectionType === 'audit-report') {
@@ -964,7 +964,7 @@ export class WarehouseController {
       // Also check for 'document' field in case frontend sends single file
       documentFile = documentFiles && documentFiles.length > 0 ? documentFiles[0] : request.body?.document;
     }
-    
+
     return this.warehouseService.saveFinancialSubsection(
       sectionType,
       applicationId,
@@ -1007,7 +1007,7 @@ export class WarehouseController {
     }
 
     const user = request.user as User;
-    
+
     // For tax-return and audit-report, use multiple files; for others, use first file (backward compatibility)
     let documentFile: any = undefined;
     if (sectionType === 'tax-return' || sectionType === 'audit-report') {
@@ -1017,7 +1017,7 @@ export class WarehouseController {
       // Single file for other sections (backward compatibility)
       documentFile = documentFiles && documentFiles.length > 0 ? documentFiles[0] : request.body?.document;
     }
-    
+
     return this.warehouseService.saveFinancialSubsection(
       sectionType,
       applicationId,
