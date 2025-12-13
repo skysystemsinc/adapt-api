@@ -1,5 +1,5 @@
 import { BadRequestException, forwardRef, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FinancialInformationEntity } from './entities/financial-information.entity';
 import { TaxReturnEntity } from './entities/financial/tax-return.entity';
@@ -7,9 +7,14 @@ import { BankStatementEntity } from './entities/financial/bank-statement.entity'
 import { OthersEntity } from './entities/financial/others.entity';
 import { AuditReportEntity } from './entities/financial/audit-report.entity';
 import { WarehouseDocument } from './entities/warehouse-document.entity';
-import { WarehouseOperatorApplicationRequest } from './entities/warehouse-operator-application-request.entity';
+import { WarehouseOperatorApplicationRequest, WarehouseOperatorApplicationStatus } from './entities/warehouse-operator-application-request.entity';
 import { OthersDto } from './dto/create-financial-information.dto';
 import { WarehouseService } from './warehouse.service';
+import { AuditReportHistoryEntity } from './entities/financial/audit-report-history.entity';
+import { TaxReturnHistoryEntity } from './entities/financial/tax-return-history.entity';
+import { BankStatementHistoryEntity } from './entities/financial/bank-statement-history.entity';
+import { OthersHistoryEntity } from './entities/financial/others-history.entity';
+import { AssignmentLevel, AssignmentStatus } from './operator/assignment/entities/assignment.entity';
 
 @Injectable()
 export class FinancialInformationService {
@@ -94,6 +99,18 @@ export class FinancialInformationService {
     const savedResult = await this.dataSource.transaction(async (manager) => {
       const auditReportRepo = manager.getRepository(AuditReportEntity);
       const documentRepo = manager.getRepository(WarehouseDocument);
+      const appRepo = manager.getRepository(WarehouseOperatorApplicationRequest);
+      const historyRepo = manager.getRepository(AuditReportHistoryEntity);
+      
+      const appInTransaction = await appRepo.findOne({
+        where: { id: financialInfo.application.id, userId },
+      });
+      if (!appInTransaction) {
+        throw new NotFoundException('Application not found');
+      }
+      if (![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(appInTransaction.status)) {
+        throw new BadRequestException('Cannot update audit report after application is approved, submitted, or rejected');
+      }
 
       // Normalize documentFiles to array
       let filesToUpload: any[] = [];
@@ -138,6 +155,33 @@ export class FinancialInformationService {
 
         if (!existing) {
           throw new NotFoundException('Audit report not found');
+        }
+
+        if (![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(appInTransaction.status)) {
+          throw new BadRequestException('Cannot update audit report after application is approved, submitted, or rejected');
+        }
+
+        if(appInTransaction.status === WarehouseOperatorApplicationStatus.REJECTED) {
+          //save history of audit report
+          const historyRecord = historyRepo.create({
+            auditReportId: existing.id,
+            documentType: existing.documentType,
+            documentName: existing.documentName,
+            periodStart: existing.periodStart,
+            periodEnd: existing.periodEnd,
+            assets: existing.assets,
+            liabilities: existing.liabilities,
+            equity: existing.equity,
+            revenue: existing.revenue,
+            netProfitLoss: existing.netProfitLoss,
+            remarks: existing.remarks ?? null,
+            financialInformationId: financialInfo.id,
+            document: existing.document,
+            isActive: false,
+          });
+          // Preserve the original createdAt timestamp from the audit report record
+          historyRecord.createdAt = existing.createdAt;
+          await historyRepo.save(historyRecord);
         }
 
         Object.assign(existing, {
@@ -277,6 +321,47 @@ export class FinancialInformationService {
       originalFileName: doc.originalFileName ?? undefined,
     }));
 
+    // Reload application to get latest status after transaction
+    const updatedApplication = await this.warehouseOperatorRepository.findOne({
+      where: { id: financialInfo.application.id },
+    });
+
+    // if application is rejected, track resubmission and update status if all sections are complete
+    if (updatedApplication?.status === WarehouseOperatorApplicationStatus.REJECTED) {
+      // Track resubmission and update status if all sections are complete
+      // Find the assignment section for financial information if it exists
+      const assignments = await this.warehouseService['assignmentRepository'].find({
+        where: {
+          applicationId: financialInfo.application.id,
+          level: AssignmentLevel.HOD_TO_APPLICANT,
+          status: AssignmentStatus.REJECTED,
+        },
+      });
+
+      let assignmentSectionId: string | null = null;
+      if (assignments.length > 0) {
+        const assignmentSections = await this.warehouseService['assignmentSectionRepository'].find({
+          where: {
+            assignmentId: In(assignments.map((a) => a.id)),
+            sectionType: '5-financial-information',
+            resourceId: financialInfo.id,
+          },
+        });
+
+        if (assignmentSections.length > 0) {
+          assignmentSectionId = assignmentSections[0].id;
+        }
+      }
+
+      // Call helper function to track resubmission and update status
+      await this.warehouseService['trackResubmissionAndUpdateStatus'](
+        financialInfo.application.id,
+        '5-financial-information',
+        financialInfo.id,
+        assignmentSectionId ?? undefined,
+      );
+    }
+
     return {
       message: id ? 'Audit report updated successfully' : 'Audit report saved successfully',
       data: {
@@ -320,6 +405,8 @@ export class FinancialInformationService {
     const savedResult = await this.dataSource.transaction(async (manager) => {
       const taxReturnRepo = manager.getRepository(TaxReturnEntity);
       const documentRepo = manager.getRepository(WarehouseDocument);
+      const appRepo = manager.getRepository(WarehouseOperatorApplicationRequest);
+      const historyRepo = manager.getRepository(TaxReturnHistoryEntity);
 
       // Normalize documentFiles to array
       let filesToUpload: any[] = [];
@@ -364,6 +451,33 @@ export class FinancialInformationService {
 
         if (!existing) {
           throw new NotFoundException('Tax return not found');
+        }
+
+        // Get application to check status
+        const appInTransaction = await appRepo.findOne({
+          where: { id: financialInfo.application.id },
+        });
+
+        if (!appInTransaction) {
+          throw new NotFoundException('Application not found');
+        }
+
+        // Save history of tax return if application is rejected (before overwriting)
+        if (appInTransaction.status === WarehouseOperatorApplicationStatus.REJECTED) {
+          const historyRecord = historyRepo.create({
+            taxReturnId: existing.id,
+            documentType: existing.documentType,
+            documentName: existing.documentName,
+            periodStart: existing.periodStart,
+            periodEnd: existing.periodEnd,
+            remarks: existing.remarks ?? null,
+            financialInformationId: financialInfo.id,
+            document: existing.document,
+            isActive: false,
+          });
+          // Preserve the original createdAt timestamp from the tax return record
+          historyRecord.createdAt = existing.createdAt;
+          await historyRepo.save(historyRecord);
         }
 
         Object.assign(existing, {
@@ -493,6 +607,47 @@ export class FinancialInformationService {
       originalFileName: doc.originalFileName ?? undefined,
     }));
 
+    // Reload application to get latest status after transaction
+    const updatedApplication = await this.warehouseOperatorRepository.findOne({
+      where: { id: financialInfo.application.id },
+    });
+
+    // if application is rejected, track resubmission and update status if all sections are complete
+    if (updatedApplication?.status === WarehouseOperatorApplicationStatus.REJECTED) {
+      // Track resubmission and update status if all sections are complete
+      // Find the assignment section for financial information if it exists
+      const assignments = await this.warehouseService['assignmentRepository'].find({
+        where: {
+          applicationId: financialInfo.application.id,
+          level: AssignmentLevel.HOD_TO_APPLICANT,
+          status: AssignmentStatus.REJECTED,
+        },
+      });
+
+      let assignmentSectionId: string | null = null;
+      if (assignments.length > 0) {
+        const assignmentSections = await this.warehouseService['assignmentSectionRepository'].find({
+          where: {
+            assignmentId: In(assignments.map((a) => a.id)),
+            sectionType: '5-financial-information',
+            resourceId: financialInfo.id,
+          },
+        });
+
+        if (assignmentSections.length > 0) {
+          assignmentSectionId = assignmentSections[0].id;
+        }
+      }
+
+      // Call helper function to track resubmission and update status
+      await this.warehouseService['trackResubmissionAndUpdateStatus'](
+        financialInfo.application.id,
+        '5-financial-information',
+        financialInfo.id,
+        assignmentSectionId ?? undefined,
+      );
+    }
+
     return {
       message: id ? 'Tax return updated successfully' : 'Tax return saved successfully',
       data: {
@@ -530,6 +685,8 @@ export class FinancialInformationService {
     const savedResult = await this.dataSource.transaction(async (manager) => {
       const bankStatementRepo = manager.getRepository(BankStatementEntity);
       const documentRepo = manager.getRepository(WarehouseDocument);
+      const appRepo = manager.getRepository(WarehouseOperatorApplicationRequest);
+      const historyRepo = manager.getRepository(BankStatementHistoryEntity);
 
       if (id) {
         // Update existing
@@ -540,6 +697,33 @@ export class FinancialInformationService {
 
         if (!existing) {
           throw new NotFoundException('Bank statement not found');
+        }
+
+        // Get application to check status
+        const appInTransaction = await appRepo.findOne({
+          where: { id: financialInfo.application.id },
+        });
+
+        if (!appInTransaction) {
+          throw new NotFoundException('Application not found');
+        }
+
+        // Save history of bank statement if application is rejected (before overwriting)
+        if (appInTransaction.status === WarehouseOperatorApplicationStatus.REJECTED) {
+          const historyRecord = historyRepo.create({
+            bankStatementId: existing.id,
+            documentType: existing.documentType,
+            documentName: existing.documentName,
+            periodStart: existing.periodStart,
+            periodEnd: existing.periodEnd,
+            remarks: existing.remarks ?? null,
+            financialInformationId: financialInfo.id,
+            document: existing.document,
+            isActive: false,
+          });
+          // Preserve the original createdAt timestamp from the bank statement record
+          historyRecord.createdAt = existing.createdAt;
+          await historyRepo.save(historyRecord);
         }
 
         Object.assign(existing, {
@@ -611,6 +795,47 @@ export class FinancialInformationService {
       relations: ['document'],
     });
 
+    // Reload application to get latest status after transaction
+    const updatedApplication = await this.warehouseOperatorRepository.findOne({
+      where: { id: financialInfo.application.id },
+    });
+
+    // if application is rejected, track resubmission and update status if all sections are complete
+    if (updatedApplication?.status === WarehouseOperatorApplicationStatus.REJECTED) {
+      // Track resubmission and update status if all sections are complete
+      // Find the assignment section for financial information if it exists
+      const assignments = await this.warehouseService['assignmentRepository'].find({
+        where: {
+          applicationId: financialInfo.application.id,
+          level: AssignmentLevel.HOD_TO_APPLICANT,
+          status: AssignmentStatus.REJECTED,
+        },
+      });
+
+      let assignmentSectionId: string | null = null;
+      if (assignments.length > 0) {
+        const assignmentSections = await this.warehouseService['assignmentSectionRepository'].find({
+          where: {
+            assignmentId: In(assignments.map((a) => a.id)),
+            sectionType: '5-financial-information',
+            resourceId: financialInfo.id,
+          },
+        });
+
+        if (assignmentSections.length > 0) {
+          assignmentSectionId = assignmentSections[0].id;
+        }
+      }
+
+      // Call helper function to track resubmission and update status
+      await this.warehouseService['trackResubmissionAndUpdateStatus'](
+        financialInfo.application.id,
+        '5-financial-information',
+        financialInfo.id,
+        assignmentSectionId ?? undefined,
+      );
+    }
+
     return {
       message: id ? 'Bank statement updated successfully' : 'Bank statement saved successfully',
       data: {
@@ -663,6 +888,8 @@ export class FinancialInformationService {
     const savedResult = await this.dataSource.transaction(async (manager) => {
       const othersRepo = manager.getRepository(OthersEntity);
       const documentRepo = manager.getRepository(WarehouseDocument);
+      const appRepo = manager.getRepository(WarehouseOperatorApplicationRequest);
+      const historyRepo = manager.getRepository(OthersHistoryEntity);
 
       const assignDocument = async (
         documentId: string | undefined | null,
@@ -698,6 +925,33 @@ export class FinancialInformationService {
 
         if (!existing) {
           throw new NotFoundException('Other document not found');
+        }
+
+        // Get application to check status
+        const appInTransaction = await appRepo.findOne({
+          where: { id: application.id },
+        });
+
+        if (!appInTransaction) {
+          throw new NotFoundException('Application not found');
+        }
+
+        // Save history of other document if application is rejected (before overwriting)
+        if (appInTransaction.status === WarehouseOperatorApplicationStatus.REJECTED) {
+          const historyRecord = historyRepo.create({
+            othersId: existing.id,
+            documentType: existing.documentType,
+            documentName: existing.documentName,
+            periodStart: existing.periodStart,
+            periodEnd: existing.periodEnd,
+            remarks: existing.remarks ?? null,
+            financialInformationId: financialInfo.id,
+            document: existing.document,
+            isActive: false,
+          });
+          // Preserve the original createdAt timestamp from the other document record
+          historyRecord.createdAt = existing.createdAt;
+          await historyRepo.save(historyRecord);
         }
 
         Object.assign(existing, {
@@ -779,6 +1033,54 @@ export class FinancialInformationService {
       where: { id: savedResult.id },
       relations: ['document'],
     });
+
+    // Reload application to get latest status after transaction
+    const updatedApplication = await this.warehouseOperatorRepository.findOne({
+      where: { id: applicationId },
+    });
+
+    // Reload financial info to ensure we have the latest data
+    const currentFinancialInfo = await this.financialInformationRepository.findOne({
+      where: { applicationId: application?.id },
+    });
+
+    // if application is rejected, track resubmission and update status if all sections are complete
+    if (updatedApplication?.status === WarehouseOperatorApplicationStatus.REJECTED && currentFinancialInfo && application) {
+      // Track resubmission and update status if all sections are complete
+      // Find the assignment section for financial information if it exists
+      const assignments = await this.warehouseService['assignmentRepository'].find({
+        where: {
+          applicationId: applicationId,
+          level: AssignmentLevel.HOD_TO_APPLICANT,
+          status: AssignmentStatus.REJECTED,
+        },
+      });
+
+      let assignmentSectionId: string | null = null;
+      if (assignments.length > 0 && currentFinancialInfo) {
+        const assignmentSections = await this.warehouseService['assignmentSectionRepository'].find({
+          where: {
+            assignmentId: In(assignments.map((a) => a.id)),
+            sectionType: '5-financial-information',
+            resourceId: currentFinancialInfo.id,
+          },
+        });
+
+        if (assignmentSections.length > 0) {
+          assignmentSectionId = assignmentSections[0].id;
+        }
+      }
+
+      // Call helper function to track resubmission and update status
+      if (currentFinancialInfo) {
+        await this.warehouseService['trackResubmissionAndUpdateStatus'](
+          applicationId,
+          '5-financial-information',
+          currentFinancialInfo.id,
+          assignmentSectionId ?? undefined,
+        );
+      }
+    }
 
     return {
       message: id ? 'Other document updated successfully' : 'Other document saved successfully',
