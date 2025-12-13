@@ -340,11 +340,12 @@ export class FinancialInformationService {
 
       let assignmentSectionId: string | null = null;
       if (assignments.length > 0) {
+        // Use the audit report ID to find the specific assignment section
         const assignmentSections = await this.warehouseService['assignmentSectionRepository'].find({
           where: {
             assignmentId: In(assignments.map((a) => a.id)),
             sectionType: '5-financial-information',
-            resourceId: financialInfo.id,
+            resourceId: savedResult.id, // Use audit report ID, not financialInfo.id
           },
         });
 
@@ -354,10 +355,11 @@ export class FinancialInformationService {
       }
 
       // Call helper function to track resubmission and update status
+      // Use the audit report ID (savedResult.id) to match assignment section resourceId
       await this.warehouseService['trackResubmissionAndUpdateStatus'](
         financialInfo.applicationId,
         '5-financial-information',
-        financialInfo.id,
+        savedResult.id, // Use audit report ID, not financialInfo.id
         assignmentSectionId ?? undefined,
       );
     }
@@ -626,11 +628,12 @@ export class FinancialInformationService {
 
       let assignmentSectionId: string | null = null;
       if (assignments.length > 0) {
+        // Use the tax return ID to find the specific assignment section
         const assignmentSections = await this.warehouseService['assignmentSectionRepository'].find({
           where: {
             assignmentId: In(assignments.map((a) => a.id)),
             sectionType: '5-financial-information',
-            resourceId: financialInfo.id,
+            resourceId: savedResult.id, // Use tax return ID, not financialInfo.id
           },
         });
 
@@ -640,10 +643,11 @@ export class FinancialInformationService {
       }
 
       // Call helper function to track resubmission and update status
+      // Use the tax return ID (savedResult.id) to match assignment section resourceId
       await this.warehouseService['trackResubmissionAndUpdateStatus'](
         financialInfo.applicationId,
         '5-financial-information',
-        financialInfo.id,
+        savedResult.id, // Use tax return ID, not financialInfo.id
         assignmentSectionId ?? undefined,
       );
     }
@@ -814,11 +818,12 @@ export class FinancialInformationService {
 
       let assignmentSectionId: string | null = null;
       if (assignments.length > 0) {
+        // Use the bank statement ID to find the specific assignment section
         const assignmentSections = await this.warehouseService['assignmentSectionRepository'].find({
           where: {
             assignmentId: In(assignments.map((a) => a.id)),
             sectionType: '5-financial-information',
-            resourceId: financialInfo.id,
+            resourceId: savedResult.id, // Use bank statement ID, not financialInfo.id
           },
         });
 
@@ -828,10 +833,11 @@ export class FinancialInformationService {
       }
 
       // Call helper function to track resubmission and update status
+      // Use the bank statement ID (savedResult.id) to match assignment section resourceId
       await this.warehouseService['trackResubmissionAndUpdateStatus'](
         financialInfo.applicationId,
         '5-financial-information',
-        financialInfo.id,
+        savedResult.id, // Use bank statement ID, not financialInfo.id
         assignmentSectionId ?? undefined,
       );
     }
@@ -1057,12 +1063,13 @@ export class FinancialInformationService {
       });
 
       let assignmentSectionId: string | null = null;
-      if (assignments.length > 0 && currentFinancialInfo) {
+      if (assignments.length > 0) {
+        // Use the other document ID to find the specific assignment section
         const assignmentSections = await this.warehouseService['assignmentSectionRepository'].find({
           where: {
             assignmentId: In(assignments.map((a) => a.id)),
             sectionType: '5-financial-information',
-            resourceId: currentFinancialInfo.id,
+            resourceId: savedResult.id, // Use other document ID, not currentFinancialInfo.id
           },
         });
 
@@ -1072,14 +1079,13 @@ export class FinancialInformationService {
       }
 
       // Call helper function to track resubmission and update status
-      if (currentFinancialInfo) {
-        await this.warehouseService['trackResubmissionAndUpdateStatus'](
-          applicationId,
-          '5-financial-information',
-          currentFinancialInfo.id,
-          assignmentSectionId ?? undefined,
-        );
-      }
+      // Use the other document ID (savedResult.id) to match assignment section resourceId
+      await this.warehouseService['trackResubmissionAndUpdateStatus'](
+        applicationId,
+        '5-financial-information',
+        savedResult.id, // Use other document ID, not currentFinancialInfo.id
+        assignmentSectionId ?? undefined,
+      );
     }
 
     return {
