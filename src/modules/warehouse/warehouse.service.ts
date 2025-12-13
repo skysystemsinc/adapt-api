@@ -51,6 +51,11 @@ import { DeclarationHistoryEntity } from './entities/hr/declaration.entity/decla
 import { ProfessionalQualificationsHistoryEntity } from './entities/hr/professional-qualifications.entity/professional-qualifications-history.entity';
 import { TrainingsHistoryEntity } from './entities/hr/trainings.entity/trainings-history.entity';
 import { ExperienceHistoryEntity } from './entities/hr/experience.entity/experience-history.entity';
+import { FinancialInformationHistoryEntity } from './entities/financial-information-history.entity';
+import { AuditReportHistoryEntity } from './entities/financial/audit-report-history.entity';
+import { TaxReturnHistoryEntity } from './entities/financial/tax-return-history.entity';
+import { BankStatementHistoryEntity } from './entities/financial/bank-statement-history.entity';
+import { OthersHistoryEntity } from './entities/financial/others-history.entity';
 
 export class WarehouseService {
   private readonly uploadDir = 'uploads';
@@ -2374,22 +2379,22 @@ export class WarehouseService {
 
         if (appInTransaction?.status === WarehouseOperatorApplicationStatus.REJECTED) {
           const historyRecord = historyRepo.create({
-              id: undefined,
-              professionalQualificationsId: existing.id,
-              certificationTitle: existing.certificationTitle,
-              issuingBody: existing.issuingBody,
-              country: existing.country,
-              dateOfAward: existing.dateOfAward,
-              validity: existing.validity ?? null,
-              membershipNumber: existing.membershipNumber ?? null,
-              professionalCertificate: existing.professionalCertificate ?? null,
-              hrId: hr.id,
-              isActive: false,
-            })
-          
+            id: undefined,
+            professionalQualificationsId: existing.id,
+            certificationTitle: existing.certificationTitle,
+            issuingBody: existing.issuingBody,
+            country: existing.country,
+            dateOfAward: existing.dateOfAward,
+            validity: existing.validity ?? null,
+            membershipNumber: existing.membershipNumber ?? null,
+            professionalCertificate: existing.professionalCertificate ?? null,
+            hrId: hr.id,
+            isActive: false,
+          })
+
           // Preserve the original createdAt timestamp from the professional qualification record
           historyRecord.createdAt = existing.createdAt;
-          
+
           await historyRepo.save(historyRecord);
         }
         Object.assign(existing, {
@@ -2790,7 +2795,7 @@ export class WarehouseService {
             hrId: hr.id,
             isActive: false,
           });
-          
+
           // Preserve the original createdAt timestamp from the experience record
           historyRecord.createdAt = existing.createdAt;
           await historyRepo.save(historyRecord);
@@ -2892,14 +2897,20 @@ export class WarehouseService {
       throw new NotFoundException('Warehouse operator application not found. Please create an application first.');
     }
 
-    if (application.status !== WarehouseOperatorApplicationStatus.DRAFT) {
-      throw new BadRequestException('Financial information can only be added while application is in draft status.');
+    if (![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(application.status)) {
+      throw new BadRequestException('Cannot update financial information after application is approved or submitted');
     }
 
     // Check if financial information already exists for this application (only when creating new, not updating)
     if (!dto.id) {
       const existingFinancialInfo = await this.financialInformationRepository.findOne({
-        where: { applicationId: application.id }
+        where: { applicationId: application.id },
+        relations: [
+          'auditReport',
+          'taxReturns',
+          'bankStatements',
+          'others',
+        ],
       });
 
       if (existingFinancialInfo) {
@@ -2913,6 +2924,22 @@ export class WarehouseService {
       const taxReturnRepo = manager.getRepository(TaxReturnEntity);
       const bankStatementRepo = manager.getRepository(BankStatementEntity);
       const othersRepo = manager.getRepository(OthersEntity);
+      const auditReportHistoryRepo = manager.getRepository(AuditReportHistoryEntity);
+      const taxReturnHistoryRepo = manager.getRepository(TaxReturnHistoryEntity);
+      const bankStatementHistoryRepo = manager.getRepository(BankStatementHistoryEntity);
+      const othersHistoryRepo = manager.getRepository(OthersHistoryEntity);
+      const appRepo = manager.getRepository(WarehouseOperatorApplicationRequest);
+
+      const appInTransaction = await appRepo.findOne({
+        where: { id: applicationId, userId },
+      });
+      if (!appInTransaction) {
+        throw new NotFoundException('Application not found');
+      }
+
+      if (![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(appInTransaction.status)) {
+        throw new BadRequestException('Cannot update financial information after application is approved or submitted');
+      }
 
       if (dto.id) {
         const existingFinancialInfo = await financialInfoRepo.findOne({
@@ -2931,17 +2958,86 @@ export class WarehouseService {
 
         // Update audit report
         if (existingFinancialInfo.auditReport) {
+          if (appInTransaction?.status === WarehouseOperatorApplicationStatus.REJECTED) {
+            const historyRecord = auditReportHistoryRepo.create({
+              id: undefined,
+              auditReportId: existingFinancialInfo.auditReport.id,
+              documentType: existingFinancialInfo.auditReport.documentType,
+              documentName: existingFinancialInfo.auditReport.documentName,
+              periodStart: existingFinancialInfo.auditReport.periodStart,
+              periodEnd: existingFinancialInfo.auditReport.periodEnd,
+              assets: existingFinancialInfo.auditReport.assets,
+              liabilities: existingFinancialInfo.auditReport.liabilities,
+              equity: existingFinancialInfo.auditReport.equity,
+              revenue: existingFinancialInfo.auditReport.revenue,
+              netProfitLoss: existingFinancialInfo.auditReport.netProfitLoss,
+              remarks: existingFinancialInfo.auditReport.remarks,
+              isActive: false,
+            });
+            historyRecord.createdAt = existingFinancialInfo.auditReport.createdAt;
+            await auditReportHistoryRepo.save(historyRecord);
+          }
+
           Object.assign(existingFinancialInfo.auditReport, dto.auditReport);
           await auditReportRepo.save(existingFinancialInfo.auditReport);
-        } else {
-          const newAuditReport = await auditReportRepo.save(
-            auditReportRepo.create({
-              ...dto.auditReport,
-              financialInformationId: existingFinancialInfo.id,
-            }),
-          );
-          existingFinancialInfo.auditReport = newAuditReport;
-          existingFinancialInfo.auditReportId = newAuditReport.id;
+        }
+
+        // copy in relevant history table before deleting
+        if (existingFinancialInfo.taxReturns.length > 0) {
+          if (appInTransaction?.status === WarehouseOperatorApplicationStatus.REJECTED) {
+            for (const taxReturn of existingFinancialInfo.taxReturns) {
+              const taxReturnHistoryRecord = taxReturnHistoryRepo.create({
+                id: undefined,
+                taxReturnId: taxReturn.id,
+                documentType: taxReturn.documentType,
+                documentName: taxReturn.documentName,
+                periodStart: taxReturn.periodStart,
+                periodEnd: taxReturn.periodEnd,
+                remarks: taxReturn.remarks,
+                isActive: false,
+              });
+              taxReturnHistoryRecord.createdAt = taxReturn.createdAt;
+              await taxReturnHistoryRepo.save(taxReturnHistoryRecord);
+            }
+          }
+        }
+
+        if (existingFinancialInfo.bankStatements.length > 0) {
+          if (appInTransaction?.status === WarehouseOperatorApplicationStatus.REJECTED) {
+            for (const bankStatement of existingFinancialInfo.bankStatements) {
+              const bankStatementHistoryRecord = bankStatementHistoryRepo.create({
+                id: undefined,
+                bankStatementId: bankStatement.id,
+                documentType: bankStatement.documentType,
+                documentName: bankStatement.documentName,
+                periodStart: bankStatement.periodStart,
+                periodEnd: bankStatement.periodEnd,
+                remarks: bankStatement.remarks,
+                isActive: false,
+              });
+              bankStatementHistoryRecord.createdAt = bankStatement.createdAt;
+              await bankStatementHistoryRepo.save(bankStatementHistoryRecord);
+            }
+          }
+        }
+
+        if (existingFinancialInfo.others.length > 0) {
+          if (appInTransaction?.status === WarehouseOperatorApplicationStatus.REJECTED) {
+            for (const other of existingFinancialInfo.others) {
+              const othersHistoryRecord = othersHistoryRepo.create({
+                id: undefined,
+                othersId: other.id,
+                documentType: other.documentType,
+                documentName: other.documentName,
+                periodStart: other.periodStart,
+                periodEnd: other.periodEnd,
+                remarks: other.remarks,
+                isActive: false,
+              });
+              othersHistoryRecord.createdAt = other.createdAt;
+              await othersHistoryRepo.save(othersHistoryRecord);
+            }
+          }
         }
 
         // Delete existing children and create new ones
