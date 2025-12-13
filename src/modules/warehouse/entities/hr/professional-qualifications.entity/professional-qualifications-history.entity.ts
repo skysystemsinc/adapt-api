@@ -1,0 +1,59 @@
+import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { HrEntity } from "../../hr.entity";
+import { WarehouseDocument } from "../../warehouse-document.entity";
+import { ProfessionalQualificationsEntity } from "./professional-qualifications.entity";
+
+@Entity("hr_professional_qualifications_history")
+export class ProfessionalQualificationsHistoryEntity {
+    @PrimaryGeneratedColumn("uuid")
+    id: string;
+
+    @Column({ type: 'uuid', nullable: false })
+    professionalQualificationsId: string;
+
+    @ManyToOne(() => ProfessionalQualificationsEntity, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'professionalQualificationsId' })
+    professionalQualifications: ProfessionalQualificationsEntity;
+
+    @Column({ type: "varchar", length: 150 })
+    certificationTitle: string;
+
+    @Column({ type: "varchar", length: 150 })
+    issuingBody: string;
+
+    @Column({ type: "varchar", length: 100 })
+    country: string;
+
+    @Column({ type: "varchar", length: 20 })
+    dateOfAward: string;
+
+    @Column({ type: "varchar", length: 20, nullable: true })
+    validity: string | null;
+
+    @Column({ type: "varchar", length: 100, nullable: true })
+    membershipNumber: string | null;
+
+    @Column({ nullable: true })
+    professionalCertificate?: string | null;
+
+    @ManyToOne(() => WarehouseDocument, { onDelete: "SET NULL" })
+    @JoinColumn({ name: "professionalCertificate" })
+    professionalCertificateDocument?: WarehouseDocument;
+
+    @Column({ nullable: true })
+    hrId: string;
+
+    @ManyToOne(() => HrEntity, (hr) => hr.professionalQualifications, { onDelete: "CASCADE" })
+    @JoinColumn({ name: "hrId" })
+    hr: HrEntity;
+
+    @Column({ default: true })
+    isActive: boolean;
+
+    @CreateDateColumn()
+    createdAt: Date;
+
+    @UpdateDateColumn()
+    updatedAt: Date;
+}
+

@@ -41,6 +41,7 @@ import { BankDetailsHistory } from './entities/bank-details-history.entity';
 import { CompanyInformationHistory } from './entities/company-information-history.entity';
 import { AcademicQualificationsHistoryEntity } from './entities/hr/academic-qualifications.entity/academic-qualifications-history.entity';
 import { PersonalDetailsHistoryEntity } from './entities/hr/personal-details.entity/personal-details-history.entity';
+import { ProfessionalQualificationsHistoryEntity } from './entities/hr/professional-qualifications.entity/professional-qualifications-history.entity';
 
 @Module({
   controllers: [WarehouseController],
@@ -79,6 +80,7 @@ import { PersonalDetailsHistoryEntity } from './entities/hr/personal-details.ent
       CompanyInformationHistory,
       AcademicQualificationsHistoryEntity,
       PersonalDetailsHistoryEntity,
+      ProfessionalQualificationsHistoryEntity,
     ]),
     forwardRef(() => AuthModule),
     JwtModule.registerAsync({

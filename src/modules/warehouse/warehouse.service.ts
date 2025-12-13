@@ -48,6 +48,7 @@ import { BankDetailsHistory } from './entities/bank-details-history.entity';
 import { PersonalDetailsHistoryEntity } from './entities/hr/personal-details.entity/personal-details-history.entity';
 import { AcademicQualificationsHistoryEntity } from './entities/hr/academic-qualifications.entity/academic-qualifications-history.entity';
 import { DeclarationHistoryEntity } from './entities/hr/declaration.entity/declaration-history.entity';
+import { ProfessionalQualificationsHistoryEntity } from './entities/hr/professional-qualifications.entity/professional-qualifications-history.entity';
 
 export class WarehouseService {
   private readonly uploadDir = 'uploads';
@@ -88,6 +89,8 @@ export class WarehouseService {
     private readonly bankDetailsHistoryRepository: Repository<BankDetailsHistory>,
     @InjectRepository(PersonalDetailsHistoryEntity)
     private readonly personalDetailsHistoryRepository: Repository<PersonalDetailsHistoryEntity>,
+    @InjectRepository(ProfessionalQualificationsHistoryEntity)
+    private readonly professionalQualificationsHistoryRepository: Repository<ProfessionalQualificationsHistoryEntity>,
   ) {
     // Ensure upload directory exists
     this.ensureUploadDirectory();
@@ -2293,9 +2296,25 @@ export class WarehouseService {
       throw new NotFoundException('HR information not found for the provided ID');
     }
 
+    if (![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(application.status)) {
+      throw new BadRequestException('Cannot update professional qualification after application is approved or submitted');
+    }
+
     const savedResult = await this.dataSource.transaction(async (manager) => {
       const professionalRepo = manager.getRepository(ProfessionalQualificationsEntity);
       const documentRepo = manager.getRepository(WarehouseDocument);
+      const historyRepo = manager.getRepository(ProfessionalQualificationsHistoryEntity);
+      const appRepo = manager.getRepository(WarehouseOperatorApplicationRequest);
+      const appInTransaction = await appRepo.findOne({
+        where: { id: applicationId, userId },
+      });
+      if (!appInTransaction) {
+        throw new NotFoundException('Application not found');
+      }
+
+      if (![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(appInTransaction.status)) {
+        throw new BadRequestException('Cannot update professional qualification after application is approved or submitted');
+      }
 
       const assignDocument = async (
         documentId: string | undefined | null,
@@ -2345,6 +2364,26 @@ export class WarehouseService {
           throw new NotFoundException('Professional qualification not found');
         }
 
+        if (appInTransaction?.status === WarehouseOperatorApplicationStatus.REJECTED) {
+          const historyRecord = historyRepo.create({
+              id: undefined,
+              professionalQualificationsId: existing.id,
+              certificationTitle: existing.certificationTitle,
+              issuingBody: existing.issuingBody,
+              country: existing.country,
+              dateOfAward: existing.dateOfAward,
+              validity: existing.validity ?? null,
+              membershipNumber: existing.membershipNumber ?? null,
+              professionalCertificate: existing.professionalCertificate ?? null,
+              hrId: hr.id,
+              isActive: false,
+            })
+          
+          // Preserve the original createdAt timestamp from the professional qualification record
+          historyRecord.createdAt = existing.createdAt;
+          
+          await historyRepo.save(historyRecord);
+        }
         Object.assign(existing, {
           ...dto,
           professionalCertificate: certificateDocumentId ?? existing.professionalCertificate ?? null,
