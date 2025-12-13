@@ -49,6 +49,7 @@ import { PersonalDetailsHistoryEntity } from './entities/hr/personal-details.ent
 import { AcademicQualificationsHistoryEntity } from './entities/hr/academic-qualifications.entity/academic-qualifications-history.entity';
 import { DeclarationHistoryEntity } from './entities/hr/declaration.entity/declaration-history.entity';
 import { ProfessionalQualificationsHistoryEntity } from './entities/hr/professional-qualifications.entity/professional-qualifications-history.entity';
+import { TrainingsHistoryEntity } from './entities/hr/trainings.entity/trainings-history.entity';
 
 export class WarehouseService {
   private readonly uploadDir = 'uploads';
@@ -89,8 +90,14 @@ export class WarehouseService {
     private readonly bankDetailsHistoryRepository: Repository<BankDetailsHistory>,
     @InjectRepository(PersonalDetailsHistoryEntity)
     private readonly personalDetailsHistoryRepository: Repository<PersonalDetailsHistoryEntity>,
+    @InjectRepository(AcademicQualificationsHistoryEntity)
+    private readonly academicQualificationsHistoryRepository: Repository<AcademicQualificationsHistoryEntity>,
+    @InjectRepository(DeclarationHistoryEntity)
+    private readonly declarationHistoryRepository: Repository<DeclarationHistoryEntity>,
     @InjectRepository(ProfessionalQualificationsHistoryEntity)
     private readonly professionalQualificationsHistoryRepository: Repository<ProfessionalQualificationsHistoryEntity>,
+    @InjectRepository(TrainingsHistoryEntity)
+    private readonly trainingsHistoryRepository: Repository<TrainingsHistoryEntity>,
   ) {
     // Ensure upload directory exists
     this.ensureUploadDirectory();
@@ -2498,9 +2505,24 @@ export class WarehouseService {
       throw new NotFoundException('HR information not found for the provided ID');
     }
 
+    if (![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(application.status)) {
+      throw new BadRequestException('Cannot update training after application is approved or submitted');
+    }
+
     const savedResult = await this.dataSource.transaction(async (manager) => {
       const trainingsRepo = manager.getRepository(TrainingsEntity);
       const documentRepo = manager.getRepository(WarehouseDocument);
+      const historyRepo = manager.getRepository(TrainingsHistoryEntity);
+      const appRepo = manager.getRepository(WarehouseOperatorApplicationRequest);
+      const appInTransaction = await appRepo.findOne({
+        where: { id: applicationId, userId },
+      });
+      if (!appInTransaction) {
+        throw new NotFoundException('Application not found');
+      }
+      if (![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(appInTransaction.status)) {
+        throw new BadRequestException('Cannot update training after application is approved or submitted');
+      }
 
       const assignDocument = async (
         documentId: string | undefined | null,
@@ -2548,6 +2570,24 @@ export class WarehouseService {
 
         if (!existing) {
           throw new NotFoundException('Training not found');
+        }
+
+        if (appInTransaction?.status === WarehouseOperatorApplicationStatus.REJECTED) {
+          const historyRecord = historyRepo.create({
+            id: undefined,
+            trainingsId: existing.id,
+            trainingTitle: existing.trainingTitle,
+            conductedBy: existing.conductedBy,
+            trainingType: existing.trainingType,
+            durationStart: existing.durationStart,
+            durationEnd: existing.durationEnd,
+            dateOfCompletion: existing.dateOfCompletion,
+            trainingCertificate: existing.trainingCertificate ?? null,
+            hrId: hr.id,
+            isActive: false,
+          });
+          historyRecord.createdAt = existing.createdAt;
+          await historyRepo.save(historyRecord);
         }
 
         Object.assign(existing, {
