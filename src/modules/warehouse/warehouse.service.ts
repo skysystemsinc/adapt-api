@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { AuthorizedSignatoryDto, CreateCompanyInformationRequestDto, CreateBankDetailsDto, CreateWarehouseOperatorApplicationRequestDto } from './dto/create-warehouse.dto';
 import { UpdateWarehouseDto } from './dto/update-warehouse.dto';
-import { DataSource, In, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { WarehouseOperatorApplicationRequest, WarehouseOperatorApplicationStatus } from './entities/warehouse-operator-application-request.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { AuthorizedSignatory } from './entities/authorized-signatories.entity';
@@ -40,8 +40,12 @@ import { forwardRef, Inject } from '@nestjs/common';
 import { FinancialInformationService } from './financial-information.service';
 import { WarehouseOperator } from './entities/warehouse-operator.entity';
 import { ResubmitOperatorApplicationDto } from './dto/resubmit-warehouse.dto';
-import { Assignment, AssignmentLevel } from './operator/assignment/entities/assignment.entity';
+import { Assignment, AssignmentLevel, AssignmentStatus } from './operator/assignment/entities/assignment.entity';
 import { AssignmentSection } from './operator/assignment/entities/assignment-section.entity';
+import { AssignmentSectionField } from './operator/assignment/entities/assignment-section-field.entity';
+import { AssignmentHistory } from './operator/assignment/entities/assignment-history.entity';
+import { AssignmentSectionHistory } from './operator/assignment/entities/assignment-section-history.entity';
+import { AssignmentSectionFieldHistory } from './operator/assignment/entities/assignment-section-field-history.entity';
 import { AuthorizedSignatoryHistory } from './entities/authorized-signatories-history.entity';
 import { CompanyInformationHistory } from './entities/company-information-history.entity';
 import { BankDetailsHistory } from './entities/bank-details-history.entity';
@@ -56,6 +60,9 @@ import { AuditReportHistoryEntity } from './entities/financial/audit-report-hist
 import { TaxReturnHistoryEntity } from './entities/financial/tax-return-history.entity';
 import { BankStatementHistoryEntity } from './entities/financial/bank-statement-history.entity';
 import { OthersHistoryEntity } from './entities/financial/others-history.entity';
+import { ResubmittedSectionEntity } from './entities/resubmitted-section.entity';
+import { ApplicationRejectionEntity } from './entities/application-rejection.entity';
+import { ApplicationRejectionHistoryEntity } from './entities/application-rejection-history.entity';
 
 export class WarehouseService {
   private readonly uploadDir = 'uploads';
@@ -839,6 +846,42 @@ export class WarehouseService {
     } else if (result.existingNtcCertificate) {
       // Keep existing certificate if no new file is provided
       ntcCertificateDocumentId = result.existingNtcCertificate.id;
+    }
+
+    // if application is rejected, track resubmission and update status if all sections are complete
+    if (existingApplication.status === WarehouseOperatorApplicationStatus.REJECTED) {
+      // Track resubmission and update status if all sections are complete
+      // Find the assignment section for company information if it exists
+      const assignments = await this.assignmentRepository.find({
+        where: {
+          applicationId: applicationId,
+          level: AssignmentLevel.HOD_TO_APPLICANT,
+          status: AssignmentStatus.REJECTED,
+        },
+      });
+
+      let assignmentSectionId: string | null = null;
+      if (assignments.length > 0) {
+        const assignmentSections = await this.assignmentSectionRepository.find({
+          where: {
+            assignmentId: In(assignments.map((a) => a.id)),
+            sectionType: '2-company-information',
+            resourceId: companyInformationId,
+          },
+        });
+
+        if (assignmentSections.length > 0) {
+          assignmentSectionId = assignmentSections[0].id;
+        }
+      }
+
+      // Call helper function to track resubmission and update status
+      await this.trackResubmissionAndUpdateStatus(
+        applicationId,
+        '2-company-information',
+        companyInformationId,
+        assignmentSectionId ?? undefined,
+      );
     }
 
     return {
@@ -4193,6 +4236,42 @@ export class WarehouseService {
       };
     });
 
+    // if application is rejected, track resubmission and update status if all sections are complete
+    if (application.status === WarehouseOperatorApplicationStatus.REJECTED) {
+      // Track resubmission and update status if all sections are complete
+      // Find the assignment section for bank details if it exists
+      const assignments = await this.assignmentRepository.find({
+        where: {
+          applicationId: applicationId,
+          level: AssignmentLevel.HOD_TO_APPLICANT,
+          status: AssignmentStatus.REJECTED,
+        },
+      });
+
+      let assignmentSectionId: string | null = null;
+      if (assignments.length > 0) {
+        const assignmentSections = await this.assignmentSectionRepository.find({
+          where: {
+            assignmentId: In(assignments.map((a) => a.id)),
+            sectionType: '3-bank-details',
+            resourceId: bankDetailsId,
+          },
+        });
+
+        if (assignmentSections.length > 0) {
+          assignmentSectionId = assignmentSections[0].id;
+        }
+      }
+
+      // Call helper function to track resubmission and update status
+      await this.trackResubmissionAndUpdateStatus(
+        applicationId,
+        '3-bank-details',
+        bankDetailsId,
+        assignmentSectionId ?? undefined,
+      );
+    }
+
     return {
       message: 'Bank details updated successfully',
       bankDetails: result.bankDetails,
@@ -4680,5 +4759,474 @@ export class WarehouseService {
         unlockedSections: unlockedSections,
       },
     };
+  }
+
+  /**
+   * Helper function to track resubmitted sections and update application status
+   * when all unlocked sections have been resubmitted.
+   * 
+   * @param applicationId - The warehouse operator application ID
+   * @param sectionType - The normalized section type (e.g., "1-authorize-signatory-information")
+   * @param resourceId - Optional resource ID for sections with multiple resources (e.g., HR entity ID, authorized signatory ID)
+   * @param assignmentSectionId - Optional assignment section ID to link the resubmission
+   * @param manager - Optional EntityManager for use within transactions
+   */
+  private async trackResubmissionAndUpdateStatus(
+    applicationId: string,
+    sectionType: string,
+    resourceId?: string | null,
+    assignmentSectionId?: string | null,
+    manager?: EntityManager,
+  ): Promise<void> {
+    const repo = manager || this.dataSource.manager;
+    const resubmittedSectionRepo = repo.getRepository(ResubmittedSectionEntity);
+    const applicationRepo = repo.getRepository(WarehouseOperatorApplicationRequest);
+    const assignmentRepo = repo.getRepository(Assignment);
+    const assignmentSectionRepo = repo.getRepository(AssignmentSection);
+
+    // Get application with rejections
+    const application = await applicationRepo.findOne({
+      where: { id: applicationId },
+      relations: ['rejections'],
+    });
+
+    if (!application) {
+      return; // Application not found, skip tracking
+    }
+
+    // Only track if application is in REJECTED status
+    if (application.status !== WarehouseOperatorApplicationStatus.REJECTED) {
+      return;
+    }
+
+    // Map normalized section types to display names used in unlockedSections
+    const sectionTypeMap: Record<string, string[]> = {
+      '1-authorize-signatory-information': ['1-authorize-signatory-information'],
+      '2-company-information': ['2-company-information'],
+      '3-bank-details': ['3-bank-details'],
+      '4-hr-information': ['4-hr-information'],
+      '5-financial-information': ['5-financial-information'],
+      '6-application-checklist-questionnaire': ['6-application-checklist-questionnaire'],
+    };
+
+    // Find the display name for this section type
+    const displaySectionNames: string[] = [];
+    for (const [normalized, displayNames] of Object.entries(sectionTypeMap)) {
+      if (normalized === sectionType || sectionType.includes(normalized) || normalized.includes(sectionType)) {
+        displaySectionNames.push(...displayNames);
+        break;
+      }
+    }
+
+    // If no mapping found, use the sectionType as-is
+    if (displaySectionNames.length === 0) {
+      displaySectionNames.push(sectionType);
+    }
+
+    // Check if any rejection has this section unlocked
+    const hasUnlockedSection = application.rejections.some((rejection) =>
+      rejection.unlockedSections?.some((unlocked) =>
+        displaySectionNames.some((displayName) => unlocked.includes(displayName) || displayName.includes(unlocked))
+      )
+    );
+
+    if (!hasUnlockedSection) {
+      return; // This section is not unlocked, no need to track
+    }
+
+    // Record the resubmission
+    const whereClause: any = {
+      applicationId,
+      sectionType,
+    };
+    if (resourceId !== undefined && resourceId !== null) {
+      whereClause.resourceId = resourceId;
+    } else {
+      whereClause.resourceId = null;
+    }
+    if (assignmentSectionId !== undefined && assignmentSectionId !== null) {
+      whereClause.assignmentSectionId = assignmentSectionId;
+    } else {
+      whereClause.assignmentSectionId = null;
+    }
+
+    const existingResubmission = await resubmittedSectionRepo.findOne({
+      where: whereClause,
+    });
+
+    if (!existingResubmission) {
+      const resubmittedSection = resubmittedSectionRepo.create({
+        applicationId,
+        sectionType,
+        resourceId: resourceId ?? undefined,
+        assignmentSectionId: assignmentSectionId ?? undefined,
+      });
+      await resubmittedSectionRepo.save(resubmittedSection);
+    }
+
+    // Get all assignments for this application with HOD_TO_APPLICANT level and REJECTED status
+    const assignments = await assignmentRepo.find({
+      where: {
+        applicationId,
+        level: AssignmentLevel.HOD_TO_APPLICANT,
+        status: AssignmentStatus.REJECTED,
+      },
+    });
+
+    if (assignments.length === 0) {
+      return; // No assignments found, cannot verify completion
+    }
+
+    // Get all assignment sections for these assignments
+    const assignmentSections = await assignmentSectionRepo.find({
+      where: {
+        assignmentId: In(assignments.map((a) => a.id)),
+      },
+    });
+
+    // Get all unique unlocked sections from rejections
+    const allUnlockedSections = application.rejections
+      .flatMap((rejection) => rejection.unlockedSections || [])
+      .filter((section, index, self) => self.indexOf(section) === index); // unique
+
+    if (allUnlockedSections.length === 0) {
+      return;
+    }
+
+    // Check if all unlocked sections have been resubmitted
+    const sectionCompletionChecks = await Promise.all(
+      allUnlockedSections.map(async (unlockedSection) => {
+        // Find the normalized section type for this unlocked section
+        let normalizedType: string | null = null;
+        for (const [normalized, displayNames] of Object.entries(sectionTypeMap)) {
+          if (displayNames.some((displayName) => unlockedSection.includes(displayName) || displayName.includes(unlockedSection))) {
+            normalizedType = normalized;
+            break;
+          }
+        }
+
+        // If no mapping found, try to match directly
+        if (!normalizedType) {
+          normalizedType = unlockedSection.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-');
+        }
+
+        // Get all assignment sections for this section type
+        const sectionsForType = assignmentSections.filter((section) => {
+          // Match normalized type or check if sectionType contains the normalized type
+          return section.sectionType === normalizedType ||
+            section.sectionType.includes(normalizedType!) ||
+            normalizedType!.includes(section.sectionType);
+        });
+
+        if (sectionsForType.length === 0) {
+          // No specific resources to check, verify if any resubmission exists for this section type
+          const resubmissions = await resubmittedSectionRepo.find({
+            where: {
+              applicationId,
+              sectionType: normalizedType!,
+            },
+          });
+          return resubmissions.length > 0;
+        }
+
+        // For sections with multiple resources, check if all resourceIds have been resubmitted
+        const resourceIds = sectionsForType
+          .map((section) => section.resourceId)
+          .filter((id): id is string => id !== null && id !== undefined);
+
+        if (resourceIds.length === 0) {
+          // No resourceIds, check if any resubmission exists for this section type
+          const resubmissions = await resubmittedSectionRepo.find({
+            where: {
+              applicationId,
+              sectionType: normalizedType!,
+            },
+          });
+          return resubmissions.length > 0;
+        }
+
+        // Check if all resourceIds have been resubmitted
+        const resubmittedResourceIds = await resubmittedSectionRepo.find({
+          where: {
+            applicationId,
+            sectionType: normalizedType!,
+            resourceId: In(resourceIds),
+          },
+        });
+
+        const resubmittedIds = new Set(resubmittedResourceIds.map((r) => r.resourceId).filter((id): id is string => id !== null && id !== undefined));
+
+        // All resourceIds must be resubmitted
+        return resourceIds.every((resourceId) => resubmittedIds.has(resourceId));
+      })
+    );
+
+    const allSectionsComplete = sectionCompletionChecks.every((isComplete) => isComplete);
+
+    // If all sections are complete, update application status to PENDING and move all assignments to history
+    if (allSectionsComplete) {
+      application.status = WarehouseOperatorApplicationStatus.PENDING;
+      await applicationRepo.save(application);
+
+      // Move all completed assignment sections to history (only assignments related to rejected sections)
+      await this.moveAllCompletedAssignmentSectionsToHistory(applicationId, application.rejections, repo);
+
+      // Move all application rejections to history (all rejections from current cycle)
+      await this.moveApplicationRejectionsToHistory(applicationId, repo);
+    }
+  }
+
+  /**
+   * Moves all completed assignment sections to history when all sections are resubmitted.
+   * This allows users to resubmit sections multiple times until all sections are complete.
+   * Only moves assignments that are related to rejected sections.
+   * 
+   * @param applicationId - The application ID
+   * @param rejections - Array of application rejections to determine which sections were rejected
+   * @param manager - EntityManager for database operations
+   */
+  private async moveAllCompletedAssignmentSectionsToHistory(
+    applicationId: string,
+    rejections: ApplicationRejectionEntity[],
+    manager: EntityManager,
+  ): Promise<void> {
+    const assignmentRepo = manager.getRepository(Assignment);
+    const assignmentSectionRepo = manager.getRepository(AssignmentSection);
+    const assignmentSectionHistoryRepo = manager.getRepository(AssignmentSectionHistory);
+    const assignmentSectionFieldHistoryRepo = manager.getRepository(AssignmentSectionFieldHistory);
+    const assignmentHistoryRepo = manager.getRepository(AssignmentHistory);
+
+    // Get all rejected section types from all rejections
+    const rejectedSectionTypes = rejections
+      .flatMap((rejection) => rejection.unlockedSections || [])
+      .filter((section, index, self) => self.indexOf(section) === index); // unique
+
+    if (rejectedSectionTypes.length === 0) {
+      return; // No rejected sections, nothing to move
+    }
+
+    // Map normalized section types to display names used in unlockedSections
+    const sectionTypeMap: Record<string, string[]> = {
+      '1-authorize-signatory-information': ['1-authorize-signatory-information'],
+      '2-company-information': ['2-company-information'],
+      '3-bank-details': ['3-bank-details'],
+      '4-hr-information': ['4-hr-information'],
+      '5-financial-information': ['5-financial-information'],
+      '6-application-checklist-questionnaire': ['6-application-checklist-questionnaire'],
+    };
+
+    // Normalize rejected section types to match assignment section types
+    const normalizedRejectedTypes = new Set<string>();
+    for (const rejectedSection of rejectedSectionTypes) {
+      // Try to find normalized type from map
+      let normalizedType: string | null = null;
+      for (const [normalized, displayNames] of Object.entries(sectionTypeMap)) {
+        if (displayNames.some((displayName) => rejectedSection.includes(displayName) || displayName.includes(rejectedSection))) {
+          normalizedType = normalized;
+          break;
+        }
+      }
+
+      // If no mapping found, try to normalize directly
+      if (!normalizedType) {
+        normalizedType = rejectedSection.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-');
+      }
+
+      if (normalizedType) {
+        normalizedRejectedTypes.add(normalizedType);
+      }
+    }
+
+    // Find all assignments for this application with HOD_TO_APPLICANT or OFFICER_TO_HOD level
+    const assignments = await assignmentRepo.find({
+      where: {
+        applicationId,
+        level: In([AssignmentLevel.HOD_TO_APPLICANT, AssignmentLevel.OFFICER_TO_HOD]),
+      },
+      relations: ['sections', 'sections.fields', 'parentAssignment'],
+    });
+
+    // Filter assignments to only include those that have sections matching rejected section types
+    const assignmentsToMove = assignments.filter((assignment) => {
+      if (!assignment.sections || assignment.sections.length === 0) {
+        return false;
+      }
+
+      // Check if any section in this assignment matches a rejected section type
+      return assignment.sections.some((section) => {
+        // Check if sectionType matches any rejected type
+        return normalizedRejectedTypes.has(section.sectionType) ||
+          Array.from(normalizedRejectedTypes).some((rejectedType) =>
+            section.sectionType.includes(rejectedType) || rejectedType.includes(section.sectionType)
+          );
+      });
+    });
+
+    for (const assignment of assignmentsToMove) {
+      // Move all sections for this assignment to history
+      if (assignment.sections && assignment.sections.length > 0) {
+        for (const section of assignment.sections) {
+          // Move assignment section fields to history
+          if (section.fields && section.fields.length > 0) {
+            for (const field of section.fields) {
+              const fieldHistory = assignmentSectionFieldHistoryRepo.create({
+                assignmentSectionFieldId: field.id,
+                assignmentSectionId: section.id,
+                fieldName: field.fieldName,
+                remarks: field.remarks,
+                status: field.status,
+                isActive: false,
+              });
+              // Preserve original createdAt
+              fieldHistory.createdAt = field.createdAt;
+              await assignmentSectionFieldHistoryRepo.save(fieldHistory);
+            }
+          }
+
+          // Move assignment section to history
+          const sectionHistory = assignmentSectionHistoryRepo.create({
+            assignmentSectionId: section.id,
+            assignmentId: assignment.id,
+            sectionType: section.sectionType,
+            resourceId: section.resourceId,
+            resourceType: section.resourceType,
+            isActive: false,
+          });
+          // Preserve original createdAt
+          sectionHistory.createdAt = section.createdAt;
+          await assignmentSectionHistoryRepo.save(sectionHistory);
+        }
+
+        // Delete all sections (cascade will delete fields)
+        await assignmentSectionRepo.remove(assignment.sections);
+      }
+
+      // Move assignment to history
+      const assignmentHistory = assignmentHistoryRepo.create({
+        assignmentId: assignment.id,
+        parentAssignmentId: assignment.parentAssignment?.id || null,
+        applicationId: assignment.applicationId,
+        applicationLocationId: assignment.applicationLocationId,
+        assignedBy: assignment.assignedBy,
+        assignedTo: assignment.assignedTo,
+        level: assignment.level,
+        assessmentId: assignment.assessmentId,
+        status: assignment.status,
+        isActive: false,
+      });
+      // Preserve original createdAt
+      assignmentHistory.createdAt = assignment.createdAt;
+      await assignmentHistoryRepo.save(assignmentHistory);
+
+      // Delete the assignment
+      await assignmentRepo.remove(assignment);
+    }
+  }
+
+  /**
+   * Checks if an assignment has any remaining sections.
+   * If the assignment is empty, moves it to history.
+   * 
+   * @param assignmentId - The ID of the assignment to check
+   * @param manager - EntityManager for database operations
+   */
+  private async moveAssignmentToHistoryIfEmpty(
+    assignmentId: string,
+    manager: EntityManager,
+  ): Promise<void> {
+    const assignmentRepo = manager.getRepository(Assignment);
+    const assignmentSectionRepo = manager.getRepository(AssignmentSection);
+    const assignmentHistoryRepo = manager.getRepository(AssignmentHistory);
+
+    // Check if assignment has any remaining sections
+    const remainingSectionsCount = await assignmentSectionRepo.count({
+      where: { assignmentId },
+    });
+
+    // If assignment still has sections, don't move it
+    if (remainingSectionsCount > 0) {
+      return;
+    }
+
+    // Load assignment with relations
+    const assignment = await assignmentRepo.findOne({
+      where: { id: assignmentId },
+      relations: ['parentAssignment'],
+    });
+
+    if (!assignment) {
+      return; // Assignment already moved or doesn't exist
+    }
+
+    // Only move HOD_TO_APPLICANT or OFFICER_TO_HOD assignments
+    if (
+      assignment.level !== AssignmentLevel.HOD_TO_APPLICANT &&
+      assignment.level !== AssignmentLevel.OFFICER_TO_HOD
+    ) {
+      return;
+    }
+
+    // Move assignment to history
+    const assignmentHistory = assignmentHistoryRepo.create({
+      assignmentId: assignment.id,
+      parentAssignmentId: assignment.parentAssignment?.id || null,
+      applicationId: assignment.applicationId,
+      applicationLocationId: assignment.applicationLocationId,
+      assignedBy: assignment.assignedBy,
+      assignedTo: assignment.assignedTo,
+      level: assignment.level,
+      assessmentId: assignment.assessmentId,
+      status: assignment.status,
+      isActive: false,
+    });
+    // Preserve original createdAt
+    assignmentHistory.createdAt = assignment.createdAt;
+    await assignmentHistoryRepo.save(assignmentHistory);
+
+    // Delete the assignment
+    await assignmentRepo.remove(assignment);
+  }
+
+  /**
+   * Moves all application rejections to history when all sections are resubmitted.
+   * This moves all rejections from the current rejection cycle to history for audit trail.
+   * 
+   * @param applicationId - The application ID
+   * @param manager - EntityManager for database operations
+   */
+  private async moveApplicationRejectionsToHistory(
+    applicationId: string,
+    manager: EntityManager,
+  ): Promise<void> {
+    const rejectionRepo = manager.getRepository(ApplicationRejectionEntity);
+    const rejectionHistoryRepo = manager.getRepository(ApplicationRejectionHistoryEntity);
+
+    // Find all rejections for this application (all rejections from current cycle)
+    const rejections = await rejectionRepo.find({
+      where: { applicationId },
+    });
+
+    if (rejections.length === 0) {
+      return; // No rejections to move
+    }
+
+    // Move each rejection to history
+    for (const rejection of rejections) {
+      const rejectionHistory = rejectionHistoryRepo.create({
+        applicationId: rejection.applicationId,
+        locationApplicationId: rejection.locationApplicationId,
+        rejectionReason: rejection.rejectionReason,
+        rejectionBy: rejection.rejectionBy,
+        unlockedSections: rejection.unlockedSections,
+      });
+      
+      // Preserve original createdAt timestamp
+      rejectionHistory.createdAt = rejection.createdAt;
+      
+      await rejectionHistoryRepo.save(rejectionHistory);
+    }
+
+    // Delete all rejections from active table
+    await rejectionRepo.remove(rejections);
   }
 }

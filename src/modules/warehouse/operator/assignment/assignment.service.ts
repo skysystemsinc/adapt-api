@@ -116,6 +116,33 @@ export class AssignmentService {
           }
         }
 
+        // CHECK IF THE APPLICATION HAS 6 ASSIGNMENTS
+        const assignmentHodToExpertCount = await transactionalEntityManager.getRepository(Assignment).count({
+          where: {
+            applicationId: applicationId,
+            level: AssignmentLevel.HOD_TO_EXPERT,
+          },
+        });
+
+        const assignmentHodToApplicantCount = await transactionalEntityManager.getRepository(Assignment).count({
+          where: {
+            applicationId: applicationId,
+            level: AssignmentLevel.HOD_TO_APPLICANT,
+          },
+        });
+
+        let totalAssignmentCount = assignmentHodToExpertCount + assignmentHodToApplicantCount;
+
+        if (totalAssignmentCount >= 6 && assignmentHodToApplicantCount > 0) {
+          const updateResult = await transactionalEntityManager.getRepository(WarehouseOperatorApplicationRequest).update(applicationId, {
+            status: WarehouseOperatorApplicationStatus.REJECTED,
+          });
+
+          if (updateResult.affected === 0) {
+            throw new ConflictException('Failed to update application status');
+          }
+        }
+
         return savedAssignment;
       });
 

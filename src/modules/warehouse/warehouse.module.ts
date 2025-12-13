@@ -45,6 +45,7 @@ import { ProfessionalQualificationsHistoryEntity } from './entities/hr/professio
 import { TrainingsHistoryEntity } from './entities/hr/trainings.entity/trainings-history.entity';
 import { DeclarationHistoryEntity } from './entities/hr/declaration.entity/declaration-history.entity';
 import { ExperienceHistoryEntity } from './entities/hr/experience.entity/experience-history.entity';
+import { ResubmittedSectionEntity } from './entities/resubmitted-section.entity';
 
 @Module({
   controllers: [WarehouseController],
@@ -89,6 +90,7 @@ import { ExperienceHistoryEntity } from './entities/hr/experience.entity/experie
       TrainingsHistoryEntity,
       DeclarationHistoryEntity,
       ExperienceHistoryEntity,
+      ResubmittedSectionEntity,
     ]),
     forwardRef(() => AuthModule),
     JwtModule.registerAsync({
