@@ -44,6 +44,7 @@ import { PersonalDetailsHistoryEntity } from './entities/hr/personal-details.ent
 import { ProfessionalQualificationsHistoryEntity } from './entities/hr/professional-qualifications.entity/professional-qualifications-history.entity';
 import { TrainingsHistoryEntity } from './entities/hr/trainings.entity/trainings-history.entity';
 import { DeclarationHistoryEntity } from './entities/hr/declaration.entity/declaration-history.entity';
+import { ExperienceHistoryEntity } from './entities/hr/experience.entity/experience-history.entity';
 
 @Module({
   controllers: [WarehouseController],
@@ -88,6 +89,9 @@ import { DeclarationHistoryEntity } from './entities/hr/declaration.entity/decla
       DeclarationHistoryEntity,
       TrainingsHistoryEntity,
       DeclarationHistoryEntity,
+      TrainingsHistoryEntity,
+      DeclarationHistoryEntity,
+      ExperienceHistoryEntity,
     ]),
     forwardRef(() => AuthModule),
     JwtModule.registerAsync({
