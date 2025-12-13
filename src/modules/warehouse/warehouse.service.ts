@@ -612,12 +612,13 @@ export class WarehouseService {
       return {
         signatory: updated,
         applicationId: appInTransaction.applicationId,
+        appId: appInTransaction.id,
       };
     });
 
     // Reload application to get latest status after transaction
     const updatedApplication = await this.warehouseOperatorRepository.findOne({
-      where: { id: result.applicationId },
+      where: { id: result.appId },
     });
 
     // if application is rejected, track resubmission and update status if all sections are complete
@@ -626,7 +627,7 @@ export class WarehouseService {
       // Find the assignment section for authorized signatory if it exists
       const assignments = await this.assignmentRepository.find({
         where: {
-          applicationId: result.applicationId,
+          applicationId: result.appId,
           level: AssignmentLevel.HOD_TO_APPLICANT,
           status: AssignmentStatus.REJECTED,
         },
@@ -649,7 +650,7 @@ export class WarehouseService {
 
       // Call helper function to track resubmission and update status
       await this.trackResubmissionAndUpdateStatus(
-        result.applicationId,
+        result.appId,
         '1-authorize-signatory-information',
         authorizedSignatoryId,
         assignmentSectionId ?? undefined,
@@ -659,7 +660,7 @@ export class WarehouseService {
     return {
       message: 'Authorized signatory updated successfully',
       authorizedSignatoryId: result.signatory.id,
-      applicationId: result.applicationId,
+      applicationId: result.appId,
     };
   }
 
