@@ -615,6 +615,47 @@ export class WarehouseService {
       };
     });
 
+    // Reload application to get latest status after transaction
+    const updatedApplication = await this.warehouseOperatorRepository.findOne({
+      where: { id: result.applicationId },
+    });
+
+    // if application is rejected, track resubmission and update status if all sections are complete
+    if (updatedApplication?.status === WarehouseOperatorApplicationStatus.REJECTED) {
+      // Track resubmission and update status if all sections are complete
+      // Find the assignment section for authorized signatory if it exists
+      const assignments = await this.assignmentRepository.find({
+        where: {
+          applicationId: result.applicationId,
+          level: AssignmentLevel.HOD_TO_APPLICANT,
+          status: AssignmentStatus.REJECTED,
+        },
+      });
+
+      let assignmentSectionId: string | null = null;
+      if (assignments.length > 0) {
+        const assignmentSections = await this.assignmentSectionRepository.find({
+          where: {
+            assignmentId: In(assignments.map((a) => a.id)),
+            sectionType: '1-authorize-signatory-information',
+            resourceId: authorizedSignatoryId,
+          },
+        });
+
+        if (assignmentSections.length > 0) {
+          assignmentSectionId = assignmentSections[0].id;
+        }
+      }
+
+      // Call helper function to track resubmission and update status
+      await this.trackResubmissionAndUpdateStatus(
+        result.applicationId,
+        '1-authorize-signatory-information',
+        authorizedSignatoryId,
+        assignmentSectionId ?? undefined,
+      );
+    }
+
     return {
       message: 'Authorized signatory updated successfully',
       authorizedSignatoryId: result.signatory.id,
@@ -1989,6 +2030,47 @@ export class WarehouseService {
       ],
     });
 
+    // Reload application to get latest status after transaction
+    const updatedApplication = await this.warehouseOperatorRepository.findOne({
+      where: { id: applicationId },
+    });
+
+    // if application is rejected, track resubmission and update status if all sections are complete
+    if (updatedApplication?.status === WarehouseOperatorApplicationStatus.REJECTED && hrInformationId) {
+      // Track resubmission and update status if all sections are complete
+      // Find the assignment section for HR information if it exists
+      const assignments = await this.assignmentRepository.find({
+        where: {
+          applicationId: applicationId,
+          level: AssignmentLevel.HOD_TO_APPLICANT,
+          status: AssignmentStatus.REJECTED,
+        },
+      });
+
+      let assignmentSectionId: string | null = null;
+      if (assignments.length > 0) {
+        const assignmentSections = await this.assignmentSectionRepository.find({
+          where: {
+            assignmentId: In(assignments.map((a) => a.id)),
+            sectionType: '4-hr-information',
+            resourceId: hrInformationId,
+          },
+        });
+
+        if (assignmentSections.length > 0) {
+          assignmentSectionId = assignmentSections[0].id;
+        }
+      }
+
+      // Call helper function to track resubmission and update status
+      await this.trackResubmissionAndUpdateStatus(
+        applicationId,
+        '4-hr-information',
+        hrInformationId,
+        assignmentSectionId ?? undefined,
+      );
+    }
+
     return {
       message: 'Personal details saved successfully',
       data: {
@@ -2103,6 +2185,47 @@ export class WarehouseService {
         return declaration;
       }
     });
+
+    // Reload application to get latest status after transaction
+    const updatedApplication = await this.warehouseOperatorRepository.findOne({
+      where: { id: applicationId },
+    });
+
+    // if application is rejected, track resubmission and update status if all sections are complete
+    if (updatedApplication?.status === WarehouseOperatorApplicationStatus.REJECTED && hrInformationId) {
+      // Track resubmission and update status if all sections are complete
+      // Find the assignment section for HR information if it exists
+      const assignments = await this.assignmentRepository.find({
+        where: {
+          applicationId: applicationId,
+          level: AssignmentLevel.HOD_TO_APPLICANT,
+          status: AssignmentStatus.REJECTED,
+        },
+      });
+
+      let assignmentSectionId: string | null = null;
+      if (assignments.length > 0) {
+        const assignmentSections = await this.assignmentSectionRepository.find({
+          where: {
+            assignmentId: In(assignments.map((a) => a.id)),
+            sectionType: '4-hr-information',
+            resourceId: hrInformationId,
+          },
+        });
+
+        if (assignmentSections.length > 0) {
+          assignmentSectionId = assignmentSections[0].id;
+        }
+      }
+
+      // Call helper function to track resubmission and update status
+      await this.trackResubmissionAndUpdateStatus(
+        applicationId,
+        '4-hr-information',
+        hrInformationId,
+        assignmentSectionId ?? undefined,
+      );
+    }
 
     return {
       message: 'Declaration saved successfully',
@@ -2272,6 +2395,47 @@ export class WarehouseService {
         return academic;
       }
     });
+
+    // Reload application to get latest status after transaction
+    const updatedApplication = await this.warehouseOperatorRepository.findOne({
+      where: { id: applicationId },
+    });
+
+    // if application is rejected, track resubmission and update status if all sections are complete
+    if (updatedApplication?.status === WarehouseOperatorApplicationStatus.REJECTED && hrInformationId) {
+      // Track resubmission and update status if all sections are complete
+      // Find the assignment section for HR information if it exists
+      const assignments = await this.assignmentRepository.find({
+        where: {
+          applicationId: applicationId,
+          level: AssignmentLevel.HOD_TO_APPLICANT,
+          status: AssignmentStatus.REJECTED,
+        },
+      });
+
+      let assignmentSectionId: string | null = null;
+      if (assignments.length > 0) {
+        const assignmentSections = await this.assignmentSectionRepository.find({
+          where: {
+            assignmentId: In(assignments.map((a) => a.id)),
+            sectionType: '4-hr-information',
+            resourceId: hrInformationId,
+          },
+        });
+
+        if (assignmentSections.length > 0) {
+          assignmentSectionId = assignmentSections[0].id;
+        }
+      }
+
+      // Call helper function to track resubmission and update status
+      await this.trackResubmissionAndUpdateStatus(
+        applicationId,
+        '4-hr-information',
+        hrInformationId,
+        assignmentSectionId ?? undefined,
+      );
+    }
 
     return {
       message: id ? 'Academic qualification updated successfully' : 'Academic qualification saved successfully',
@@ -2475,6 +2639,47 @@ export class WarehouseService {
       }
     });
 
+    // Reload application to get latest status after transaction
+    const updatedApplication = await this.warehouseOperatorRepository.findOne({
+      where: { id: applicationId },
+    });
+
+    // if application is rejected, track resubmission and update status if all sections are complete
+    if (updatedApplication?.status === WarehouseOperatorApplicationStatus.REJECTED && hrInformationId) {
+      // Track resubmission and update status if all sections are complete
+      // Find the assignment section for HR information if it exists
+      const assignments = await this.assignmentRepository.find({
+        where: {
+          applicationId: applicationId,
+          level: AssignmentLevel.HOD_TO_APPLICANT,
+          status: AssignmentStatus.REJECTED,
+        },
+      });
+
+      let assignmentSectionId: string | null = null;
+      if (assignments.length > 0) {
+        const assignmentSections = await this.assignmentSectionRepository.find({
+          where: {
+            assignmentId: In(assignments.map((a) => a.id)),
+            sectionType: '4-hr-information',
+            resourceId: hrInformationId,
+          },
+        });
+
+        if (assignmentSections.length > 0) {
+          assignmentSectionId = assignmentSections[0].id;
+        }
+      }
+
+      // Call helper function to track resubmission and update status
+      await this.trackResubmissionAndUpdateStatus(
+        applicationId,
+        '4-hr-information',
+        hrInformationId,
+        assignmentSectionId ?? undefined,
+      );
+    }
+
     return {
       message: id ? 'Professional qualification updated successfully' : 'Professional qualification saved successfully',
       data: {
@@ -2673,6 +2878,47 @@ export class WarehouseService {
         return training;
       }
     });
+
+    // Reload application to get latest status after transaction
+    const updatedApplication = await this.warehouseOperatorRepository.findOne({
+      where: { id: applicationId },
+    });
+
+    // if application is rejected, track resubmission and update status if all sections are complete
+    if (updatedApplication?.status === WarehouseOperatorApplicationStatus.REJECTED && hrInformationId) {
+      // Track resubmission and update status if all sections are complete
+      // Find the assignment section for HR information if it exists
+      const assignments = await this.assignmentRepository.find({
+        where: {
+          applicationId: applicationId,
+          level: AssignmentLevel.HOD_TO_APPLICANT,
+          status: AssignmentStatus.REJECTED,
+        },
+      });
+
+      let assignmentSectionId: string | null = null;
+      if (assignments.length > 0) {
+        const assignmentSections = await this.assignmentSectionRepository.find({
+          where: {
+            assignmentId: In(assignments.map((a) => a.id)),
+            sectionType: '4-hr-information',
+            resourceId: hrInformationId,
+          },
+        });
+
+        if (assignmentSections.length > 0) {
+          assignmentSectionId = assignmentSections[0].id;
+        }
+      }
+
+      // Call helper function to track resubmission and update status
+      await this.trackResubmissionAndUpdateStatus(
+        applicationId,
+        '4-hr-information',
+        hrInformationId,
+        assignmentSectionId ?? undefined,
+      );
+    }
 
     return {
       message: id ? 'Training updated successfully' : 'Training saved successfully',
@@ -2878,6 +3124,47 @@ export class WarehouseService {
         return experience;
       }
     });
+
+    // Reload application to get latest status after transaction
+    const updatedApplication = await this.warehouseOperatorRepository.findOne({
+      where: { id: applicationId },
+    });
+
+    // if application is rejected, track resubmission and update status if all sections are complete
+    if (updatedApplication?.status === WarehouseOperatorApplicationStatus.REJECTED && hrInformationId) {
+      // Track resubmission and update status if all sections are complete
+      // Find the assignment section for HR information if it exists
+      const assignments = await this.assignmentRepository.find({
+        where: {
+          applicationId: applicationId,
+          level: AssignmentLevel.HOD_TO_APPLICANT,
+          status: AssignmentStatus.REJECTED,
+        },
+      });
+
+      let assignmentSectionId: string | null = null;
+      if (assignments.length > 0) {
+        const assignmentSections = await this.assignmentSectionRepository.find({
+          where: {
+            assignmentId: In(assignments.map((a) => a.id)),
+            sectionType: '4-hr-information',
+            resourceId: hrInformationId,
+          },
+        });
+
+        if (assignmentSections.length > 0) {
+          assignmentSectionId = assignmentSections[0].id;
+        }
+      }
+
+      // Call helper function to track resubmission and update status
+      await this.trackResubmissionAndUpdateStatus(
+        applicationId,
+        '4-hr-information',
+        hrInformationId,
+        assignmentSectionId ?? undefined,
+      );
+    }
 
     return {
       message: id ? 'Experience updated successfully' : 'Experience saved successfully',
@@ -3171,6 +3458,47 @@ export class WarehouseService {
         'others',
       ],
     });
+
+    // Reload application to get latest status after transaction
+    const updatedApplication = await this.warehouseOperatorRepository.findOne({
+      where: { id: applicationId },
+    });
+
+    // if application is rejected, track resubmission and update status if all sections are complete
+    if (updatedApplication?.status === WarehouseOperatorApplicationStatus.REJECTED) {
+      // Track resubmission and update status if all sections are complete
+      // Find the assignment section for financial information if it exists
+      const assignments = await this.assignmentRepository.find({
+        where: {
+          applicationId: applicationId,
+          level: AssignmentLevel.HOD_TO_APPLICANT,
+          status: AssignmentStatus.REJECTED,
+        },
+      });
+
+      let assignmentSectionId: string | null = null;
+      if (assignments.length > 0) {
+        const assignmentSections = await this.assignmentSectionRepository.find({
+          where: {
+            assignmentId: In(assignments.map((a) => a.id)),
+            sectionType: '5-financial-information',
+            resourceId: savedFinancialInfo.id,
+          },
+        });
+
+        if (assignmentSections.length > 0) {
+          assignmentSectionId = assignmentSections[0].id;
+        }
+      }
+
+      // Call helper function to track resubmission and update status
+      await this.trackResubmissionAndUpdateStatus(
+        applicationId,
+        '5-financial-information',
+        savedFinancialInfo.id,
+        assignmentSectionId ?? undefined,
+      );
+    }
 
     return {
       message: 'Financial information saved successfully',
