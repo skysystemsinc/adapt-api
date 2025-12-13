@@ -50,6 +50,7 @@ import { AcademicQualificationsHistoryEntity } from './entities/hr/academic-qual
 import { DeclarationHistoryEntity } from './entities/hr/declaration.entity/declaration-history.entity';
 import { ProfessionalQualificationsHistoryEntity } from './entities/hr/professional-qualifications.entity/professional-qualifications-history.entity';
 import { TrainingsHistoryEntity } from './entities/hr/trainings.entity/trainings-history.entity';
+import { ExperienceHistoryEntity } from './entities/hr/experience.entity/experience-history.entity';
 
 export class WarehouseService {
   private readonly uploadDir = 'uploads';
@@ -2704,9 +2705,26 @@ export class WarehouseService {
       throw new NotFoundException('HR information not found for the provided ID');
     }
 
+    if (![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(application.status)) {
+      throw new BadRequestException('Cannot update experience after application is approved or submitted');
+    }
+
     const savedResult = await this.dataSource.transaction(async (manager) => {
       const experienceRepo = manager.getRepository(ExperienceEntity);
       const documentRepo = manager.getRepository(WarehouseDocument);
+      const historyRepo = manager.getRepository(ExperienceHistoryEntity);
+      const appRepo = manager.getRepository(WarehouseOperatorApplicationRequest);
+
+      const appInTransaction = await appRepo.findOne({
+        where: { id: applicationId, userId },
+      });
+      if (!appInTransaction) {
+        throw new NotFoundException('Application not found');
+      }
+
+      if (![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(appInTransaction.status)) {
+        throw new BadRequestException('Cannot update experience after application is approved or submitted');
+      }
 
       const assignDocument = async (
         documentId: string | undefined | null,
@@ -2754,6 +2772,28 @@ export class WarehouseService {
 
         if (!existing) {
           throw new NotFoundException('Experience not found');
+        }
+
+        if (appInTransaction?.status === WarehouseOperatorApplicationStatus.REJECTED) {
+          const historyRecord = historyRepo.create({
+            id: undefined,
+            experienceId: existing.id,
+            positionHeld: existing.positionHeld,
+            organizationName: existing.organizationName,
+            organizationAddress: existing.organizationAddress,
+            natureOfOrganization: existing.natureOfOrganization,
+            dateOfAppointment: existing.dateOfAppointment,
+            dateOfLeaving: existing.dateOfLeaving ?? null,
+            duration: existing.duration ?? null,
+            responsibilities: existing.responsibilities ?? null,
+            experienceLetter: existing.experienceLetter ?? null,
+            hrId: hr.id,
+            isActive: false,
+          });
+          
+          // Preserve the original createdAt timestamp from the experience record
+          historyRecord.createdAt = existing.createdAt;
+          await historyRepo.save(historyRecord);
         }
 
         Object.assign(existing, {
