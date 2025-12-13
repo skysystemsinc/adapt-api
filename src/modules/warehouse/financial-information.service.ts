@@ -103,7 +103,7 @@ export class FinancialInformationService {
       const historyRepo = manager.getRepository(AuditReportHistoryEntity);
       
       const appInTransaction = await appRepo.findOne({
-        where: { id: financialInfo.application.id, userId },
+        where: { id: financialInfo.applicationId, userId },
       });
       if (!appInTransaction) {
         throw new NotFoundException('Application not found');
@@ -323,7 +323,7 @@ export class FinancialInformationService {
 
     // Reload application to get latest status after transaction
     const updatedApplication = await this.warehouseOperatorRepository.findOne({
-      where: { id: financialInfo.application.id },
+      where: { id: financialInfo.applicationId },
     });
 
     // if application is rejected, track resubmission and update status if all sections are complete
@@ -332,7 +332,7 @@ export class FinancialInformationService {
       // Find the assignment section for financial information if it exists
       const assignments = await this.warehouseService['assignmentRepository'].find({
         where: {
-          applicationId: financialInfo.application.id,
+          applicationId: financialInfo.applicationId,
           level: AssignmentLevel.HOD_TO_APPLICANT,
           status: AssignmentStatus.REJECTED,
         },
@@ -355,7 +355,7 @@ export class FinancialInformationService {
 
       // Call helper function to track resubmission and update status
       await this.warehouseService['trackResubmissionAndUpdateStatus'](
-        financialInfo.application.id,
+        financialInfo.applicationId,
         '5-financial-information',
         financialInfo.id,
         assignmentSectionId ?? undefined,
@@ -455,7 +455,7 @@ export class FinancialInformationService {
 
         // Get application to check status
         const appInTransaction = await appRepo.findOne({
-          where: { id: financialInfo.application.id },
+          where: { id: financialInfo.applicationId },
         });
 
         if (!appInTransaction) {
@@ -609,7 +609,7 @@ export class FinancialInformationService {
 
     // Reload application to get latest status after transaction
     const updatedApplication = await this.warehouseOperatorRepository.findOne({
-      where: { id: financialInfo.application.id },
+      where: { id: financialInfo.applicationId },
     });
 
     // if application is rejected, track resubmission and update status if all sections are complete
@@ -618,7 +618,7 @@ export class FinancialInformationService {
       // Find the assignment section for financial information if it exists
       const assignments = await this.warehouseService['assignmentRepository'].find({
         where: {
-          applicationId: financialInfo.application.id,
+          applicationId: financialInfo.applicationId,
           level: AssignmentLevel.HOD_TO_APPLICANT,
           status: AssignmentStatus.REJECTED,
         },
@@ -641,7 +641,7 @@ export class FinancialInformationService {
 
       // Call helper function to track resubmission and update status
       await this.warehouseService['trackResubmissionAndUpdateStatus'](
-        financialInfo.application.id,
+        financialInfo.applicationId,
         '5-financial-information',
         financialInfo.id,
         assignmentSectionId ?? undefined,
@@ -701,7 +701,7 @@ export class FinancialInformationService {
 
         // Get application to check status
         const appInTransaction = await appRepo.findOne({
-          where: { id: financialInfo.application.id },
+          where: { id: financialInfo.applicationId },
         });
 
         if (!appInTransaction) {
@@ -797,7 +797,7 @@ export class FinancialInformationService {
 
     // Reload application to get latest status after transaction
     const updatedApplication = await this.warehouseOperatorRepository.findOne({
-      where: { id: financialInfo.application.id },
+      where: { id: financialInfo.applicationId },
     });
 
     // if application is rejected, track resubmission and update status if all sections are complete
@@ -806,7 +806,7 @@ export class FinancialInformationService {
       // Find the assignment section for financial information if it exists
       const assignments = await this.warehouseService['assignmentRepository'].find({
         where: {
-          applicationId: financialInfo.application.id,
+          applicationId: financialInfo.applicationId,
           level: AssignmentLevel.HOD_TO_APPLICANT,
           status: AssignmentStatus.REJECTED,
         },
@@ -829,7 +829,7 @@ export class FinancialInformationService {
 
       // Call helper function to track resubmission and update status
       await this.warehouseService['trackResubmissionAndUpdateStatus'](
-        financialInfo.application.id,
+        financialInfo.applicationId,
         '5-financial-information',
         financialInfo.id,
         assignmentSectionId ?? undefined,
