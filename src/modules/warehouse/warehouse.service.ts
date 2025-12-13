@@ -4268,6 +4268,7 @@ export class WarehouseService {
       id: hr.id,
       personalDetails: hr.personalDetails
         ? {
+          id: hr.personalDetails.id,
           designationId: hr.personalDetails.designationId,
           designationName: hr.personalDetails.designation?.name ?? null,
           name: hr.personalDetails.name,
@@ -4353,6 +4354,7 @@ export class WarehouseService {
       })) ?? [],
       declaration: hr.declaration
         ? {
+          id: hr.declaration.id,
           writeOffAvailed: hr.declaration.writeOffAvailed,
           defaultOfFinance: hr.declaration.defaultOfFinance,
           placementOnECL: hr.declaration.placementOnECL,
