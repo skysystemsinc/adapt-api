@@ -8,6 +8,7 @@ import { UsersModule } from '../users/users.module';
 import { User } from '../users/entities/user.entity';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RecaptchaService } from './services/recaptcha.service';
+import { ForgotPasswordRateLimitGuard } from './guards/forgot-password-rate-limit.guard';
 
 @Module({
   imports: [
@@ -24,7 +25,7 @@ import { RecaptchaService } from './services/recaptcha.service';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, RecaptchaService, JwtAuthGuard],
+  providers: [AuthService, RecaptchaService, JwtAuthGuard, ForgotPasswordRateLimitGuard],
   exports: [AuthService, JwtAuthGuard],
 })
 export class AuthModule {}
