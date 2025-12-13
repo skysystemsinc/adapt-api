@@ -46,6 +46,7 @@ import { AuthorizedSignatoryHistory } from './entities/authorized-signatories-hi
 import { CompanyInformationHistory } from './entities/company-information-history.entity';
 import { BankDetailsHistory } from './entities/bank-details-history.entity';
 import { PersonalDetailsHistoryEntity } from './entities/hr/personal-details.entity/personal-details-history.entity';
+import { AcademicQualificationsHistoryEntity } from './entities/hr/academic-qualifications.entity/academic-qualifications-history.entity';
 
 export class WarehouseService {
   private readonly uploadDir = 'uploads';
@@ -2042,6 +2043,10 @@ export class WarehouseService {
       throw new NotFoundException('Warehouse operator application not found. Please create an application first.');
     }
 
+    if (![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(application.status)) {
+      throw new BadRequestException('Cannot update academic qualification after application is approved or submitted');
+    }
+
     // HR Information ID is required for academic qualification
     if (!hrInformationId) {
       throw new BadRequestException('HR Information ID is required. Please save personal details first.');
@@ -2059,6 +2064,19 @@ export class WarehouseService {
     const savedResult = await this.dataSource.transaction(async (manager) => {
       const academicRepo = manager.getRepository(AcademicQualificationsEntity);
       const documentRepo = manager.getRepository(WarehouseDocument);
+      const historyRepo = manager.getRepository(AcademicQualificationsHistoryEntity);
+      const appRepo = manager.getRepository(WarehouseOperatorApplicationRequest);
+
+      const appInTransaction = await appRepo.findOne({
+        where: { id: applicationId, userId },
+      });
+      if (!appInTransaction) {
+        throw new NotFoundException('Application not found');
+      }
+
+      if (![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(appInTransaction.status)) {
+        throw new BadRequestException('Cannot update academic qualification after application is approved or submitted');
+      }
 
       const assignDocument = async (
         documentId: string | undefined | null,
@@ -2099,13 +2117,32 @@ export class WarehouseService {
       }
 
       if (id) {
-        // Update existing
         const existing = await academicRepo.findOne({
           where: { id, hrId: hr.id },
         });
 
         if (!existing) {
           throw new NotFoundException('Academic qualification not found');
+        }
+
+        // save history of academic qualification if application is rejected
+        if (appInTransaction?.status === WarehouseOperatorApplicationStatus.REJECTED) {
+          await historyRepo.save(
+            historyRepo.create({
+              id: undefined,
+              academicQualificationsId: existing.id,
+              degree: existing.degree,
+              major: existing.major,
+              institute: existing.institute,
+              country: existing.country,
+              yearOfPassing: existing.yearOfPassing,
+              grade: existing.grade,
+              academicCertificate: existing.academicCertificate,
+              hrId: hr.id,
+              isActive: false,
+              createdAt: existing.createdAt,
+            })
+          );
         }
 
         Object.assign(existing, {

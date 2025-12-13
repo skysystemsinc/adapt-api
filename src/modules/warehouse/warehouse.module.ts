@@ -39,6 +39,8 @@ import { Assignment } from './operator/assignment/entities/assignment.entity';
 import { AuthorizedSignatoryHistory } from './entities/authorized-signatories-history.entity';
 import { BankDetailsHistory } from './entities/bank-details-history.entity';
 import { CompanyInformationHistory } from './entities/company-information-history.entity';
+import { AcademicQualificationsHistoryEntity } from './entities/hr/academic-qualifications.entity/academic-qualifications-history.entity';
+import { PersonalDetailsHistoryEntity } from './entities/hr/personal-details.entity/personal-details-history.entity';
 
 @Module({
   controllers: [WarehouseController],
@@ -75,6 +77,8 @@ import { CompanyInformationHistory } from './entities/company-information-histor
       AuthorizedSignatoryHistory,
       BankDetailsHistory,
       CompanyInformationHistory,
+      AcademicQualificationsHistoryEntity,
+      PersonalDetailsHistoryEntity,
     ]),
     forwardRef(() => AuthModule),
     JwtModule.registerAsync({
