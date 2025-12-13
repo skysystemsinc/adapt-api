@@ -47,6 +47,7 @@ import { CompanyInformationHistory } from './entities/company-information-histor
 import { BankDetailsHistory } from './entities/bank-details-history.entity';
 import { PersonalDetailsHistoryEntity } from './entities/hr/personal-details.entity/personal-details-history.entity';
 import { AcademicQualificationsHistoryEntity } from './entities/hr/academic-qualifications.entity/academic-qualifications-history.entity';
+import { DeclarationHistoryEntity } from './entities/hr/declaration.entity/declaration-history.entity';
 
 export class WarehouseService {
   private readonly uploadDir = 'uploads';
@@ -1852,7 +1853,7 @@ export class WarehouseService {
 
         // save history of personal details if application is rejected
         if (appInTransaction?.status === WarehouseOperatorApplicationStatus.REJECTED) {
-          await historyRepo.save( 
+          await historyRepo.save(
             historyRepo.create({
               id: undefined,
               personalDetailsId: currentHr.personalDetails.id,
@@ -1984,9 +1985,26 @@ export class WarehouseService {
       throw new NotFoundException('HR information not found for the provided ID');
     }
 
+    if (![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(application.status)) {
+      throw new BadRequestException('Cannot update declaration after application is approved or submitted');
+    }
+
     const savedResult = await this.dataSource.transaction(async (manager) => {
       const hrRepo = manager.getRepository(HrEntity);
       const declarationRepo = manager.getRepository(DeclarationEntity);
+      const historyRepo = manager.getRepository(DeclarationHistoryEntity);
+      const appRepo = manager.getRepository(WarehouseOperatorApplicationRequest);
+
+      const appInTransaction = await appRepo.findOne({
+        where: { id: applicationId, userId },
+      });
+      if (!appInTransaction) {
+        throw new NotFoundException('Application not found');
+      }
+
+      if (![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(appInTransaction.status)) {
+        throw new BadRequestException('Cannot update declaration after application is approved or submitted');
+      }
 
       const currentHr = await hrRepo.findOne({
         where: { id: hr.id },
@@ -1994,6 +2012,22 @@ export class WarehouseService {
       });
 
       if (currentHr?.declaration) {
+        if (appInTransaction?.status === WarehouseOperatorApplicationStatus.REJECTED) {
+          const historyRecord = historyRepo.create({
+            id: undefined,
+            declarationId: currentHr.declaration.id,
+            writeOffAvailed: currentHr.declaration.writeOffAvailed,
+            defaultOfFinance: currentHr.declaration.defaultOfFinance,
+            placementOnECL: currentHr.declaration.placementOnECL,
+            convictionPleaBargain: currentHr.declaration.convictionPleaBargain,
+            isActive: false,
+          });
+
+          // Preserve the original createdAt timestamp from the declaration record
+          historyRecord.createdAt = currentHr.declaration.createdAt;
+
+          await historyRepo.save(historyRecord);
+        }
         // Update existing declaration
         Object.assign(currentHr.declaration, dto);
         await declarationRepo.save(currentHr.declaration);
