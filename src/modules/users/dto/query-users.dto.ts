@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsOptional, IsEnum, IsInt, Min } from 'class-validator';
+import { IsOptional, IsEnum, IsInt, Min, IsString } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export enum UserTypeFilter {
@@ -8,6 +8,14 @@ export enum UserTypeFilter {
 }
 
 export class QueryUsersDto {
+  @ApiProperty({
+    description: 'Search by name or email',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  search?: string;
+  
   @ApiProperty({
     description: 'Filter by user type',
     enum: UserTypeFilter,

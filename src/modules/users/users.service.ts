@@ -163,7 +163,7 @@ export class UsersService {
     data: ApplicantUserResponseDto[] | InternalUserResponseDto[];
     meta: { total: number; page: number; limit: number; totalPages: number };
   }> {
-    const { type, page = 1, limit = 10 } = query;
+    const { type, page = 1, limit = 10, search } = query;
     const skip = (page - 1) * limit;
 
     const queryBuilder = this.userRepository
@@ -179,6 +179,10 @@ export class UsersService {
       queryBuilder.andWhere('role.name = :roleName', { roleName: 'Applicant' });
     } else if (type === UserTypeFilter.INTERNAL_USERS) {
       queryBuilder.andWhere('role.name != :roleName', { roleName: 'Applicant' });
+    }
+
+    if (search) {
+      queryBuilder.andWhere('user.firstName LIKE :search OR user.lastName LIKE :search OR user.email LIKE :search', { search: `%${search}%` });
     }
 
     const [users, total] = await queryBuilder.getManyAndCount();
