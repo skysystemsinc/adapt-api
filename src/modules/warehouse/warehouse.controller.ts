@@ -349,6 +349,31 @@ export class WarehouseController {
     return this.warehouseService.deleteHrInformation(applicationId, hrInformationId, user.id);
   }
 
+  @ApiOperation({ summary: 'Get first authorized signatory name and applicant legal status from warehouse operator application' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiResponse({ 
+    status: 200, 
+    description: 'First authorized signatory name and applicant legal status retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string' },
+        data: {
+          type: 'object',
+          properties: {
+            authorizedSignatoryName: { type: 'string', nullable: true },
+            applicantLegalStatus: { type: 'string', nullable: true },
+          },
+        },
+      },
+    },
+  })
+  @Get('/operator/application/first-authorized-signatory')
+  getFirstAuthorizedSignatoryName(@Request() request: any) {
+    const user = request.user as User;
+    return this.warehouseService.getFirstAuthorizedSignatoryName(user.id);
+  }
+
   @ApiOperation({ summary: 'Get warehouse application with authorized signatories' })
   @ApiBearerAuth('JWT-auth')
   @Get('/operator/application/:applicationId/warehouse-application')

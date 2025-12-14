@@ -64,6 +64,9 @@ import { ResubmittedSectionEntity } from './entities/resubmitted-section.entity'
 import { ApplicationRejectionEntity } from './entities/application-rejection.entity';
 import { ApplicationRejectionHistoryEntity } from './entities/application-rejection-history.entity';
 import { ApplicantChecklistHistoryEntity } from './entities/applicant-checklist-history.entity';
+import { RegistrationApplication } from '../registration-application/entities/registration-application.entity';
+import { RegistrationApplicationDetails } from '../registration-application/entities/registration-application-details.entity';
+import { FormField } from '../forms/entities/form-field.entity';
 
 export class WarehouseService {
   private readonly uploadDir = 'uploads';
@@ -114,6 +117,12 @@ export class WarehouseService {
     private readonly trainingsHistoryRepository: Repository<TrainingsHistoryEntity>,
     @InjectRepository(ResubmittedSectionEntity)
     private readonly resubmittedSectionRepository: Repository<ResubmittedSectionEntity>,
+    @InjectRepository(RegistrationApplication)
+    private readonly registrationApplicationRepository: Repository<RegistrationApplication>,
+    @InjectRepository(RegistrationApplicationDetails)
+    private readonly registrationApplicationDetailsRepository: Repository<RegistrationApplicationDetails>,
+    @InjectRepository(FormField)
+    private readonly formFieldRepository: Repository<FormField>,
   ) {
     // Ensure upload directory exists
     this.ensureUploadDirectory();
@@ -1536,6 +1545,142 @@ export class WarehouseService {
     return {
       message: 'HR information deleted successfully',
       success: true,
+    };
+  }
+
+  async getFirstAuthorizedSignatoryName(userId: string) {
+    // Find the warehouse operator application for the user
+    const application = await this.warehouseOperatorRepository.findOne({
+      where: { userId },
+      order: { createdAt: 'DESC' }, // Get the most recent application
+    });
+
+    if (!application) {
+      return {
+        message: 'No warehouse operator application found',
+        data: {
+          authorizedSignatoryName: null,
+          applicantLegalStatus: null,
+        },
+      };
+    }
+
+    // Find the first authorized signatory for this application
+    const firstAuthorizedSignatory = await this.authorizedSignatoryRepository.findOne({
+      where: { 
+        warehouseOperatorApplicationRequestId: application.id,
+        isActive: true,
+      },
+      order: { createdAt: 'ASC' }, // Get the first one created
+    });
+
+    // Get legal status from registration application (same as registration API)
+    let applicantLegalStatus: string | null = null;
+    
+    try {
+      // Step 1: Find registration_application by userId through user relation
+      // Using QueryBuilder since userId is the actual column name (from JoinColumn)
+      const registrationApplication = await this.registrationApplicationRepository
+        .createQueryBuilder('application')
+        .leftJoinAndSelect('application.applicationTypeId', 'applicationTypeId')
+        .leftJoinAndSelect('application.user', 'user')
+        .where('application.userId = :userId', { userId })
+        .getOne();
+
+      if (!registrationApplication) {
+        return {
+          message: 'First authorized signatory name and applicant legal status retrieved successfully',
+          data: {
+            authorizedSignatoryName: firstAuthorizedSignatory?.authorizedSignatoryName || null,
+            applicantLegalStatus: null,
+          },
+        };
+      }
+
+      // Step 2: Get formId from registration_application
+      const formId = registrationApplication.formId;
+      if (!formId) {
+        return {
+          message: 'First authorized signatory name and applicant legal status retrieved successfully',
+          data: {
+            authorizedSignatoryName: firstAuthorizedSignatory?.authorizedSignatoryName || null,
+            applicantLegalStatus: null,
+          },
+        };
+      }
+
+      // Step 3: Find form_fields with specific labels and get their field keys
+      // Mapping from labels to readable property names
+      const labelToPropertyMap: Record<string, string> = {
+        "Please select your application types:": "applicationType",
+        "Please select your application type:": "applicationType",
+      };
+
+      const targetLabels = Object.keys(labelToPropertyMap);
+
+      // Get all form_fields for this formId
+      const allFormFields = await this.formFieldRepository.find({
+        where: { formId: formId },
+      });
+
+      // Create a map from fieldKey to property name
+      const fieldKeyToPropertyMap: Record<string, string> = {};
+      for (const label of targetLabels) {
+        const field = allFormFields.find(f => f.label === label);
+        if (field) {
+          fieldKeyToPropertyMap[field.fieldKey] = labelToPropertyMap[label];
+        }
+      }
+
+      // Step 4: Find registration_application_details using those field keys and applicationId
+      const applicationId = registrationApplication.id;
+      let applicationTypeFromFormField: string | null = null;
+      
+      const fieldKeys = Object.keys(fieldKeyToPropertyMap);
+      if (fieldKeys.length > 0) {
+        // Get details for this application with the specific field keys
+        const applicationDetails = await this.registrationApplicationDetailsRepository.find({
+          where: {
+            application: { id: applicationId },
+            key: In(fieldKeys),
+          },
+        });
+
+        // Build the details object with readable property names
+        for (const detail of applicationDetails) {
+          const propertyName = fieldKeyToPropertyMap[detail.key];
+          if (propertyName) {
+            // Store applicationType from form field as fallback
+            if (propertyName === 'applicationType') {
+              applicationTypeFromFormField = detail.value;
+              break; // Found it, no need to continue
+            }
+          }
+        }
+      }
+
+      // Add applicationType - prefer relation value (name) over form field value (slug)
+      // Relation value is authoritative and contains the proper name (e.g., "Private Limited")
+      // Form field might contain slug (e.g., "private-limited")
+      if (registrationApplication.applicationTypeId?.name) {
+        applicantLegalStatus = registrationApplication.applicationTypeId.name;
+      } else if (applicationTypeFromFormField) {
+        // Fallback to form field value if relation is not available
+        // if it contain - remove it and add space
+        applicationTypeFromFormField = applicationTypeFromFormField.replace(/-/g, ' ');
+        applicantLegalStatus = applicationTypeFromFormField.toUpperCase();
+      }
+    } catch (error) {
+      console.error('Error getting registration application details by userId:', error);
+      // Continue with null status if error occurs
+    }
+
+    return {
+      message: 'First authorized signatory name and applicant legal status retrieved successfully',
+      data: {
+        authorizedSignatoryName: firstAuthorizedSignatory?.authorizedSignatoryName || null,
+        applicantLegalStatus: applicantLegalStatus,
+      },
     };
   }
 
