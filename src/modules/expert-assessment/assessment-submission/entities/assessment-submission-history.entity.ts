@@ -3,11 +3,11 @@ import { ExpertAssessment } from "../../entities/expert-assessment.entity";
 import { AssessmentDocument } from "../../assessment-documents/entities/assessment-document.entity";
 import { WarehouseOperatorApplicationRequest } from "../../../warehouse/entities/warehouse-operator-application-request.entity";
 import { WarehouseLocation } from "../../../warehouse-location/entities/warehouse-location.entity";
-import { InspectionReport } from "../../../inspection-reports/entities/inspection-report.entity";
 import { ExpertAssessmentSubmissionStatus } from "../../../../common/enums/ExpertAssessmentSubmissionStatus";
+import { InspectionReportHistory } from "../../../inspection-reports/entities/inspection-report-history.entity";
 
-@Entity("expert_assessment_submissions")
-export class AssessmentSubmission {
+@Entity("expert_assessment_submissions_history")
+export class AssessmentSubmissionHistory {
     @PrimaryGeneratedColumn('uuid')
     id: string;
 
@@ -24,33 +24,33 @@ export class AssessmentSubmission {
     })
     status: ExpertAssessmentSubmissionStatus;
 
-    @Column({ type: 'uuid' })
+    @Column({ type: 'uuid', })
     assessmentId: string;
 
-    @ManyToOne(() => ExpertAssessment, { onDelete: 'CASCADE' })
+    @ManyToOne(() => ExpertAssessment, { onDelete: 'SET NULL', nullable: true })
     @JoinColumn({ name: 'assessmentId' })
     assessment: ExpertAssessment;
 
     @Column({ type: 'uuid', nullable: true })
     warehouseOperatorApplicationId?: string;
 
-    @ManyToOne(() => WarehouseOperatorApplicationRequest, { onDelete: 'CASCADE', nullable: true })
+    @ManyToOne(() => WarehouseOperatorApplicationRequest, { onDelete: 'SET NULL', nullable: true })
     @JoinColumn({ name: 'warehouseOperatorApplicationId' })
     warehouseOperatorApplication?: WarehouseOperatorApplicationRequest;
 
     @Column({ type: 'uuid', nullable: true })
     warehouseLocationId?: string;
 
-    @ManyToOne(() => WarehouseLocation, { onDelete: 'CASCADE', nullable: true })
+    @ManyToOne(() => WarehouseLocation, { onDelete: 'SET NULL', nullable: true })
     @JoinColumn({ name: 'warehouseLocationId' })
     warehouseLocation?: WarehouseLocation;
 
     @Column({ type: 'uuid', nullable: true })
-    inspectionReportId?: string;
+    inspectionReportHistoryId?: string;
 
-    @ManyToOne(() => InspectionReport, { onDelete: 'CASCADE', nullable: true })
-    @JoinColumn({ name: 'inspectionReportId' })
-    inspectionReport?: InspectionReport;
+    @ManyToOne(() => InspectionReportHistory, { onDelete: 'SET NULL', nullable: true })
+    @JoinColumn({ name: 'inspectionReportHistoryId' })
+    inspectionReportHistory?: InspectionReportHistory;
 
     @CreateDateColumn()
     createdAt: Date;
@@ -58,6 +58,6 @@ export class AssessmentSubmission {
     @UpdateDateColumn()
     updatedAt: Date;
 
-    @OneToMany(() => AssessmentDocument, (document) => document.submission)
-    documents: AssessmentDocument[];
+    @OneToMany(() => AssessmentDocument, (documentHistory) => documentHistory.submissionHistory)
+    documentsHistory: AssessmentDocument[];
 }

@@ -15,7 +15,10 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { Assignment, AssignmentLevel, AssignmentStatus } from '../warehouse/operator/assignment/entities/assignment.entity';
-import { ApproveOrRejectInspectionReportDto } from './dto/approve-reject-inspection';
+import { ApproveOrRejectInspectionReportDto, ApproveOrRejectInspectionReportStatus } from './dto/approve-reject-inspection';
+import { InspectionReportHistory } from './entities/inspection-report-history.entity';
+import { AssessmentSubmissionHistory } from '../expert-assessment/assessment-submission/entities/assessment-submission-history.entity';
+import { AssignmentSection } from '../warehouse/operator/assignment/entities/assignment-section.entity';
 
 @Injectable()
 export class InspectionReportsService {
@@ -433,7 +436,7 @@ export class InspectionReportsService {
     return report;
   }
 
-  async approveOrReject(id: string, approveOrRejectInspectionReportDto: ApproveOrRejectInspectionReportDto, userId: string): Promise<InspectionReport> {
+  async approveOrReject(id: string, approveOrRejectInspectionReportDto: ApproveOrRejectInspectionReportDto, userId: string): Promise<InspectionReport | InspectionReportHistory> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -444,77 +447,203 @@ export class InspectionReportsService {
         throw new NotFoundException(`Inspection report not found`);
       }
 
+      const isLocationReport = report.warehouseLocationId !== null;
+
       if (report.status === InspectionReportStatus.APPROVED || report.status === InspectionReportStatus.REJECTED) {
         throw new BadRequestException('Inspection report is already approved or rejected');
       }
 
-      // Update report status
-      report.status = approveOrRejectInspectionReportDto.status as unknown as InspectionReportStatus;
-      report.approvedBy = userId;
-      report.approvedAt = new Date();
-      report.remarks = approveOrRejectInspectionReportDto.remarks;
+      // Reject inspection report
+      if (approveOrRejectInspectionReportDto.status === ApproveOrRejectInspectionReportStatus.REJECTED) {
+        // start transaction
+        const reportHistoryRepo = queryRunner.manager.getRepository(InspectionReportHistory);
+        const submissionHistoryRepo = queryRunner.manager.getRepository(AssessmentSubmissionHistory);
 
-      const savedReport = await queryRunner.manager.save(InspectionReport, report);
-
-      // Check if this is the 6th approved/rejected inspection report
-      const completedReportsCount = await queryRunner.manager.count(InspectionReport, {
-        where: {
+        const historyRecord = reportHistoryRepo.create({
+          inspectionReportId: report.id,
+          assessmentType: report.assessmentType,
+          maximumScore: report.maximumScore,
+          obtainedScore: report.obtainedScore,
+          percentage: report.percentage,
+          grade: report.grade,
+          selectedGrade: report.selectedGrade,
+          assessmentGradingRemarks: report.assessmentGradingRemarks,
+          overallComments: report.overallComments,
           warehouseOperatorApplicationId: report.warehouseOperatorApplicationId,
           warehouseLocationId: report.warehouseLocationId,
-          status: In([InspectionReportStatus.APPROVED, InspectionReportStatus.REJECTED]),
-        },
-      });
+          remarks: report.remarks,
+          approvedBy: userId,
+          approvedAt: new Date(),
+          createdBy: report.createdBy,
+          status: InspectionReportStatus.REJECTED,
+        });
+        historyRecord.createdAt = report.createdAt;
 
-      // If 6 inspection reports are completed (approved or rejected), create a ReviewEntity
-      if (completedReportsCount === 6) {
-        // Check if review entry already exists for this application+location
-        const existingReview = await queryRunner.manager.findOne(ReviewEntity, {
+        const savedHistoryRecord = await queryRunner.manager.save(InspectionReportHistory, historyRecord);
+
+        if (report.assessmentSubmissions && report.assessmentSubmissions.length > 0) {
+          for (const submission of report.assessmentSubmissions) {
+            const submissionHistory = submissionHistoryRepo.create({
+              assessmentId: submission.assessmentId,
+              score: submission.score,
+              remarks: submission.remarks,
+              status: submission.status,
+              warehouseOperatorApplicationId: submission.warehouseOperatorApplicationId,
+              warehouseLocationId: submission.warehouseLocationId,
+              inspectionReportHistoryId: savedHistoryRecord.id,
+            });
+            submissionHistory.createdAt = submission.createdAt; // Preserve original timestamp
+
+            const savedSubmissionHistory = await queryRunner.manager.save(AssessmentSubmissionHistory, submissionHistory);
+
+            // Step 3: Copy documents from this submission
+            if (submission.documents && submission.documents.length > 0) {
+              for (const document of submission.documents) {
+                // Update existing document to link to history
+                await queryRunner.manager
+                  .createQueryBuilder()
+                  .update(AssessmentDocument)
+                  .set({
+                    submissionHistoryId: savedSubmissionHistory.id,
+                    inspectionReportHistoryId: savedHistoryRecord.id,
+                    submissionId: null as any,
+                    inspectionReportId: null as any,
+                  })
+                  .where('id = :id', { id: document.id })
+                  .execute();
+              }
+            }
+          }
+
+        }
+
+        if (report.documents && report.documents.length > 0) {
+          for (const document of report.documents) {
+            // Update existing document to link to history
+            await queryRunner.manager
+              .createQueryBuilder()
+              .update(AssessmentDocument)
+              .set({
+                inspectionReportHistoryId: savedHistoryRecord.id,
+                inspectionReportId: null as any,
+                submissionHistoryId: null as any,
+                submissionId: null as any,
+              })
+              .where('id = :id', { id: document.id })
+              .execute();
+          }
+        }
+
+        // delete Inspection Report & Assessment Submission
+        await queryRunner.manager.delete(InspectionReport, { id: report.id });
+        await queryRunner.manager.delete(AssessmentSubmission, { inspectionReportId: report.id });
+
+        // get assignment
+        const assignment = await queryRunner.manager.findOne(Assignment, {
           where: {
-            applicationId: report.warehouseOperatorApplicationId,
-            applicationLocationId: report.warehouseLocationId,
+            ...(isLocationReport ? 
+              { applicationLocationId: report.warehouseLocationId } : 
+              { applicationId: report.warehouseOperatorApplicationId }),
+            assignedBy: userId,
+            level: AssignmentLevel.HOD_TO_EXPERT,
+            status: AssignmentStatus.ASSIGNED,
+          },
+        });
+        if (assignment) {
+          // delete assignment HOD_TO_EXPERT
+          
+          await queryRunner.manager.delete(Assignment, {
+            id: assignment.id,
+          });
+        }
+        const childAssignment = await queryRunner.manager.findOne(Assignment, {
+          where: {
+            ...(isLocationReport ? 
+              { applicationLocationId: report.warehouseLocationId } : 
+              { applicationId: report.warehouseOperatorApplicationId }),
+            assignedTo: userId,
+            level: AssignmentLevel.EXPERT_TO_HOD,
+            status: AssignmentStatus.ASSIGNED,
+          },
+        });
+        if (childAssignment) {
+          // delete child assignment EXPERT_TO_HOD
+          await queryRunner.manager.delete(Assignment, {
+            id: childAssignment.id,
+          });
+        }
+
+        await queryRunner.commitTransaction();
+        return savedHistoryRecord; // Return history record, not deleted report
+      } else {
+
+        // Update report status
+        report.status = approveOrRejectInspectionReportDto.status as unknown as InspectionReportStatus;
+        report.approvedBy = userId;
+        report.approvedAt = new Date();
+        report.remarks = approveOrRejectInspectionReportDto.remarks;
+
+        const savedReport = await queryRunner.manager.save(InspectionReport, report);
+
+        // Check if this is the 6th approved/rejected inspection report
+        const completedReportsCount = await queryRunner.manager.count(InspectionReport, {
+          where: {
+            warehouseOperatorApplicationId: report.warehouseOperatorApplicationId,
+            warehouseLocationId: report.warehouseLocationId,
+            status: In([InspectionReportStatus.APPROVED]),
           },
         });
 
-        if (!existingReview) {
-          // Find user with WAREHOUSE_OPERATOR_REVIEW permission
-          const reviewerUser = await queryRunner.manager
-            .getRepository(User)
-            .createQueryBuilder('user')
-            .innerJoin('user.userRoles', 'ur')
-            .innerJoin('ur.role', 'role')
-            .innerJoin('role.rolePermissions', 'rp')
-            .innerJoin('rp.permission', 'permission')
-            .where('permission.name = :permName', { permName: Permissions.WAREHOUSE_OPERATOR_REVIEW })
-            .getOne();
+        // If 6 inspection reports are completed (approved), create a ReviewEntity
+        if (completedReportsCount === 6) {
+          // Check if review entry already exists for this application+location
+          const existingReview = await queryRunner.manager.findOne(ReviewEntity, {
+            where: {
+              applicationId: report.warehouseOperatorApplicationId,
+              applicationLocationId: report.warehouseLocationId,
+            },
+          });
 
-          // Create review entry (userId is nullable, so it's ok if no reviewer found)
-          const reviewData: any = {
-            applicationId: report.warehouseOperatorApplicationId,
-            type: 'HOD',
-            isSubmitted: true,
-            submittedAt: new Date(),
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          };
+          if (!existingReview) {
+            // Find user with WAREHOUSE_OPERATOR_REVIEW permission
+            const reviewerUser = await queryRunner.manager
+              .getRepository(User)
+              .createQueryBuilder('user')
+              .innerJoin('user.userRoles', 'ur')
+              .innerJoin('ur.role', 'role')
+              .innerJoin('role.rolePermissions', 'rp')
+              .innerJoin('rp.permission', 'permission')
+              .where('permission.name = :permName', { permName: Permissions.WAREHOUSE_OPERATOR_REVIEW })
+              .getOne();
 
-          // Only add applicationLocationId if it exists
-          if (report.warehouseLocationId) {
-            reviewData.applicationLocationId = report.warehouseLocationId;
+            // Create review entry (userId is nullable, so it's ok if no reviewer found)
+            const reviewData: any = {
+              applicationId: report.warehouseOperatorApplicationId,
+              type: 'HOD',
+              isSubmitted: true,
+              submittedAt: new Date(),
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            };
+
+            // Only add applicationLocationId if it exists
+            if (report.warehouseLocationId) {
+              reviewData.applicationLocationId = report.warehouseLocationId;
+            }
+
+            // Only add userId if reviewer found
+            if (reviewerUser?.id) {
+              reviewData.userId = reviewerUser.id;
+            }
+
+            const review = queryRunner.manager.create(ReviewEntity, reviewData);
+            await queryRunner.manager.save(ReviewEntity, review);
           }
-
-          // Only add userId if reviewer found
-          if (reviewerUser?.id) {
-            reviewData.userId = reviewerUser.id;
-          }
-
-          const review = queryRunner.manager.create(ReviewEntity, reviewData);
-          await queryRunner.manager.save(ReviewEntity, review);
-          console.log(`✓ Created review entry for application ${report.warehouseOperatorApplicationId} - 6 inspections completed`);
         }
-      }
 
-      await queryRunner.commitTransaction();
-      return savedReport;
+        await queryRunner.commitTransaction();
+        return savedReport; // Return saved report
+      }
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
