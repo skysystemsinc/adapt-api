@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, UploadedFiles, UseInterceptors, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, UploadedFiles, UseInterceptors, BadRequestException, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { InspectionReportsService } from './inspection-reports.service';
 import { CreateInspectionReportDto } from './dto/create-inspection-report.dto';
@@ -154,9 +154,10 @@ export class InspectionReportsController {
   @ApiResponse({ status: 404, description: 'Inspection report not found' })
   findByApplicationIdAssessment(@Param('applicationId') applicationId: string,
     @Request() req: any,
+    @Query('type') type?: string,
   ) {
     const userId = req.user?.sub || req.user?.id;
-    return this.inspectionReportsService.findByApplicationIdAssessment(applicationId, userId);
+    return this.inspectionReportsService.findByApplicationIdAssessment(applicationId, userId, type);
   }
 
   @Patch(':id/approve-reject')

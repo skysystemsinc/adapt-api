@@ -379,7 +379,7 @@ export class InspectionReportsService {
     return report;
   }
 
-  async findByApplicationIdAssessment(applicationId: string, userId: string): Promise<InspectionReport> {
+  async findByApplicationIdAssessment(applicationId: string, userId: string, type?: string): Promise<InspectionReport> {
     // get user with permission
     const user = await this.dataSource.getRepository(User).findOne({
       where: { id: userId },
@@ -393,7 +393,22 @@ export class InspectionReportsService {
     const isHod = user.userRoles.some(role => role.role.rolePermissions.some(permission => permission.permission.name === Permissions.IS_HOD));
     const isFinalHOD = user.userRoles.some(role => role.role.rolePermissions.some(permission => permission.permission.name === Permissions.REVIEW_ASSESSMENT));
     const isCEO = user.userRoles.some(role => role.role.rolePermissions.some(permission => permission.permission.name === Permissions.REVIEW_FINAL_APPLICATION));
-    
+
+    if(isFinalHOD || isCEO) {
+      // get inspection report by application id and assessment type
+      const inspectionReport = await this.inspectionReportRepository.findOne({
+        where: {
+          warehouseOperatorApplicationId: applicationId,
+          assessmentType: type as AssessmentCategory,
+        },
+        relations: ['assessmentSubmissions', 'assessmentSubmissions.documents', 'documents'],
+      });
+      if (!inspectionReport) {
+        throw new NotFoundException(`Inspection report with application ID ${applicationId} and type ${type} not found`);
+      }
+      return inspectionReport;
+    }
+
     let assessmentId: string | undefined;
     let assignment: Assignment | null = null;
 
