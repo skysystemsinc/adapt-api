@@ -4,13 +4,14 @@ import { UpdateWarehouseAdminDto } from './dto/update-warehouse-admin.dto';
 import { QueryOperatorApplicationDto } from './dto/query-operator-application.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { WarehouseOperatorApplicationRequest, WarehouseOperatorApplicationStatus } from '../warehouse/entities/warehouse-operator-application-request.entity';
-import { Repository } from 'typeorm';
+import { Equal, Not, Repository } from 'typeorm';
 import { User } from '../users/entities/user.entity';
 import { DataSource } from 'typeorm';
 import { Permissions } from '../rbac/constants/permissions.constants';
 import { hasPermission } from 'src/common/utils/helper.utils';
 import { Assignment } from '../warehouse/operator/assignment/entities/assignment.entity';
 import { WarehouseDocument } from '../warehouse/entities/warehouse-document.entity';
+import { RegistrationApplication } from '../registration-application/entities/registration-application.entity';
 
 @Injectable()
 export class WarehouseAdminService {
@@ -18,6 +19,8 @@ export class WarehouseAdminService {
   constructor(
     @InjectRepository(WarehouseOperatorApplicationRequest)
     private warehouseOperatorApplicationRequestRepository: Repository<WarehouseOperatorApplicationRequest>,
+    @InjectRepository(RegistrationApplication)
+    private registrationApplicationRequestRepository: Repository<RegistrationApplication>,
     @InjectRepository(User)
     private usersRepository: Repository<User>,
     @InjectRepository(WarehouseDocument)
@@ -740,6 +743,19 @@ export class WarehouseAdminService {
       throw new NotFoundException('User not found');
     }
 
+    let isKycVerification: boolean = false;
+
+    if (applicationId) {
+      const application = await this.registrationApplicationRequestRepository.findOne({
+        where: { id: applicationId },
+        select: {
+          id: true,
+        },
+      });
+
+      if (application) isKycVerification = true;
+    }
+
     const usersQuery = await this.dataSource
       .getRepository(User)
       .createQueryBuilder('user')
@@ -759,7 +775,9 @@ export class WarehouseAdminService {
     ) AS users
   `);
 
-    if (hasPermission(user, Permissions.IS_HOD)) {
+    if (isKycVerification) {
+      usersQuery.where(`role.name != :applicantRole`, { applicantRole: 'Applicant' })
+    } else if (hasPermission(user, Permissions.IS_HOD)) {
       // get current user's permissions
       const currentUserPermissions = user.userRoles
         .flatMap((role) => role.role.rolePermissions.map((permission) => permission.permission.name));      // check if current user is HR, FINANCE, LEGAL, INSPECTION, SECURITY, TECHNICAL, ESG
@@ -811,7 +829,7 @@ export class WarehouseAdminService {
     }
 
     // If applicationId is provided, exclude users already assigned to this application
-    if (applicationId) {
+    if (applicationId && !isKycVerification) {
       usersQuery.andWhere(
         `user.id NOT IN (
           SELECT DISTINCT a."assignedTo" 
@@ -825,13 +843,54 @@ export class WarehouseAdminService {
     usersQuery.groupBy('role.id');
     const users = await usersQuery.getRawMany();
 
-    // Convert to object keyed by role
+    // Convert to object keyed by role and deduplicate users within each role
     const grouped: Record<string, any[]> = {};
     for (const row of users) {
-      grouped[row.role] = row.users;
+      // Deduplicate users by user ID within each role group
+      // This is especially important for isKycVerification where joins can create duplicates
+      const seenUserIds = new Set<string>();
+      const uniqueUsers = row.users.filter((user: any) => {
+        if (seenUserIds.has(user.id)) {
+          return false;
+        }
+        seenUserIds.add(user.id);
+        return true;
+      });
+      grouped[row.role] = uniqueUsers;
     }
 
     return grouped;
 
+  }
+
+  private async allInternalUsers() {
+    const internalUsers = await this.usersRepository.find({
+      where: {
+        userRoles: {
+          role: {
+            name: Not(Equal('Applicant')),
+          },
+        },
+      },
+      relations: {
+        userRoles: {
+          role: {
+            rolePermissions: {
+              permission: true,
+            },
+          },
+        },
+      },
+    });
+
+
+    if (internalUsers.length > 0) {
+      const grouped: Record<string, any> = {};
+      for (const row of internalUsers) {
+        grouped[row.userRoles[0].role.name] = row;
+      }
+      return grouped;
+    }
+    return {};
   }
 }

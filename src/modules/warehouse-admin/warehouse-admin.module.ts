@@ -8,12 +8,13 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { Assignment } from '../warehouse/operator/assignment/entities/assignment.entity';
 import { WarehouseDocument } from '../warehouse/entities/warehouse-document.entity';
+import { RegistrationApplication } from '../registration-application/entities/registration-application.entity';
 
 @Module({
   controllers: [WarehouseAdminController],
   providers: [WarehouseAdminService],
   imports: [
-    TypeOrmModule.forFeature([WarehouseOperatorApplicationRequest, User, Assignment, WarehouseDocument]),
+    TypeOrmModule.forFeature([WarehouseOperatorApplicationRequest, User, Assignment, WarehouseDocument, RegistrationApplication]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({

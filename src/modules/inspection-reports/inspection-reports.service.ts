@@ -391,6 +391,9 @@ export class InspectionReportsService {
     }
 
     const isHod = user.userRoles.some(role => role.role.rolePermissions.some(permission => permission.permission.name === Permissions.IS_HOD));
+    const isFinalHOD = user.userRoles.some(role => role.role.rolePermissions.some(permission => permission.permission.name === Permissions.REVIEW_ASSESSMENT));
+    const isCEO = user.userRoles.some(role => role.role.rolePermissions.some(permission => permission.permission.name === Permissions.REVIEW_FINAL_APPLICATION));
+    
     let assessmentId: string | undefined;
     let assignment: Assignment | null = null;
 
