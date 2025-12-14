@@ -775,7 +775,7 @@ export class WarehouseAdminService {
     ) AS users
   `);
 
-    if (isKycVerification) {
+    if (isKycVerification || hasPermission(user, Permissions.REVIEW_ASSESSMENT) || hasPermission(user, Permissions.REVIEW_FINAL_APPLICATION)) {
       usersQuery.where(`role.name != :applicantRole`, { applicantRole: 'Applicant' })
     } else if (hasPermission(user, Permissions.IS_HOD)) {
       // get current user's permissions
