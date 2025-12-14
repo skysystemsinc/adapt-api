@@ -25,6 +25,7 @@ import { ExpertAssessmentModule } from './modules/expert-assessment/expert-asses
 import { InspectionReportsModule } from './modules/inspection-reports/inspection-reports.module';
 import { WarehouseOperatorLocationModule } from './modules/warehouse-operator-location/warehouse-operator-location.module';
 import { DynamicCalculatorModule } from './modules/dynamic-calculator/dynamic-calculator.module';
+import { ApplicantModule } from './modules/applicant/applicant.module';
 import databaseConfig from './config/database.config';
 
 @Module({
@@ -66,6 +67,7 @@ import databaseConfig from './config/database.config';
     InspectionReportsModule,
     WarehouseOperatorLocationModule,
     DynamicCalculatorModule,
+    ApplicantModule,
   ],
   controllers: [AppController],
   providers: [AppService],
