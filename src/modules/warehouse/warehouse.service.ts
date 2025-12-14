@@ -112,6 +112,8 @@ export class WarehouseService {
     private readonly professionalQualificationsHistoryRepository: Repository<ProfessionalQualificationsHistoryEntity>,
     @InjectRepository(TrainingsHistoryEntity)
     private readonly trainingsHistoryRepository: Repository<TrainingsHistoryEntity>,
+    @InjectRepository(ResubmittedSectionEntity)
+    private readonly resubmittedSectionRepository: Repository<ResubmittedSectionEntity>,
   ) {
     // Ensure upload directory exists
     this.ensureUploadDirectory();
@@ -2050,11 +2052,12 @@ export class WarehouseService {
 
       let assignmentSectionId: string | null = null;
       if (assignments.length > 0) {
+        // Use the personal details ID to find the specific assignment section
         const assignmentSections = await this.assignmentSectionRepository.find({
           where: {
             assignmentId: In(assignments.map((a) => a.id)),
             sectionType: '4-hr-information',
-            resourceId: hrInformationId,
+            resourceId: savedResult.id, // Use personal details ID, not hrInformationId
           },
         });
 
@@ -2064,10 +2067,11 @@ export class WarehouseService {
       }
 
       // Call helper function to track resubmission and update status
+      // Use the personal details ID (savedResult.id) to match assignment section resourceId
       await this.trackResubmissionAndUpdateStatus(
         applicationId,
         '4-hr-information',
-        hrInformationId,
+        savedResult.id, // Use personal details ID, not hrInformationId
         assignmentSectionId ?? undefined,
       );
     }
@@ -2206,11 +2210,12 @@ export class WarehouseService {
 
       let assignmentSectionId: string | null = null;
       if (assignments.length > 0) {
+        // Use the declaration ID to find the specific assignment section
         const assignmentSections = await this.assignmentSectionRepository.find({
           where: {
             assignmentId: In(assignments.map((a) => a.id)),
             sectionType: '4-hr-information',
-            resourceId: hrInformationId,
+            resourceId: savedResult.id, // Use declaration ID, not hrInformationId
           },
         });
 
@@ -2220,10 +2225,11 @@ export class WarehouseService {
       }
 
       // Call helper function to track resubmission and update status
+      // Use the declaration ID (savedResult.id) to match assignment section resourceId
       await this.trackResubmissionAndUpdateStatus(
         applicationId,
         '4-hr-information',
-        hrInformationId,
+        savedResult.id, // Use declaration ID, not hrInformationId
         assignmentSectionId ?? undefined,
       );
     }
@@ -2416,11 +2422,12 @@ export class WarehouseService {
 
       let assignmentSectionId: string | null = null;
       if (assignments.length > 0) {
+        // Use the academic qualification ID to find the specific assignment section
         const assignmentSections = await this.assignmentSectionRepository.find({
           where: {
             assignmentId: In(assignments.map((a) => a.id)),
             sectionType: '4-hr-information',
-            resourceId: hrInformationId,
+            resourceId: savedResult.id, // Use academic qualification ID, not hrInformationId
           },
         });
 
@@ -2430,10 +2437,11 @@ export class WarehouseService {
       }
 
       // Call helper function to track resubmission and update status
+      // Use the academic qualification ID (savedResult.id) to match assignment section resourceId
       await this.trackResubmissionAndUpdateStatus(
         applicationId,
         '4-hr-information',
-        hrInformationId,
+        savedResult.id, // Use academic qualification ID, not hrInformationId
         assignmentSectionId ?? undefined,
       );
     }
@@ -2659,11 +2667,12 @@ export class WarehouseService {
 
       let assignmentSectionId: string | null = null;
       if (assignments.length > 0) {
+        // Use the professional qualification ID to find the specific assignment section
         const assignmentSections = await this.assignmentSectionRepository.find({
           where: {
             assignmentId: In(assignments.map((a) => a.id)),
             sectionType: '4-hr-information',
-            resourceId: hrInformationId,
+            resourceId: savedResult.id, // Use professional qualification ID, not hrInformationId
           },
         });
 
@@ -2673,10 +2682,11 @@ export class WarehouseService {
       }
 
       // Call helper function to track resubmission and update status
+      // Use the professional qualification ID (savedResult.id) to match assignment section resourceId
       await this.trackResubmissionAndUpdateStatus(
         applicationId,
         '4-hr-information',
-        hrInformationId,
+        savedResult.id, // Use professional qualification ID, not hrInformationId
         assignmentSectionId ?? undefined,
       );
     }
@@ -2899,11 +2909,12 @@ export class WarehouseService {
 
       let assignmentSectionId: string | null = null;
       if (assignments.length > 0) {
+        // Use the training ID to find the specific assignment section
         const assignmentSections = await this.assignmentSectionRepository.find({
           where: {
             assignmentId: In(assignments.map((a) => a.id)),
             sectionType: '4-hr-information',
-            resourceId: hrInformationId,
+            resourceId: savedResult.id, // Use training ID, not hrInformationId
           },
         });
 
@@ -2913,10 +2924,11 @@ export class WarehouseService {
       }
 
       // Call helper function to track resubmission and update status
+      // Use the training ID (savedResult.id) to match assignment section resourceId
       await this.trackResubmissionAndUpdateStatus(
         applicationId,
         '4-hr-information',
-        hrInformationId,
+        savedResult.id, // Use training ID, not hrInformationId
         assignmentSectionId ?? undefined,
       );
     }
@@ -3145,11 +3157,12 @@ export class WarehouseService {
 
       let assignmentSectionId: string | null = null;
       if (assignments.length > 0) {
+        // Use the experience ID to find the specific assignment section
         const assignmentSections = await this.assignmentSectionRepository.find({
           where: {
             assignmentId: In(assignments.map((a) => a.id)),
             sectionType: '4-hr-information',
-            resourceId: hrInformationId,
+            resourceId: savedResult.id, // Use experience ID, not hrInformationId
           },
         });
 
@@ -3159,10 +3172,11 @@ export class WarehouseService {
       }
 
       // Call helper function to track resubmission and update status
+      // Use the experience ID (savedResult.id) to match assignment section resourceId
       await this.trackResubmissionAndUpdateStatus(
         applicationId,
         '4-hr-information',
-        hrInformationId,
+        savedResult.id, // Use experience ID, not hrInformationId
         assignmentSectionId ?? undefined,
       );
     }
@@ -3804,7 +3818,7 @@ export class WarehouseService {
           assignDocuments,
         );
       }
-      
+
       if (submit) {
         application.status = WarehouseOperatorApplicationStatus.PENDING;
         await repos.application.save(application);
@@ -5163,6 +5177,222 @@ export class WarehouseService {
   }
 
   /**
+   * Get resubmission progress for a rejected application
+   * Shows how many sections were rejected and how many have been resubmitted
+   * 
+   * @param applicationId - The warehouse operator application ID
+   * @param userId - The user ID to verify ownership
+   * @returns Progress information including total rejected, resubmitted, remaining, and breakdown by section type
+   */
+  async getResubmissionProgress(applicationId: string, userId: string) {
+    // Verify application exists and user owns it
+    const application = await this.warehouseOperatorRepository.findOne({
+      where: { id: applicationId, userId },
+      relations: ['rejections'],
+    });
+
+    if (!application) {
+      throw new NotFoundException('Warehouse operator application not found');
+    }
+
+    // Only show progress for rejected applications
+    if (application.status !== WarehouseOperatorApplicationStatus.REJECTED) {
+      return {
+        message: 'Application is not in rejected status',
+        data: {
+          totalRejected: 0,
+          totalResubmitted: 0,
+          remaining: 0,
+          progressPercentage: 100,
+          sections: [],
+        },
+      };
+    }
+
+    // Map normalized section types to display names
+    const sectionTypeMap: Record<string, string[]> = {
+      '1-authorize-signatory-information': ['1-authorize-signatory-information'],
+      '2-company-information': ['2-company-information'],
+      '3-bank-details': ['3-bank-details'],
+      '4-hr-information': ['4-hr-information'],
+      '5-financial-information': ['5-financial-information'],
+      '6-application-checklist-questionnaire': ['6-application-checklist-questionnaire'],
+    };
+
+    // Section type to human-readable name mapping
+    const sectionDisplayNames: Record<string, string> = {
+      '1-authorize-signatory-information': 'Authorized Signatory Information',
+      '2-company-information': 'Company Information',
+      '3-bank-details': 'Bank Details',
+      '4-hr-information': 'HR Information',
+      '5-financial-information': 'Financial Information',
+      '6-application-checklist-questionnaire': 'Applicant Checklist',
+    };
+
+    // Get all unique unlocked sections from rejections
+    // unlockedSections is a JSONB array, so we need to parse if it's a string
+    const allUnlockedSections = application.rejections
+      .flatMap((rejection) => {
+        const sections = rejection.unlockedSections || [];
+        // Handle both string and parsed JSON formats
+        return sections.map((section: string) => {
+          try {
+            // If it's a JSON string, parse it; otherwise use as-is
+            return typeof section === 'string' && section.startsWith('"') ? JSON.parse(section) : section;
+          } catch {
+            return section;
+          }
+        });
+      })
+      .filter((section, index, self) => self.indexOf(section) === index); // unique
+
+    if (allUnlockedSections.length === 0) {
+      return {
+        message: 'No rejected sections found',
+        data: {
+          totalRejected: 0,
+          totalResubmitted: 0,
+          remaining: 0,
+          progressPercentage: 100,
+          sections: [],
+        },
+      };
+    }
+
+    // Get all assignments for this application with HOD_TO_APPLICANT level and REJECTED status
+    const assignments = await this.assignmentRepository.find({
+      where: {
+        applicationId,
+        level: AssignmentLevel.HOD_TO_APPLICANT,
+        status: AssignmentStatus.REJECTED,
+      },
+    });
+
+    if (assignments.length === 0) {
+      return {
+        message: 'No rejected assignments found',
+        data: {
+          totalRejected: 0,
+          totalResubmitted: 0,
+          remaining: 0,
+          progressPercentage: 100,
+          sections: [],
+        },
+      };
+    }
+
+    // Get all assignment sections for these assignments
+    const assignmentSections = await this.assignmentSectionRepository.find({
+      where: {
+        assignmentId: In(assignments.map((a) => a.id)),
+      },
+    });
+
+    // Get all resubmitted sections for this application
+    const resubmittedSections = await this.resubmittedSectionRepository.find({
+      where: { applicationId },
+    });
+
+    // Group assignment sections by normalized section type
+    const sectionsByType = new Map<string, typeof assignmentSections>();
+
+    for (const unlockedSection of allUnlockedSections) {
+      // Find normalized type for this unlocked section
+      let normalizedType: string | null = null;
+      for (const [normalized, displayNames] of Object.entries(sectionTypeMap)) {
+        if (displayNames.some((displayName) => unlockedSection.includes(displayName) || displayName.includes(unlockedSection))) {
+          normalizedType = normalized;
+          break;
+        }
+      }
+
+      // If no mapping found, try to normalize directly
+      if (!normalizedType) {
+        normalizedType = unlockedSection.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-');
+      }
+
+      // Get all assignment sections for this section type
+      const sectionsForType = assignmentSections.filter((section) => {
+        if (!normalizedType) return false;
+        return section.sectionType === normalizedType ||
+          section.sectionType.includes(normalizedType) ||
+          normalizedType.includes(section.sectionType);
+      });
+
+      if (sectionsForType.length > 0 && normalizedType) {
+        sectionsByType.set(normalizedType, sectionsForType);
+      }
+    }
+
+    // Calculate progress for each section type
+    const sectionProgress = Array.from(sectionsByType.entries()).map(([sectionType, sections]) => {
+      const resourceIds = sections
+        .map((section) => section.resourceId)
+        .filter((id): id is string => id !== null && id !== undefined);
+
+      // Count resubmitted sections for this type
+      const resubmittedForType = resubmittedSections.filter((resubmitted) => {
+        // Match by section type
+        const typeMatches = resubmitted.sectionType === sectionType ||
+          resubmitted.sectionType.includes(sectionType) ||
+          sectionType.includes(resubmitted.sectionType);
+
+        if (!typeMatches) return false;
+
+        // If there are resourceIds, match by resourceId
+        if (resourceIds.length > 0) {
+          if (!resubmitted.resourceId) return false;
+          return resourceIds.includes(resubmitted.resourceId);
+        }
+
+        // If no resourceIds, any resubmission for this type counts
+        return true;
+      });
+
+      const resubmittedIds = new Set(
+        resubmittedForType
+          .map((r) => r.resourceId)
+          .filter((id): id is string => id !== null && id !== undefined)
+      );
+
+      // Count how many resourceIds have been resubmitted
+      const resubmittedCount = resourceIds.length > 0
+        ? resourceIds.filter((resourceId) => resubmittedIds.has(resourceId)).length
+        : (resubmittedForType.length > 0 ? sections.length : 0);
+
+      const rejectedCount = sections.length;
+      const remainingCount = rejectedCount - resubmittedCount;
+      const isComplete = remainingCount === 0;
+
+      return {
+        sectionType,
+        sectionName: sectionDisplayNames[sectionType] || sectionType,
+        rejected: rejectedCount,
+        resubmitted: resubmittedCount,
+        remaining: remainingCount,
+        isComplete,
+      };
+    });
+
+    // Calculate totals
+    const totalRejected = sectionProgress.reduce((sum, section) => sum + section.rejected, 0);
+    const totalResubmitted = sectionProgress.reduce((sum, section) => sum + section.resubmitted, 0);
+    const remaining = totalRejected - totalResubmitted;
+    const progressPercentage = totalRejected > 0 ? Math.round((totalResubmitted / totalRejected) * 100) : 100;
+
+    return {
+      message: 'Resubmission progress retrieved successfully',
+      data: {
+        totalRejected,
+        totalResubmitted,
+        remaining,
+        progressPercentage,
+        sections: sectionProgress,
+      },
+    };
+  }
+
+  /**
    * Helper function to track resubmitted sections and update application status
    * when all unlocked sections have been resubmitted.
    * 
@@ -5367,10 +5597,20 @@ export class WarehouseService {
     // If all sections are complete, update application status to PENDING and move all assignments to history
     if (allSectionsComplete) {
       application.status = WarehouseOperatorApplicationStatus.PENDING;
-      await applicationRepo.save(application);
 
       // Move all completed assignment sections to history (only assignments related to rejected sections)
-      await this.moveAllCompletedAssignmentSectionsToHistory(applicationId, application.rejections, repo);
+      // This also returns the list of resubmitted section types and resourceIds
+      const { resubmittedSections, resubmittedResourcesBySection } = await this.moveAllCompletedAssignmentSectionsToHistory(applicationId, application.rejections, repo);
+
+      // Mark as resubmitted in metadata with the list of resubmitted sections and resourceIds
+      application.metadata = {
+        ...(application.metadata || {}),
+        isResubmitted: true,
+        resubmittedAt: new Date().toISOString(),
+        resubmittedSections: resubmittedSections,
+        resubmittedResourcesBySection: resubmittedResourcesBySection,
+      };
+      await applicationRepo.save(application);
 
       // Move all application rejections to history (all rejections from current cycle)
       await this.moveApplicationRejectionsToHistory(applicationId, repo);
@@ -5385,12 +5625,13 @@ export class WarehouseService {
    * @param applicationId - The application ID
    * @param rejections - Array of application rejections to determine which sections were rejected
    * @param manager - EntityManager for database operations
+   * @returns Object containing array of display names for resubmitted sections and resourceIds by section
    */
   private async moveAllCompletedAssignmentSectionsToHistory(
     applicationId: string,
     rejections: ApplicationRejectionEntity[],
     manager: EntityManager,
-  ): Promise<void> {
+  ): Promise<{ resubmittedSections: string[]; resubmittedResourcesBySection: Record<string, string[]> }> {
     const assignmentRepo = manager.getRepository(Assignment);
     const assignmentSectionRepo = manager.getRepository(AssignmentSection);
     const assignmentSectionHistoryRepo = manager.getRepository(AssignmentSectionHistory);
@@ -5403,7 +5644,10 @@ export class WarehouseService {
       .filter((section, index, self) => self.indexOf(section) === index); // unique
 
     if (rejectedSectionTypes.length === 0) {
-      return; // No rejected sections, nothing to move
+      return {
+        resubmittedSections: [],
+        resubmittedResourcesBySection: {},
+      }; // No rejected sections, nothing to move
     }
 
     // Map normalized section types to display names used in unlockedSections
@@ -5414,6 +5658,16 @@ export class WarehouseService {
       '4-hr-information': ['4-hr-information'],
       '5-financial-information': ['5-financial-information'],
       '6-application-checklist-questionnaire': ['6-application-checklist-questionnaire'],
+    };
+
+    // Section type to human-readable display name mapping
+    const sectionDisplayNames: Record<string, string> = {
+      '1-authorize-signatory-information': 'Authorized Signatory Information',
+      '2-company-information': 'Company Information',
+      '3-bank-details': 'Bank Details',
+      '4-hr-information': 'HR Information',
+      '5-financial-information': 'Financial Information',
+      '6-application-checklist-questionnaire': 'Applicant Checklist',
     };
 
     // Normalize rejected section types to match assignment section types
@@ -5462,6 +5716,41 @@ export class WarehouseService {
           );
       });
     });
+
+    // Collect unique section types and resourceIds from all assignments being moved
+    const resubmittedSectionTypes = new Set<string>();
+    const resubmittedResourcesBySection: Record<string, string[]> = {};
+    
+    for (const assignment of assignmentsToMove) {
+      if (assignment.sections && assignment.sections.length > 0) {
+        for (const section of assignment.sections) {
+          // Check if this section matches a rejected type
+          const matchesRejected = normalizedRejectedTypes.has(section.sectionType) ||
+            Array.from(normalizedRejectedTypes).some((rejectedType) =>
+              section.sectionType.includes(rejectedType) || rejectedType.includes(section.sectionType)
+            );
+          
+          if (matchesRejected) {
+            resubmittedSectionTypes.add(section.sectionType);
+            
+            // Store resourceId for granular tracking (especially for HR and Financial subsections)
+            if (section.resourceId) {
+              if (!resubmittedResourcesBySection[section.sectionType]) {
+                resubmittedResourcesBySection[section.sectionType] = [];
+              }
+              if (!resubmittedResourcesBySection[section.sectionType].includes(section.resourceId)) {
+                resubmittedResourcesBySection[section.sectionType].push(section.resourceId);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Map section types to display names
+    const resubmittedSections = Array.from(resubmittedSectionTypes)
+      .map((sectionType) => sectionDisplayNames[sectionType] || sectionType)
+      .filter((name, index, self) => self.indexOf(name) === index); // unique
 
     for (const assignment of assignmentsToMove) {
       // Move all sections for this assignment to history
@@ -5522,6 +5811,11 @@ export class WarehouseService {
       // Delete the assignment
       await assignmentRepo.remove(assignment);
     }
+
+    return {
+      resubmittedSections,
+      resubmittedResourcesBySection,
+    };
   }
 
   /**
@@ -5620,10 +5914,10 @@ export class WarehouseService {
         rejectionBy: rejection.rejectionBy,
         unlockedSections: rejection.unlockedSections,
       });
-      
+
       // Preserve original createdAt timestamp
       rejectionHistory.createdAt = rejection.createdAt;
-      
+
       await rejectionHistoryRepo.save(rejectionHistory);
     }
 

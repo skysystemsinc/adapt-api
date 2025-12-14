@@ -1173,4 +1173,46 @@ export class WarehouseController {
     const user = request.user as User;
     return this.warehouseService.getResourceStatus(applicationId, user.id, resourceType);
   }
+
+  @ApiOperation({ summary: 'Get resubmission progress for a rejected warehouse operator application' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiParam({ name: 'applicationId', description: 'The ID of the warehouse operator application' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Resubmission progress retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string' },
+        data: {
+          type: 'object',
+          properties: {
+            totalRejected: { type: 'number', example: 7 },
+            totalResubmitted: { type: 'number', example: 5 },
+            remaining: { type: 'number', example: 2 },
+            progressPercentage: { type: 'number', example: 71 },
+            sections: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  sectionType: { type: 'string', example: '4-hr-information' },
+                  sectionName: { type: 'string', example: 'HR Information' },
+                  rejected: { type: 'number', example: 7 },
+                  resubmitted: { type: 'number', example: 5 },
+                  remaining: { type: 'number', example: 2 },
+                  isComplete: { type: 'boolean', example: false },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+  @Get('/operator/application/:applicationId/resubmission-progress')
+  getResubmissionProgress(@Param('applicationId') applicationId: string, @Request() request: any) {
+    const user = request.user as User;
+    return this.warehouseService.getResubmissionProgress(applicationId, user.id);
+  }
 }

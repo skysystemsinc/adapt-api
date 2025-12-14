@@ -74,6 +74,7 @@ export class WarehouseAdminService {
         'application.applicationId',
         'application.applicationType',
         'application.status',
+        'application.metadata',
         'application.createdAt',
         'application.updatedAt',
         'user.id',
@@ -131,6 +132,7 @@ export class WarehouseAdminService {
         assignmentLevel: rawData?.assignmentLevel || null,
         assignmentStatus: rawData?.assignmentStatus || null,
         assignmentAssessmentId: rawData?.assignmentAssessmentId || null,
+        isResubmitted: entity.metadata?.isResubmitted || false,
       };
     });
 
@@ -490,6 +492,7 @@ export class WarehouseAdminService {
         id: true,
         status: true,
         applicationId: true,
+        metadata: true,
         user: true,
         companyInformation: true,
         financialInformation: true,
@@ -575,6 +578,9 @@ export class WarehouseAdminService {
         this.filterApplicationByAssignment(warehouseOperatorApplication, assignment);
       } else {
         // If no assignment found, return empty data for HOD
+        const resubmittedSections = warehouseOperatorApplication.metadata?.resubmittedSections || [];
+        const resubmittedResourcesBySection = warehouseOperatorApplication.metadata?.resubmittedResourcesBySection || {};
+        
         return {
           ...warehouseOperatorApplication,
           authorizedSignatories: [],
@@ -584,6 +590,8 @@ export class WarehouseAdminService {
           financialInformation: null,
           applicantChecklist: null,
           totalCount: 0,
+          resubmittedSections,
+          resubmittedResourcesBySection,
         };
       }
     }
@@ -607,9 +615,15 @@ export class WarehouseAdminService {
       (warehouseOperatorApplication.applicantChecklist?.registrationFee ? 1 : 0) +
       (warehouseOperatorApplication.applicantChecklist?.declaration ? 1 : 0);
 
+    // Extract resubmitted sections and resourceIds from metadata
+    const resubmittedSections = warehouseOperatorApplication.metadata?.resubmittedSections || [];
+    const resubmittedResourcesBySection = warehouseOperatorApplication.metadata?.resubmittedResourcesBySection || {};
+
     return {
       ...warehouseOperatorApplication,
       totalCount,
+      resubmittedSections,
+      resubmittedResourcesBySection,
     };
   }
 
