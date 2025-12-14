@@ -250,7 +250,7 @@ export class WarehouseAdminService {
         ?.filter((hr) => {
           // Check if HR entity ID is assigned (for backward compatibility)
           const hasHrId = assignedResourceIds.has(hr.id);
-          
+
           // Check if any sub-item is assigned
           const hasPersonalDetails = hr.personalDetails?.id && assignedResourceIds.has(hr.personalDetails.id);
           const hasAcademicQualification = hr.academicQualifications?.some((aq) => assignedResourceIds.has(aq.id));
@@ -294,8 +294,8 @@ export class WarehouseAdminService {
                   .replace(/^-+|-+$/g, '');
               };
               const normalizedPhotograph = 'photograph';
-              const isPhotographAssigned = Array.from(personalDetailsFields).some(field => 
-                normalizeFieldName(field).includes(normalizedPhotograph) || 
+              const isPhotographAssigned = Array.from(personalDetailsFields).some(field =>
+                normalizeFieldName(field).includes(normalizedPhotograph) ||
                 normalizedPhotograph.includes(normalizeFieldName(field))
               );
               if (!isPhotographAssigned) {
@@ -320,8 +320,8 @@ export class WarehouseAdminService {
                       .replace(/^-+|-+$/g, '');
                   };
                   const normalizedAcademicCert = 'academic-certificate';
-                  const isAcademicCertAssigned = Array.from(aqFields).some(field => 
-                    normalizeFieldName(field).includes(normalizedAcademicCert) || 
+                  const isAcademicCertAssigned = Array.from(aqFields).some(field =>
+                    normalizeFieldName(field).includes(normalizedAcademicCert) ||
                     normalizedAcademicCert.includes(normalizeFieldName(field))
                   );
                   if (!isAcademicCertAssigned) {
@@ -346,8 +346,8 @@ export class WarehouseAdminService {
                       .replace(/^-+|-+$/g, '');
                   };
                   const normalizedProfCert = 'professional-certificate';
-                  const isProfCertAssigned = Array.from(pqFields).some(field => 
-                    normalizeFieldName(field).includes(normalizedProfCert) || 
+                  const isProfCertAssigned = Array.from(pqFields).some(field =>
+                    normalizeFieldName(field).includes(normalizedProfCert) ||
                     normalizedProfCert.includes(normalizeFieldName(field))
                   );
                   if (!isProfCertAssigned) {
@@ -372,8 +372,8 @@ export class WarehouseAdminService {
                       .replace(/^-+|-+$/g, '');
                   };
                   const normalizedTrainingCert = 'training-certificate';
-                  const isTrainingCertAssigned = Array.from(trainingFields).some(field => 
-                    normalizeFieldName(field).includes(normalizedTrainingCert) || 
+                  const isTrainingCertAssigned = Array.from(trainingFields).some(field =>
+                    normalizeFieldName(field).includes(normalizedTrainingCert) ||
                     normalizedTrainingCert.includes(normalizeFieldName(field))
                   );
                   if (!isTrainingCertAssigned) {
@@ -398,8 +398,8 @@ export class WarehouseAdminService {
                       .replace(/^-+|-+$/g, '');
                   };
                   const normalizedExpLetter = 'experience-letter';
-                  const isExpLetterAssigned = Array.from(expFields).some(field => 
-                    normalizeFieldName(field).includes(normalizedExpLetter) || 
+                  const isExpLetterAssigned = Array.from(expFields).some(field =>
+                    normalizeFieldName(field).includes(normalizedExpLetter) ||
                     normalizedExpLetter.includes(normalizeFieldName(field))
                   );
                   if (!isExpLetterAssigned) {
@@ -539,21 +539,21 @@ export class WarehouseAdminService {
         },
         applicantChecklist: {
           humanResources: {
-            qcPersonnelDocument: true, 
-            warehouseSupervisorDocument: true, 
-            dataEntryOperatorDocument: true, 
+            qcPersonnelDocument: true,
+            warehouseSupervisorDocument: true,
+            dataEntryOperatorDocument: true,
           },
           financialSoundness: {
-            auditedFinancialStatementsDocument: true, 
-            positiveNetWorthDocument: true, 
-            noLoanDefaultsDocument: true, 
-            cleanCreditHistoryDocument: true, 
-            adequateWorkingCapitalDocument: true, 
-            validInsuranceCoverageDocument: true, 
-            noFinancialFraudDocument: true, 
+            auditedFinancialStatementsDocument: true,
+            positiveNetWorthDocument: true,
+            noLoanDefaultsDocument: true,
+            cleanCreditHistoryDocument: true,
+            adequateWorkingCapitalDocument: true,
+            validInsuranceCoverageDocument: true,
+            noFinancialFraudDocument: true,
           },
           registrationFee: {
-            bankPaymentSlipDocument: true, 
+            bankPaymentSlipDocument: true,
           },
           declaration: true,
         },
@@ -580,7 +580,7 @@ export class WarehouseAdminService {
         // If no assignment found, return empty data for HOD
         const resubmittedSections = warehouseOperatorApplication.metadata?.resubmittedSections || [];
         const resubmittedResourcesBySection = warehouseOperatorApplication.metadata?.resubmittedResourcesBySection || {};
-        
+
         return {
           ...warehouseOperatorApplication,
           authorizedSignatories: [],
@@ -655,7 +655,7 @@ export class WarehouseAdminService {
 
       // Add documents array while keeping document for backward compatibility
       (financialInformation.auditReport as any).documents = documentsArray.length > 0 ? documentsArray : undefined;
-      
+
       // Ensure document field is properly formatted if it exists
       if (financialInformation.auditReport.document) {
         (financialInformation.auditReport.document as any) = {
@@ -692,7 +692,7 @@ export class WarehouseAdminService {
 
         // Add documents array while keeping document for backward compatibility
         (taxReturn as any).documents = documentsArray.length > 0 ? documentsArray : undefined;
-        
+
         // Ensure document field is properly formatted if it exists
         if (taxReturn.document) {
           (taxReturn.document as any) = {
@@ -735,7 +735,6 @@ export class WarehouseAdminService {
       },
     });
 
-    console.log('user has roles: ', user?.organization?.id);
 
     if (!user) {
       throw new NotFoundException('User not found');
@@ -761,10 +760,47 @@ export class WarehouseAdminService {
   `);
 
     if (hasPermission(user, Permissions.IS_HOD)) {
+      // get current user's permissions
+      const currentUserPermissions = user.userRoles
+        .flatMap((role) => role.role.rolePermissions.map((permission) => permission.permission.name));      // check if current user is HR, FINANCE, LEGAL, INSPECTION, SECURITY, TECHNICAL, ESG
+
+      // Check permissions
+      const isHr = currentUserPermissions.includes(Permissions.IS_HR);
+      const isFinance = currentUserPermissions.includes(Permissions.IS_FINANCE);
+      const isLegal = currentUserPermissions.includes(Permissions.IS_LEGAL);
+      const isInspection = currentUserPermissions.includes(Permissions.IS_INSPECTION);
+      const isSecurity = currentUserPermissions.includes(Permissions.IS_SECURITY);
+      const isTechnical = currentUserPermissions.includes(Permissions.IS_TECHNICAL);
+      const isEsg = currentUserPermissions.includes(Permissions.IS_ESG);
+
+      // Determine which permission to filter by (priority order)
+      const permissionToFilter = isHr ? Permissions.IS_HR :
+        isFinance ? Permissions.IS_FINANCE :
+          isLegal ? Permissions.IS_LEGAL :
+            isInspection ? Permissions.IS_INSPECTION :
+              isSecurity ? Permissions.IS_SECURITY :
+                isTechnical ? Permissions.IS_TECHNICAL :
+                  isEsg ? Permissions.IS_ESG : null;
+
+      if (!permissionToFilter) {
+        throw new ForbiddenException('User does not have a valid HOD permission');
+      }
+
       if (user.organization) {
-        usersQuery.where(`permission.name = :name AND user.organizationId = :organizationId`, {
-          name: Permissions.IS_EXPERT,
+        usersQuery.where(`permission.name = :expertPermission AND user.organizationId = :organizationId`, {
+          expertPermission: Permissions.IS_EXPERT,
           organizationId: user.organization.id
+        });
+
+        // Ensure user also has the specific HOD permission (IS_HR, IS_FINANCE, etc.)
+        usersQuery.andWhere(`user.id IN (
+          SELECT DISTINCT ur2."userId"
+          FROM user_roles ur2
+          INNER JOIN role_permissions rp2 ON rp2."roleId" = ur2."roleId"
+          INNER JOIN permissions p2 ON p2.id = rp2."permissionId"
+          WHERE p2.name = :hodPermission
+        )`, {
+          hodPermission: permissionToFilter
         });
       }
       else {
