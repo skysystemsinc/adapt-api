@@ -488,25 +488,7 @@ export class AssignmentService {
    */
   async getAssignmentsByApplicationId(applicationId: string, userId?: string) {
     const whereClause: any = { applicationId: applicationId };
-    const user = await this.userRepository.findOne({
-      where: { id: userId },
-      relations: [
-        'userRoles',
-        'userRoles.role',
-        'userRoles.role.rolePermissions',
-        'userRoles.role.rolePermissions.permission',
-      ],
-    });
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-    if (!user.isActive) {
-      throw new ConflictException('User is not active. Please contact the administrator.');
-    }
-    if (!hasPermission(user, Permissions.VIEW_WAREHOUSE_APPLICATION_ASSIGNMENT)) {
-      throw new ForbiddenException('You are not authorized to perform this action.');
-    }
-    if (userId && !hasPermission(user, Permissions.REVIEW_ASSESSMENT) && !hasPermission(user, Permissions.REVIEW_FINAL_APPLICATION)) {
+    if (userId) {
       whereClause.assignedTo = userId;
     }
     
