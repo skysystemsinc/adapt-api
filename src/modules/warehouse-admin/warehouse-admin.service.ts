@@ -567,7 +567,9 @@ export class WarehouseAdminService {
       throw new NotFoundException('Warehouse operator application not found');
     }
 
-    if (user && (hasPermission(user, Permissions.IS_HOD) || hasPermission(user, Permissions.IS_EXPERT))) {
+    if (user && 
+      (!hasPermission(user, Permissions.REVIEW_ASSESSMENT) && 
+      !hasPermission(user, Permissions.REVIEW_FINAL_APPLICATION))) {
       // Fetch assignment for this user and application
       const assignment = await this.dataSource.getRepository(Assignment).findOne({
         where: {
@@ -577,7 +579,9 @@ export class WarehouseAdminService {
         relations: ['sections', 'sections.fields'],
       });
 
-      if (assignment && assignment.sections) {
+      if (assignment && assignment.sections 
+        && !hasPermission(user, Permissions.REVIEW_ASSESSMENT) 
+        && !hasPermission(user, Permissions.REVIEW_FINAL_APPLICATION)) {
         this.filterApplicationByAssignment(warehouseOperatorApplication, assignment);
       } else {
         // If no assignment found, return empty data for HOD
