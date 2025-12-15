@@ -67,6 +67,7 @@ import { ApplicantChecklistHistoryEntity } from './entities/applicant-checklist-
 import { RegistrationApplication } from '../registration-application/entities/registration-application.entity';
 import { RegistrationApplicationDetails } from '../registration-application/entities/registration-application-details.entity';
 import { FormField } from '../forms/entities/form-field.entity';
+import { encryptBuffer } from 'src/common/utils/helper.utils';
 
 export class WarehouseService {
   private readonly uploadDir = 'uploads';
@@ -4617,8 +4618,11 @@ export class WarehouseService {
     const filePath = path.join(this.uploadDir, sanitizedFilename);
     const documentPath = `/uploads/${sanitizedFilename}`;
 
-    // Save file to disk
-    await fs.writeFile(filePath, file.buffer);
+    // Encrypt file before saving
+    const { encrypted, iv, authTag } = encryptBuffer(file.buffer);
+
+    // Save encrypted file to disk
+    await fs.writeFile(filePath, encrypted);
 
     // Detect MIME type
     const mimeType = file.mimetype || 'application/octet-stream';
@@ -4632,6 +4636,8 @@ export class WarehouseService {
       originalFileName: file.originalname,
       filePath: documentPath,
       mimeType,
+      iv,
+      authTag,
       isActive: true,
     });
 

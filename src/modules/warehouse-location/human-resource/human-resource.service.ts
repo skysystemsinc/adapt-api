@@ -14,6 +14,7 @@ import { ProfessionalExperience } from './professional-experience/entities/profe
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import { encryptBuffer } from 'src/common/utils/helper.utils';
 
 @Injectable()
 export class HumanResourceService {
@@ -84,8 +85,11 @@ export class HumanResourceService {
     const filePath = path.join(this.uploadDir, sanitizedFilename);
     const documentPath = `/uploads/${sanitizedFilename}`;
 
-    // Save file to disk
-    await fs.writeFile(filePath, file.buffer);
+    // Encrypt file before saving
+    const { encrypted, iv, authTag } = encryptBuffer(file.buffer);
+
+    // Save encrypted file to disk
+    await fs.writeFile(filePath, encrypted);
 
     // Detect MIME type
     const mimeType = file.mimetype || 'application/octet-stream';
@@ -99,6 +103,8 @@ export class HumanResourceService {
       originalFileName: file.originalname,
       filePath: documentPath,
       mimeType,
+      iv,
+      authTag,
       isActive: true,
     });
 

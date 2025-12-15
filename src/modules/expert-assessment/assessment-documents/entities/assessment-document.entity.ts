@@ -42,6 +42,12 @@ export class AssessmentDocument {
     @Column({ type: 'text', nullable: true })
     description?: string;
 
+    @Column({ type: 'varchar', length: 255, nullable: true })
+    iv?: string;
+
+    @Column({ type: 'varchar', length: 255, nullable: true })
+    authTag?: string;
+
     @Column({ type: 'uuid', nullable: true })
     uploadedBy: string;
 

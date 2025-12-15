@@ -16,6 +16,7 @@ import { WarehouseDocument } from '../../warehouse/entities/warehouse-document.e
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import { encryptBuffer } from 'src/common/utils/helper.utils';
 
 @Injectable()
 export class WarehouseLocationChecklistService {
@@ -88,7 +89,11 @@ export class WarehouseLocationChecklistService {
     const filePath = path.join(this.uploadDir, sanitizedFilename);
     const documentPath = `/uploads/${sanitizedFilename}`;
 
-    await fs.writeFile(filePath, file.buffer);
+    // Encrypt file before saving
+    const { encrypted, iv, authTag } = encryptBuffer(file.buffer);
+
+    // Save encrypted file to disk
+    await fs.writeFile(filePath, encrypted);
 
     const mimeType = file.mimetype || 'application/octet-stream';
 
@@ -100,6 +105,8 @@ export class WarehouseLocationChecklistService {
       originalFileName: file.originalname,
       filePath: documentPath,
       mimeType,
+      iv,
+      authTag,
       isActive: true,
     });
 

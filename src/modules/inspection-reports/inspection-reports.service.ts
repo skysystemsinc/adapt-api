@@ -19,6 +19,7 @@ import { ApproveOrRejectInspectionReportDto, ApproveOrRejectInspectionReportStat
 import { InspectionReportHistory } from './entities/inspection-report-history.entity';
 import { AssessmentSubmissionHistory } from '../expert-assessment/assessment-submission/entities/assessment-submission-history.entity';
 import { AssignmentSection } from '../warehouse/operator/assignment/entities/assignment-section.entity';
+import { encryptBuffer } from 'src/common/utils/helper.utils';
 
 @Injectable()
 export class InspectionReportsService {
@@ -100,8 +101,11 @@ export class InspectionReportsService {
       const globalFilePath = path.join(this.inspectionReportsUploadDir, globalSanitizedFilename);
       const globalDocumentPath = `/uploads/inspection-reports/${globalSanitizedFilename}`;
 
-      // Save global document to disk
-      await fs.writeFile(globalFilePath, globalDocumentFile.buffer);
+      // Encrypt file before saving
+      const { encrypted: globalEncrypted, iv: globalIv, authTag: globalAuthTag } = encryptBuffer(globalDocumentFile.buffer);
+
+      // Save encrypted global document to disk
+      await fs.writeFile(globalFilePath, globalEncrypted);
 
       // Step 2: Create Inspection Report
       const { assessments, ...reportData } = createInspectionReportDto;
@@ -122,6 +126,8 @@ export class InspectionReportsService {
         fileSize: globalDocumentFile.size,
         documentType: 'global_document',
         uploadedBy: userId,
+        iv: globalIv,
+        authTag: globalAuthTag,
       });
 
       await queryRunner.manager.save(AssessmentDocument, globalDocument);
@@ -209,8 +215,11 @@ export class InspectionReportsService {
           const filePath = path.join(this.uploadDir, sanitizedFilename);
           const documentPath = `/uploads/assessment-documents/${sanitizedFilename}`;
 
-          // Save file to disk
-          await fs.writeFile(filePath, file.buffer);
+          // Encrypt file before saving
+          const { encrypted, iv, authTag } = encryptBuffer(file.buffer);
+
+          // Save encrypted file to disk
+          await fs.writeFile(filePath, encrypted);
 
           // Create document record
           const document = this.assessmentDocumentRepository.create({
@@ -221,6 +230,8 @@ export class InspectionReportsService {
             fileSize: file.size,
             documentType: 'supporting_document',
             uploadedBy: userId,
+            iv,
+            authTag,
           });
 
           await queryRunner.manager.save(AssessmentDocument, document);
