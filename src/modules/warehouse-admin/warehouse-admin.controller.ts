@@ -1,10 +1,12 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Req, UploadedFile, UseInterceptors, BadRequestException, Res } from '@nestjs/common';
 import { WarehouseAdminService } from './warehouse-admin.service';
 import { CreateWarehouseAdminDto } from './dto/create-warehouse-admin.dto';
 import { UpdateWarehouseAdminDto } from './dto/update-warehouse-admin.dto';
 import { QueryOperatorApplicationDto } from './dto/query-operator-application.dto';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
-import { ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiConsumes } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response as ExpressResponse } from 'express';
 
 @Controller('warehouse-admin')
 export class WarehouseAdminController {
@@ -71,5 +73,71 @@ export class WarehouseAdminController {
   ) {
     const userId = req.user.id;
     return this.warehouseAdminService.findAllOperators(userId, query);
+  }
+
+  @Get('/operators/:id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get warehouse operator by ID' })
+  findOneOperator(
+    @Param('id') id: string,
+    @Req() req: any
+  ) {
+    return this.warehouseAdminService.findOneOperator(id);
+  }
+
+  @Post('/operators/:id/certificate')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Upload operator certificate' })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB max
+      },
+    }),
+  )
+  async uploadOperatorCertificate(
+    @Param('id') id: string,
+    @UploadedFile() file: any,
+    @Req() req: any,
+  ) {
+    if (!file) {
+      throw new BadRequestException('No file provided');
+    }
+    const userId = req.user.id;
+    return this.warehouseAdminService.uploadOperatorCertificate(id, userId, file);
+  }
+
+  @Get('/operators/:id/certificate/download')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Download operator certificate' })
+  async downloadOperatorCertificate(
+    @Param('id') id: string,
+    @Res() res: ExpressResponse,
+  ) {
+    const { buffer, mimeType, filename } = await this.warehouseAdminService.downloadOperatorCertificate(id);
+
+    // Set security headers
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'");
+    res.setHeader('X-Frame-Options', 'DENY');
+
+    res.send(buffer);
+  }
+
+  @Delete('/operators/:id/certificate')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Delete operator certificate' })
+  async deleteOperatorCertificate(
+    @Param('id') id: string,
+    @Req() req: any,
+  ) {
+    return this.warehouseAdminService.deleteOperatorCertificate(id);
   }
 }

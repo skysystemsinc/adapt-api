@@ -76,6 +76,18 @@ export class WarehouseDocument {
   @Column({ type: 'varchar', length: 100, nullable: true })
   mimeType: string;
 
+  /**
+   * Initialization vector for encrypted files (hex string)
+   */
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  iv: string;
+
+  /**
+   * Authentication tag for encrypted files (hex string)
+   */
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  authTag: string;
+
 //   /**
 //    * File size in bytes
 //    */

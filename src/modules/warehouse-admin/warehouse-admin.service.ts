@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { CreateWarehouseAdminDto } from './dto/create-warehouse-admin.dto';
 import { UpdateWarehouseAdminDto } from './dto/update-warehouse-admin.dto';
 import { QueryOperatorApplicationDto } from './dto/query-operator-application.dto';
@@ -8,7 +8,7 @@ import { Equal, ILike, Not, Repository } from 'typeorm';
 import { User } from '../users/entities/user.entity';
 import { DataSource } from 'typeorm';
 import { Permissions } from '../rbac/constants/permissions.constants';
-import { hasPermission } from 'src/common/utils/helper.utils';
+import { hasPermission, encryptBuffer, decryptBuffer } from 'src/common/utils/helper.utils';
 import { Assignment } from '../warehouse/operator/assignment/entities/assignment.entity';
 import { WarehouseDocument } from '../warehouse/entities/warehouse-document.entity';
 import { RegistrationApplication } from '../registration-application/entities/registration-application.entity';
@@ -920,5 +920,234 @@ export class WarehouseAdminService {
       relations: { user: true },
     });
     return operators;
+  }
+
+  async findOneOperator(id: string) {
+    const operator = await this.warehouseOperatorRepository.findOne({
+      where: { id },
+      relations: { user: true },
+    });
+
+    if (!operator) {
+      return null;
+    }
+
+    // Fetch certificate document if exists
+    const certificate = await this.warehouseDocumentRepository.findOne({
+      where: {
+        documentableType: 'WarehouseOperator',
+        documentableId: id,
+        documentType: 'operator-certificate',
+      },
+    });
+
+    return {
+      ...operator,
+      certificate: certificate ? {
+        id: certificate.id,
+        originalFileName: certificate.originalFileName,
+        filePath: certificate.filePath,
+        iv: certificate.iv,
+        authTag: certificate.authTag,
+        createdAt: certificate.createdAt,
+      } : null,
+    };
+  }
+
+  async uploadOperatorCertificate(operatorId: string, userId: string, file: any) {
+    // Check if operator exists
+    const operator = await this.warehouseOperatorRepository.findOne({
+      where: { id: operatorId },
+    });
+
+    if (!operator) {
+      throw new NotFoundException('Operator not found');
+    }
+
+    // Check if certificate already exists
+    const existingCertificate = await this.warehouseDocumentRepository.findOne({
+      where: {
+        documentableType: 'WarehouseOperator',
+        documentableId: operatorId,
+        documentType: 'operator-certificate',
+      },
+    });
+
+    // Delete old certificate file if exists
+    if (existingCertificate) {
+      const fs = require('fs');
+      const path = require('path');
+      try {
+        const fullPath = path.join(process.cwd(), 'uploads', path.basename(existingCertificate.filePath));
+        if (fs.existsSync(fullPath)) {
+          fs.unlinkSync(fullPath);
+        }
+      } catch (error) {
+        console.error('Error deleting old certificate file:', error);
+      }
+      await this.warehouseDocumentRepository.remove(existingCertificate);
+    }
+
+    // Use the same upload logic as warehouse service
+    const uploadDir = 'uploads';
+    const fs = require('fs');
+    const path = require('path');
+    const { v4: uuidv4 } = require('uuid');
+
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+
+    // Validate file type
+    const allowedExtensions = ['.pdf', '.png', '.jpg', '.jpeg', '.doc', '.docx'];
+    const fileExtension = path.extname(file.originalname).toLowerCase();
+
+    if (!allowedExtensions.includes(fileExtension)) {
+      throw new BadRequestException(
+        `File type '${fileExtension}' is not allowed. Allowed types: ${allowedExtensions.join(', ')}`,
+      );
+    }
+
+    // Validate file size (max 10MB)
+    const maxSizeBytes = 10 * 1024 * 1024;
+    if (file.size > maxSizeBytes) {
+      throw new BadRequestException(
+        `File size ${(file.size / 1024 / 1024).toFixed(2)}MB exceeds maximum allowed size of 10MB`,
+      );
+    }
+
+    // Generate unique filename
+    const sanitizedFilename = `${uuidv4()}${fileExtension}`;
+    const filePath = path.join(uploadDir, sanitizedFilename);
+    const documentPath = `/uploads/${sanitizedFilename}`;
+
+    // Encrypt file before saving
+    const { encrypted, iv, authTag } = encryptBuffer(file.buffer);
+
+    // Save encrypted file to disk
+    await fs.promises.writeFile(filePath, encrypted);
+
+    // Detect MIME type
+    const mimeType = file.mimetype || 'application/octet-stream';
+
+    // Create document record
+    const document = this.warehouseDocumentRepository.create({
+      userId,
+      documentableType: 'WarehouseOperator',
+      documentableId: operatorId,
+      documentType: 'operator-certificate',
+      originalFileName: file.originalname,
+      filePath: documentPath,
+      mimeType,
+      iv,
+      authTag,
+      isActive: true,
+    });
+
+    const savedDocument = await this.warehouseDocumentRepository.save(document);
+
+    return {
+      id: savedDocument.id,
+      filePath: savedDocument.filePath,
+      originalFileName: savedDocument.originalFileName,
+      mimeType: savedDocument.mimeType,
+    };
+  }
+
+  async downloadOperatorCertificate(operatorId: string) {
+    // Find the operator certificate
+    const certificate = await this.warehouseDocumentRepository.findOne({
+      where: {
+        documentableType: 'WarehouseOperator',
+        documentableId: operatorId,
+        documentType: 'operator-certificate',
+      },
+    });
+
+    if (!certificate) {
+      throw new NotFoundException('Certificate not found');
+    }
+
+    // Get file path
+    const fs = require('fs');
+    const path = require('path');
+    const filename = path.basename(certificate.filePath);
+    const filePath = path.join(process.cwd(), 'uploads', filename);
+
+    // Check if file exists
+    if (!fs.existsSync(filePath)) {
+      throw new NotFoundException('Certificate file not found on disk');
+    }
+
+    // Read encrypted file
+    const encryptedBuffer = await fs.promises.readFile(filePath);
+
+    // Decrypt if iv and authTag are present
+    let decryptedBuffer: Buffer;
+    if (certificate.iv && certificate.authTag) {
+      try {
+        decryptedBuffer = decryptBuffer(encryptedBuffer, certificate.iv, certificate.authTag);
+      } catch (error: any) {
+        throw new BadRequestException(`Failed to decrypt certificate: ${error.message}`);
+      }
+    } else {
+      // If no encryption metadata, assume file is not encrypted (backward compatibility)
+      decryptedBuffer = encryptedBuffer;
+    }
+
+    // Determine MIME type and filename
+    const mimeType = certificate.mimeType || 'application/octet-stream';
+    const displayFilename = certificate.originalFileName || filename;
+
+    return {
+      buffer: decryptedBuffer,
+      mimeType,
+      filename: displayFilename,
+    };
+  }
+
+  async deleteOperatorCertificate(id: string) {
+    // Check if operator exists
+    const operator = await this.warehouseOperatorRepository.findOne({
+      where: { id },
+    });
+
+    if (!operator) {
+      throw new NotFoundException('Operator not found');
+    }
+
+    // Find the certificate document
+    const certificate = await this.warehouseDocumentRepository.findOne({
+      where: {
+        documentableType: 'WarehouseOperator',
+        documentableId: id,
+        documentType: 'operator-certificate',
+      },
+    });
+
+    if (!certificate) {
+      throw new NotFoundException('Certificate not found');
+    }
+
+    // Delete the file from disk
+    const fs = require('fs');
+    const path = require('path');
+    try {
+      const filename = path.basename(certificate.filePath);
+      const filePath = path.join(process.cwd(), 'uploads', filename);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    } catch (error) {
+      console.error('Error deleting certificate file:', error);
+      // Continue with database deletion even if file deletion fails
+    }
+
+    // Delete the certificate document from database
+    await this.warehouseDocumentRepository.remove(certificate);
+
+    return {
+      message: 'Certificate deleted successfully',
+    };
   }
 }
