@@ -36,31 +36,31 @@ export class WarehouseLocation {
     @JoinColumn({ name: 'userId' })
     user: User;
 
-    @OneToOne(() => Facility, (facility) => facility.warehouseLocation, {onDelete: 'CASCADE'})
+    @OneToOne(() => Facility, (facility) => facility.warehouseLocation, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'facilityId' })
     facility: Facility;
 
-    @OneToOne(() => Contact, (contact) => contact.warehouseLocation, {onDelete: 'CASCADE'})
+    @OneToOne(() => Contact, (contact) => contact.warehouseLocation, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'contactId' })
     contact: Contact;
 
-    @OneToOne(() => Jurisdiction, (jurisdiction) => jurisdiction.warehouseLocation, {onDelete: 'CASCADE'})
+    @OneToOne(() => Jurisdiction, (jurisdiction) => jurisdiction.warehouseLocation, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'jurisdictionId' })
     jurisdiction: Jurisdiction;
 
-    @OneToOne(() => Security, (security) => security.warehouseLocation, {onDelete: 'CASCADE'})
+    @OneToOne(() => Security, (security) => security.warehouseLocation, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'securityId' })
     security: Security;
 
-    @OneToOne(() => FireSafety, (fireSafety) => fireSafety.warehouseLocation, {onDelete: 'CASCADE'})
+    @OneToOne(() => FireSafety, (fireSafety) => fireSafety.warehouseLocation, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'fireSafetyId' })
     fireSafety: FireSafety;
 
-    @OneToOne(() => Weighing, (weighing) => weighing.warehouseLocation, {onDelete: 'CASCADE'})
+    @OneToOne(() => Weighing, (weighing) => weighing.warehouseLocation, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'weighingId' })
     weighing: Weighing;
 
-    @OneToOne(() => TechnicalQualitative, (technicalQualitative) => technicalQualitative.warehouseLocation, {onDelete: 'CASCADE'})
+    @OneToOne(() => TechnicalQualitative, (technicalQualitative) => technicalQualitative.warehouseLocation, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'technicalQualitativeId' })
     technicalQualitative: TechnicalQualitative;
 
@@ -86,6 +86,9 @@ export class WarehouseLocation {
         default: WarehouseLocationStatus.DRAFT,
     })
     status: WarehouseLocationStatus;
+
+    @Column({ type: 'jsonb', nullable: true, default: {} })
+    metadata: any;
 
     @CreateDateColumn()
     createdAt: Date;
