@@ -97,10 +97,17 @@ export class WarehouseLocationAdminService {
     // Exclude DRAFT status applications
     queryBuilder.andWhere('location.status != :draftStatus', { draftStatus: WarehouseLocationStatus.DRAFT });
 
-    // If user is HOD or Expert, filter by assignment
+    // For HOD/Expert users: filter to only locations where they have ANY assignment
+    // (not just where the latest assignment is to them)
     if (user && (hasPermission(user, Permissions.IS_HOD) || hasPermission(user, Permissions.IS_EXPERT))) {
-      queryBuilder
-        .andWhere('assignment."assignedTo" = :assignedToUserId', { assignedToUserId: userId });
+      queryBuilder.andWhere(
+        `location.id IN (
+          SELECT DISTINCT a."applicationLocationId" 
+          FROM assignment a 
+          WHERE a."assignedTo" = :assignedToUserId
+        )`,
+        { assignedToUserId: userId }
+      );
     }
 
     if (status) {
