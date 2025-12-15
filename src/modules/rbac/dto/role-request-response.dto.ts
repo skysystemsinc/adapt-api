@@ -43,6 +43,13 @@ export class RoleRequestResponseDto {
   @Expose()
   description?: string;
 
+  // Original role metadata (for updates)
+  @Expose()
+  originalName?: string;
+
+  @Expose()
+  originalDescription?: string;
+
   @Expose()
   status: RoleRequestStatus;
 

@@ -29,7 +29,7 @@ export class RoleRequestsService {
     @InjectRepository(Permission)
     private readonly permissionRepository: Repository<Permission>,
     private readonly dataSource: DataSource,
-  ) {}
+  ) { }
 
   /**
    * Create a role request for approval
@@ -52,6 +52,20 @@ export class RoleRequestsService {
 
       if (!role) {
         throw new NotFoundException(`Role with ID '${createRoleRequestDto.roleId}' not found`);
+      }
+
+      // 2. Check for pending role requests
+      const pendingRequest = await this.roleRequestRepository.findOne({
+        where: {
+          roleId: createRoleRequestDto.roleId,
+          status: RoleRequestStatus.PENDING,
+        },
+      });
+
+      if (pendingRequest) {
+        throw new BadRequestException(
+          'This role already has a pending request. Please resolve it before creating a new one.',
+        );
       }
 
       // Get current version of the role to determine next version
@@ -444,7 +458,25 @@ export class RoleRequestsService {
       permissions.forEach((perm) => permissionMap.set(perm.id, perm));
     }
 
+    // Collect roles for requests that are tied to an existing role
+    const roleIds = Array.from(
+      new Set(
+        requests
+          .map((req) => req.roleId)
+          .filter((id): id is string => !!id),
+      ),
+    );
+
+    const roleMap = new Map<string, Role>();
+    if (roleIds.length > 0) {
+      const roles = await this.roleRepository.find({
+        where: { id: In(roleIds) },
+      });
+      roles.forEach((role) => roleMap.set(role.id, role));
+    }
+
     return requests.map((request) => {
+      const originalRole = request.roleId ? roleMap.get(request.roleId) : undefined;
       const permissions = request.permissionRequests.map((permReq) =>
         plainToInstance(
           RolePermissionRequestResponseDto,
@@ -460,6 +492,8 @@ export class RoleRequestsService {
         RoleRequestResponseDto,
         {
           ...request,
+          originalName: originalRole?.name,
+          originalDescription: originalRole?.description,
           permissions,
         },
         { excludeExtraneousValues: true },
