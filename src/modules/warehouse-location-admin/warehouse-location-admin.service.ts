@@ -7,6 +7,7 @@ import { User } from '../users/entities/user.entity';
 import { Permissions } from '../rbac/constants/permissions.constants';
 import { hasPermission } from 'src/common/utils/helper.utils';
 import { Assignment } from '../warehouse/operator/assignment/entities/assignment.entity';
+import { RegistrationApplication } from '../registration-application/entities/registration-application.entity';
 
 @Injectable()
 export class WarehouseLocationAdminService {
@@ -31,7 +32,10 @@ export class WarehouseLocationAdminService {
     @InjectRepository(User)
     private usersRepository: Repository<User>,
     private dataSource: DataSource,
-  ) {}
+
+    @InjectRepository(RegistrationApplication)
+    private registrationApplicationRequestRepository: Repository<RegistrationApplication>,
+  ) { }
 
   async findAllWarehouseLocationsPaginated(query: QueryLocationApplicationDto, userId: string) {
     const { page = 1, status, search, limit = 10, sortBy = 'createdAt', sortOrder = 'ASC' } = query;
@@ -670,8 +674,8 @@ export class WarehouseLocationAdminService {
               .replace(/^-+|-+$/g, '');
           };
           const normalizedWeighbridgeCert = 'weighbridge-calibration-certificate';
-          const isWeighbridgeCertAssigned = Array.from(weighingFields).some(field => 
-            normalizeFieldName(field).includes(normalizedWeighbridgeCert) || 
+          const isWeighbridgeCertAssigned = Array.from(weighingFields).some(field =>
+            normalizeFieldName(field).includes(normalizedWeighbridgeCert) ||
             normalizedWeighbridgeCert.includes(normalizeFieldName(field))
           );
           if (!isWeighbridgeCertAssigned) {
@@ -744,8 +748,8 @@ export class WarehouseLocationAdminService {
                   .replace(/^-+|-+$/g, '');
               };
               const normalizedPhotograph = 'photograph';
-              const isPhotographAssigned = Array.from(personalDetailsFields).some(field => 
-                normalizeFieldName(field).includes(normalizedPhotograph) || 
+              const isPhotographAssigned = Array.from(personalDetailsFields).some(field =>
+                normalizeFieldName(field).includes(normalizedPhotograph) ||
                 normalizedPhotograph.includes(normalizeFieldName(field))
               );
               if (!isPhotographAssigned) {
@@ -770,8 +774,8 @@ export class WarehouseLocationAdminService {
                       .replace(/^-+|-+$/g, '');
                   };
                   const normalizedAcademicCert = 'academic-certificate';
-                  const isAcademicCertAssigned = Array.from(aqFields).some(field => 
-                    normalizeFieldName(field).includes(normalizedAcademicCert) || 
+                  const isAcademicCertAssigned = Array.from(aqFields).some(field =>
+                    normalizeFieldName(field).includes(normalizedAcademicCert) ||
                     normalizedAcademicCert.includes(normalizeFieldName(field))
                   );
                   if (!isAcademicCertAssigned) {
@@ -796,8 +800,8 @@ export class WarehouseLocationAdminService {
                       .replace(/^-+|-+$/g, '');
                   };
                   const normalizedProfCert = 'professional-certificate';
-                  const isProfCertAssigned = Array.from(pqFields).some(field => 
-                    normalizeFieldName(field).includes(normalizedProfCert) || 
+                  const isProfCertAssigned = Array.from(pqFields).some(field =>
+                    normalizeFieldName(field).includes(normalizedProfCert) ||
                     normalizedProfCert.includes(normalizeFieldName(field))
                   );
                   if (!isProfCertAssigned) {
@@ -822,8 +826,8 @@ export class WarehouseLocationAdminService {
                       .replace(/^-+|-+$/g, '');
                   };
                   const normalizedTrainingCert = 'training-certificate';
-                  const isTrainingCertAssigned = Array.from(trainingFields).some(field => 
-                    normalizeFieldName(field).includes(normalizedTrainingCert) || 
+                  const isTrainingCertAssigned = Array.from(trainingFields).some(field =>
+                    normalizeFieldName(field).includes(normalizedTrainingCert) ||
                     normalizedTrainingCert.includes(normalizeFieldName(field))
                   );
                   if (!isTrainingCertAssigned) {
@@ -848,8 +852,8 @@ export class WarehouseLocationAdminService {
                       .replace(/^-+|-+$/g, '');
                   };
                   const normalizedExpLetter = 'experience-letter';
-                  const isExpLetterAssigned = Array.from(expFields).some(field => 
-                    normalizeFieldName(field).includes(normalizedExpLetter) || 
+                  const isExpLetterAssigned = Array.from(expFields).some(field =>
+                    normalizeFieldName(field).includes(normalizedExpLetter) ||
                     normalizedExpLetter.includes(normalizeFieldName(field))
                   );
                   if (!isExpLetterAssigned) {
@@ -899,7 +903,7 @@ export class WarehouseLocationAdminService {
               { field: 'agreement-undertaking', doc: 'agreementUndertakingDocument' },
             ];
             documentFields.forEach(({ field, doc }) => {
-              const isAssigned = Array.from(ownershipFields).some(f => 
+              const isAssigned = Array.from(ownershipFields).some(f =>
                 normalizeFieldName(f).includes(field) || field.includes(normalizeFieldName(f))
               );
               if (!isAssigned) {
@@ -921,7 +925,7 @@ export class WarehouseLocationAdminService {
               { field: 'data-entry-operator', doc: 'dataEntryOperatorDocument' },
             ];
             documentFields.forEach(({ field, doc }) => {
-              const isAssigned = Array.from(hrKeyFields).some(f => 
+              const isAssigned = Array.from(hrKeyFields).some(f =>
                 normalizeFieldName(f).includes(field) || field.includes(normalizeFieldName(f))
               );
               if (!isAssigned) {
@@ -937,8 +941,8 @@ export class WarehouseLocationAdminService {
           const locationRiskKey = `checklist-${application.warehouseLocationChecklist.locationRisk.id}`;
           const locationRiskFields = assignedFields.get(locationRiskKey);
           if (locationRiskFields && locationRiskFields.size > 0) {
-            const isAssigned = Array.from(locationRiskFields).some(f => 
-              normalizeFieldName(f).includes('warehouse-outside-flooding-area') || 
+            const isAssigned = Array.from(locationRiskFields).some(f =>
+              normalizeFieldName(f).includes('warehouse-outside-flooding-area') ||
               'warehouse-outside-flooding-area'.includes(normalizeFieldName(f))
             );
             if (!isAssigned) {
@@ -961,7 +965,7 @@ export class WarehouseLocationAdminService {
               { field: 'cctv-cameras', doc: 'cctvCamerasDocument' },
             ];
             documentFields.forEach(({ field, doc }) => {
-              const isAssigned = Array.from(securityPerimeterFields).some(f => 
+              const isAssigned = Array.from(securityPerimeterFields).some(f =>
                 normalizeFieldName(f).includes(field) || field.includes(normalizeFieldName(f))
               );
               if (!isAssigned) {
@@ -993,7 +997,7 @@ export class WarehouseLocationAdminService {
               { field: 'temperature-sensor-cables', doc: 'temperatureSensorCablesDocument' },
             ];
             documentFields.forEach(({ field, doc }) => {
-              const isAssigned = Array.from(infraFields).some(f => 
+              const isAssigned = Array.from(infraFields).some(f =>
                 normalizeFieldName(f).includes(field) || field.includes(normalizeFieldName(f))
               );
               if (!isAssigned) {
@@ -1021,7 +1025,7 @@ export class WarehouseLocationAdminService {
               { field: 'fire-safety-measures', doc: 'fireSafetyMeasuresDocument' },
             ];
             documentFields.forEach(({ field, doc }) => {
-              const isAssigned = Array.from(storageFields).some(f => 
+              const isAssigned = Array.from(storageFields).some(f =>
                 normalizeFieldName(f).includes(field) || field.includes(normalizeFieldName(f))
               );
               if (!isAssigned) {
@@ -1037,8 +1041,8 @@ export class WarehouseLocationAdminService {
           const regFeeKey = `checklist-${application.warehouseLocationChecklist.registrationFee.id}`;
           const regFeeFields = assignedFields.get(regFeeKey);
           if (regFeeFields && regFeeFields.size > 0) {
-            const isAssigned = Array.from(regFeeFields).some(f => 
-              normalizeFieldName(f).includes('bank-payment-slip') || 
+            const isAssigned = Array.from(regFeeFields).some(f =>
+              normalizeFieldName(f).includes('bank-payment-slip') ||
               'bank-payment-slip'.includes(normalizeFieldName(f))
             );
             if (!isAssigned) {
@@ -1069,7 +1073,10 @@ export class WarehouseLocationAdminService {
    * @param userId - The ID of the user making the request
    * @param applicationId - Optional application ID to filter out already-assigned users
    */
-  async findAllWarehouseLocationRoles(userId: string, applicationId?: string) {
+  async findAllWarehouseLocationRoles(
+    userId: string,
+    applicationId?: string
+  ) {
     const user = await this.usersRepository.findOne({
       where: { id: userId },
       relations: {
@@ -1088,7 +1095,22 @@ export class WarehouseLocationAdminService {
       throw new NotFoundException('User not found');
     }
 
-    const usersQuery = await this.dataSource
+    /**
+     * 🔹 1. KYC / application existence check (MISSING EARLIER)
+     */
+    let isKycVerification = false;
+
+    if (applicationId) {
+      const application =
+        await this.registrationApplicationRequestRepository.findOne({
+          where: { id: applicationId },
+          select: { id: true },
+        });
+
+      if (application) isKycVerification = true;
+    }
+
+    const usersQuery = this.dataSource
       .getRepository(User)
       .createQueryBuilder('user')
       .innerJoin('user.userRoles', 'ur')
@@ -1107,27 +1129,114 @@ export class WarehouseLocationAdminService {
         ) AS users
       `);
 
-    if (hasPermission(user, Permissions.IS_HOD)) {
-      if (user.organization) {
-        usersQuery.where(`permission.name = :name AND user.organizationId = :organizationId`, {
-          name: Permissions.IS_EXPERT,
-          organizationId: user.organization.id
-        });
-      } else {
-        throw new ForbiddenException('User does not have an organization');
-      }
-    } else if (hasPermission(user, Permissions.MANAGE_WAREHOUSE_APPLICATION_ASSIGNMENT)) {
-      usersQuery.where(`permission.name = :name`, { name: Permissions.IS_HOD });
+    /**
+     * 🔹 2. Review permissions + Applicant exclusion (MISSING)
+     */
+    if (
+      isKycVerification ||
+      hasPermission(user, Permissions.REVIEW_ASSESSMENT) ||
+      hasPermission(user, Permissions.REVIEW_FINAL_APPLICATION)
+    ) {
+      usersQuery.where(`role.name != :applicantRole`, {
+        applicantRole: 'Applicant',
+      });
     }
 
-    // If applicationId is provided, exclude users already assigned to this application
-    if (applicationId) {
+    /**
+     * 🔹 3. HOD logic with priority permission filtering (MISSING)
+     */
+    else if (hasPermission(user, Permissions.IS_HOD)) {
+      const currentUserPermissions = user.userRoles.flatMap((role) =>
+        role.role.rolePermissions.map(
+          (permission) => permission.permission.name
+        )
+      );
+
+      const isHr = currentUserPermissions.includes(Permissions.IS_HR);
+      const isFinance = currentUserPermissions.includes(Permissions.IS_FINANCE);
+      const isLegal = currentUserPermissions.includes(Permissions.IS_LEGAL);
+      const isInspection =
+        currentUserPermissions.includes(Permissions.IS_INSPECTION);
+      const isSecurity =
+        currentUserPermissions.includes(Permissions.IS_SECURITY);
+      const isTechnical =
+        currentUserPermissions.includes(Permissions.IS_TECHNICAL);
+      const isEsg = currentUserPermissions.includes(Permissions.IS_ESG);
+
+      const permissionToFilter = isHr
+        ? Permissions.IS_HR
+        : isFinance
+          ? Permissions.IS_FINANCE
+          : isLegal
+            ? Permissions.IS_LEGAL
+            : isInspection
+              ? Permissions.IS_INSPECTION
+              : isSecurity
+                ? Permissions.IS_SECURITY
+                : isTechnical
+                  ? Permissions.IS_TECHNICAL
+                  : isEsg
+                    ? Permissions.IS_ESG
+                    : null;
+
+      if (!permissionToFilter) {
+        throw new ForbiddenException(
+          'User does not have a valid HOD permission'
+        );
+      }
+
+      if (!user.organization) {
+        throw new ForbiddenException('User does not have an organization');
+      }
+
+      usersQuery
+        .where(
+          `permission.name = :expertPermission 
+           AND user.organizationId = :organizationId`,
+          {
+            expertPermission: Permissions.IS_EXPERT,
+            organizationId: user.organization.id,
+          }
+        )
+        .andWhere(
+          `
+          user.id IN (
+            SELECT DISTINCT ur2."userId"
+            FROM user_roles ur2
+            INNER JOIN role_permissions rp2 
+              ON rp2."roleId" = ur2."roleId"
+            INNER JOIN permissions p2 
+              ON p2.id = rp2."permissionId"
+            WHERE p2.name = :hodPermission
+          )
+        `,
+          { hodPermission: permissionToFilter }
+        );
+    }
+
+    /**
+     * 🔹 4. Assignment manager logic (UNCHANGED)
+     */
+    else if (
+      hasPermission(user, Permissions.MANAGE_WAREHOUSE_APPLICATION_ASSIGNMENT)
+    ) {
+      usersQuery.where(`permission.name = :name`, {
+        name: Permissions.IS_HOD,
+      });
+    }
+
+    /**
+     * 🔹 5. Exclude already assigned users (MATCHED WITH 1st API)
+     */
+    if (applicationId && !isKycVerification) {
       usersQuery.andWhere(
-        `user.id NOT IN (
-          SELECT DISTINCT a."assignedTo" 
-          FROM assignment a 
+        `
+        user.id NOT IN (
+          SELECT DISTINCT a."assignedTo"
+          FROM assignment a
           WHERE a."applicationLocationId" = :applicationId
-        )`,
+        )
+      `,
         { applicationId }
       );
     }
@@ -1135,12 +1244,23 @@ export class WarehouseLocationAdminService {
     usersQuery.groupBy('role.id');
     const users = await usersQuery.getRawMany();
 
-    // Convert to object keyed by role
+    /**
+     * 🔹 6. Deduplicate users per role (MISSING)
+     */
     const grouped: Record<string, any[]> = {};
+
     for (const row of users) {
-      grouped[row.role] = row.users;
+      const seenUserIds = new Set<string>();
+      const uniqueUsers = row.users.filter((u: any) => {
+        if (seenUserIds.has(u.id)) return false;
+        seenUserIds.add(u.id);
+        return true;
+      });
+
+      grouped[row.role] = uniqueUsers;
     }
 
     return grouped;
   }
+
 }
