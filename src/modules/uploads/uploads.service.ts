@@ -16,6 +16,7 @@ import { FormField } from '../forms/entities/form-field.entity';
 import { FileUpload } from './entities/file-upload.entity';
 import type { UploadFileResponseDto } from './dto/upload-file.dto';
 import { encryptBuffer, decryptBuffer } from 'src/common/utils/helper.utils';
+import { ClamAVService } from '../clamav/clamav.service';
 
 /**
  * MIME type mappings for file extensions
@@ -55,6 +56,7 @@ export class UploadsService {
     private readonly formFieldRepository: Repository<FormField>,
     @InjectRepository(FileUpload)
     private readonly fileUploadRepository: Repository<FileUpload>,
+    private readonly clamAVService: ClamAVService,
   ) {
     // Ensure upload directory exists
     this.ensureUploadDirectory();
@@ -132,6 +134,51 @@ export class UploadsService {
       throw new BadRequestException(
         `File MIME type '${detectedMimeType}' does not match extension '${fileExtension}'. Possible file type mismatch or malicious file.`,
       );
+    }
+
+    // 5.5. Scan file with ClamAV before processing
+    try {
+      this.logger.log(`🔍 Scanning file with ClamAV: ${file.originalname}`);
+      const scanResult = await this.clamAVService.scanBuffer(
+        file.buffer,
+        file.originalname,
+      );
+
+      if (scanResult.isInfected) {
+        this.logger.warn(
+          `🚨 Infected file detected: ${file.originalname}, Viruses: ${scanResult.viruses.join(', ')}`,
+        );
+        throw new BadRequestException(
+          `File is infected with malware: ${scanResult.viruses.join(', ')}. Upload rejected.`,
+        );
+      }
+
+      this.logger.log(`✅ File passed ClamAV scan: ${file.originalname}`);
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        // Always reject infected files, regardless of CLAMAV_SCAN setting
+        throw error;
+      }
+      
+      // Handle ClamAV service failures (unavailable, timeout, etc.)
+      const isMandatory = this.clamAVService.getScanMandatory();
+      
+      if (isMandatory) {
+        // CLAMAV_SCAN=true: Block upload if scan fails
+        this.logger.error(
+          `ClamAV scan failed for ${file.originalname}: ${error.message}`,
+          error.stack,
+        );
+        throw new BadRequestException(
+          `Virus scanning unavailable: ${error.message}. Upload blocked due to mandatory scanning.`,
+        );
+      } else {
+        // CLAMAV_SCAN=false: Log warning but allow upload (bypass on failure)
+        this.logger.warn(
+          `ClamAV scan failed for ${file.originalname}: ${error.message}. Bypassing scan and allowing upload.`,
+          error.stack,
+        );
+      }
     }
 
     // 6. Sanitize filename: UUID + original extension

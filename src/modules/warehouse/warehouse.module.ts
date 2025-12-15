@@ -34,6 +34,7 @@ import { WarehouseApplicantVerificationModule } from './warehouse-applicant-veri
 import { AssignmentModule } from './operator/assignment/assignment.module';
 import { ReviewModule } from './review/review.module';
 import { WarehouseOperator } from './entities/warehouse-operator.entity';
+import { ClamAVModule } from '../clamav/clamav.module';
 import { AssignmentSection } from './operator/assignment/entities/assignment-section.entity';
 import { Assignment } from './operator/assignment/entities/assignment.entity';
 import { AuthorizedSignatoryHistory } from './entities/authorized-signatories-history.entity';
@@ -110,6 +111,7 @@ import { FormField } from '../forms/entities/form-field.entity';
     WarehouseApplicantVerificationModule,
     AssignmentModule,
     ReviewModule,
+    ClamAVModule,
   ],
   exports: [WarehouseService],
 })
