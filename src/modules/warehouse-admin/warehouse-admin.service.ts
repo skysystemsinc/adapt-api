@@ -4,7 +4,7 @@ import { UpdateWarehouseAdminDto } from './dto/update-warehouse-admin.dto';
 import { QueryOperatorApplicationDto } from './dto/query-operator-application.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { WarehouseOperatorApplicationRequest, WarehouseOperatorApplicationStatus } from '../warehouse/entities/warehouse-operator-application-request.entity';
-import { Equal, Not, Repository } from 'typeorm';
+import { Equal, ILike, Not, Repository } from 'typeorm';
 import { User } from '../users/entities/user.entity';
 import { DataSource } from 'typeorm';
 import { Permissions } from '../rbac/constants/permissions.constants';
@@ -12,6 +12,7 @@ import { hasPermission } from 'src/common/utils/helper.utils';
 import { Assignment } from '../warehouse/operator/assignment/entities/assignment.entity';
 import { WarehouseDocument } from '../warehouse/entities/warehouse-document.entity';
 import { RegistrationApplication } from '../registration-application/entities/registration-application.entity';
+import { WarehouseOperator } from '../warehouse/entities/warehouse-operator.entity';
 
 @Injectable()
 export class WarehouseAdminService {
@@ -26,6 +27,8 @@ export class WarehouseAdminService {
     @InjectRepository(WarehouseDocument)
     private warehouseDocumentRepository: Repository<WarehouseDocument>,
     private dataSource: DataSource,
+    @InjectRepository(WarehouseOperator)
+    private warehouseOperatorRepository: Repository<WarehouseOperator>,
   ) { }
 
   async findAllWareHouseOperatorsPaginated(query: QueryOperatorApplicationDto, userId: string) {
@@ -896,5 +899,26 @@ export class WarehouseAdminService {
       return grouped;
     }
     return {};
+  }
+
+  async findAllOperators(userId: string, query: QueryOperatorApplicationDto) {
+    const { page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'ASC', search } = query;
+    
+    // find all warehouse operators with pagination
+    // if search is provided, search by user name or email
+    const whereCondition: any = {};
+    if (search) {
+      whereCondition.user.firstName = ILike(`%${search}%`);
+      whereCondition.user.lastName = ILike(`%${search}%`);
+      whereCondition.user.email = ILike(`%${search}%`);
+    } 
+    const operators = await this.warehouseOperatorRepository.findAndCount({
+      where: whereCondition,
+      skip: (page - 1) * limit,
+      take: limit,
+      order: { [sortBy]: sortOrder as 'ASC' | 'DESC' },
+      relations: { user: true },
+    });
+    return operators;
   }
 }

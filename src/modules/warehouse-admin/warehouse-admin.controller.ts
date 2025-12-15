@@ -60,4 +60,16 @@ export class WarehouseAdminController {
   remove(@Param('id') id: string) {
     return this.warehouseAdminService.remove(+id);
   }
+
+  @Get('/operators')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get all warehouse operators' })
+  findAllOperators(
+    @Query() query: QueryOperatorApplicationDto,
+    @Req() req: any
+  ) {
+    const userId = req.user.id;
+    return this.warehouseAdminService.findAllOperators(userId, query);
+  }
 }
