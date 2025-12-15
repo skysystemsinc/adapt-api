@@ -1,7 +1,7 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { UpdateAssignmentDto } from './dto/update-assignment.dto';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, Repository, UpdateResult } from 'typeorm';
 import { User } from 'src/modules/users/entities/user.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Assignment, AssignmentLevel, AssignmentStatus } from './entities/assignment.entity';
@@ -12,6 +12,7 @@ import { hasPermission } from 'src/common/utils/helper.utils';
 import { RejectApplicationDto } from './dto/reject-application.dto';
 import { WarehouseOperatorApplicationRequest, WarehouseOperatorApplicationStatus } from '../../entities/warehouse-operator-application-request.entity';
 import { ApplicationRejectionEntity } from '../../entities/application-rejection.entity';
+import { WarehouseLocation, WarehouseLocationStatus } from 'src/modules/warehouse-location/entities/warehouse-location.entity';
 
 @Injectable()
 export class AssignmentService {
@@ -181,10 +182,21 @@ export class AssignmentService {
       throw new ForbiddenException('You are not authorized to perform this action.');
     }
 
-    const application = await this.dataSource.getRepository(WarehouseOperatorApplicationRequest).findOne({
+    let application: WarehouseOperatorApplicationRequest | WarehouseLocation | null = null;
+    let isLocationApplication = false;
+    // CHECK IF THE APPLICATION IS A WAREHOUSE OPERATOR APPLICATION
+    application = await this.dataSource.getRepository(WarehouseOperatorApplicationRequest).findOne({
       where: { id: applicationId },
     });
 
+    if (!application) {
+      // CHECK IF THE APPLICATION IS A WAREHOUSE LOCATION APPLICATION
+      application = await this.dataSource.getRepository(WarehouseLocation).findOne({
+        where: { id: applicationId },
+      });
+      isLocationApplication = true;
+    }
+    // IF THE APPLICATION IS NOT FOUND, THROW AN ERROR
     if (!application) {
       throw new NotFoundException('Application not found');
     }
@@ -212,7 +224,9 @@ export class AssignmentService {
       const assignment = await this.dataSource.transaction(async (transactionalEntityManager) => {
         // Create assignment entity
         const assignmentEntity = transactionalEntityManager.create(Assignment, {
-          applicationId: applicationId,
+          ...(isLocationApplication ? 
+            { applicationLocationId: applicationId } : 
+            { applicationId: applicationId }),
           assignedBy: assignedById,
           assignedTo: application.userId,
           level: AssignmentLevel.HOD_TO_APPLICANT,
@@ -248,7 +262,9 @@ export class AssignmentService {
 
         // Create application rejection entity
         const applicationRejectionEntity = transactionalEntityManager.create(ApplicationRejectionEntity, {
-          applicationId: applicationId,
+          ...(isLocationApplication ? 
+            { locationApplicationId: applicationId } : 
+            { applicationId: applicationId }),
           rejectionBy: assignedById,
           rejectionReason: rejectApplicationDto.remarks,
           unlockedSections: rejectApplicationDto.sections.map(section => section.sectionType),
@@ -259,32 +275,45 @@ export class AssignmentService {
 
         const assignmentHodToExpertCount = await transactionalEntityManager.getRepository(Assignment).count({
           where: {
-            applicationId: applicationId,
+            ...(isLocationApplication ? 
+              { applicationLocationId: applicationId } : 
+              { applicationId: applicationId }),
             level: AssignmentLevel.HOD_TO_EXPERT,
           },
         });
 
         const assignmentHodToApplicantCount = await transactionalEntityManager.getRepository(Assignment).count({
           where: {
-            applicationId: applicationId,
+            ...(isLocationApplication ? 
+              { applicationLocationId: applicationId } : 
+              { applicationId: applicationId }),
             level: AssignmentLevel.HOD_TO_APPLICANT,
           },
         });
 
         let totalAssignmentCount = assignmentHodToExpertCount + assignmentHodToApplicantCount;
 
+        let updateResult: UpdateResult | null = null;
         if (totalAssignmentCount >= 1 && assignmentHodToApplicantCount > 0) {
-          const updateResult = await transactionalEntityManager.getRepository(WarehouseOperatorApplicationRequest).update(applicationId, {
-            status: WarehouseOperatorApplicationStatus.REJECTED,
-          });
-
-          if (updateResult.affected === 0) {
-            throw new ConflictException('Failed to update application status');
+          if (isLocationApplication) {
+            updateResult = await transactionalEntityManager.getRepository(WarehouseLocation).update(applicationId, {
+              status: WarehouseLocationStatus.REJECTED,
+              metadata: {
+                rejectionReason: rejectApplicationDto.remarks || null,
+              } as any,
+            });
+          } else {
+            updateResult = await transactionalEntityManager.getRepository(WarehouseOperatorApplicationRequest).update(applicationId, {
+              status: WarehouseOperatorApplicationStatus.REJECTED,
+            });
           }
-        }
+
+            if (updateResult.affected === 0) {
+              throw new ConflictException('Failed to update application status');
+            }
+          }
 
         return savedAssignment;
-
       });
 
       return {

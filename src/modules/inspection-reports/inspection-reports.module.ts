@@ -12,6 +12,7 @@ import { ExpertAssessment } from '../expert-assessment/entities/expert-assessmen
 import { ReviewEntity } from '../warehouse/review/entities/review.entity';
 import { AuthModule } from '../auth/auth.module';
 import { RBACModule } from '../rbac/rbac.module';
+import { ClamAVModule } from '../clamav/clamav.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { RBACModule } from '../rbac/rbac.module';
       inject: [ConfigService],
     }),
     RBACModule,
+    ClamAVModule,
   ],
   controllers: [InspectionReportsController],
   providers: [InspectionReportsService],

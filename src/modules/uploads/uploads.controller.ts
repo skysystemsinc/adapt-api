@@ -5,6 +5,7 @@ import {
   Body,
   Param,
   UploadedFile,
+  UploadedFiles,
   UseInterceptors,
   UseGuards,
   HttpCode,
@@ -13,7 +14,7 @@ import {
   BadRequestException,
   Req,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import {
   ApiTags,
   ApiOperation,
@@ -28,11 +29,19 @@ import * as path from 'path';
 import { UploadsService } from './uploads.service';
 import { UploadFileDto, UploadFileResponseDto } from './dto/upload-file.dto';
 import { UploadRateLimitGuard } from './guards/upload-rate-limit.guard';
+import { ClamAVService } from '../clamav/clamav.service';
+import {
+  FileScanResponseDto,
+  BatchScanResponseDto,
+} from '../clamav/dto/scan-result.dto';
 
 @ApiTags('File Uploads')
 @Controller('uploads')
 export class UploadsController {
-  constructor(private readonly uploadsService: UploadsService) {}
+  constructor(
+    private readonly uploadsService: UploadsService,
+    private readonly clamAVService: ClamAVService,
+  ) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -134,6 +143,170 @@ export class UploadsController {
     res.setHeader('X-Frame-Options', 'DENY');
 
     res.send(buffer);
+  }
+
+  /**
+   * Simple file upload endpoint with ClamAV scanning
+   * This endpoint demonstrates the ClamAV integration without form validation
+   */
+  @Post('scan')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(UploadRateLimitGuard)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: {
+        fileSize: 100 * 1024 * 1024, // 100MB max
+      },
+    }),
+  )
+  @ApiOperation({
+    summary: 'Upload and scan a file with ClamAV',
+    description:
+      'Uploads a file and scans it with ClamAV. Returns scan result without saving the file.',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: { type: 'string', format: 'binary' },
+      },
+      required: ['file'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'File scan result',
+    type: FileScanResponseDto,
+  })
+  @ApiResponse({ status: 400, description: 'Invalid file or malware detected' })
+  async scanFile(
+    @UploadedFile() file: any,
+  ): Promise<FileScanResponseDto> {
+    if (!file) {
+      throw new BadRequestException('No file provided');
+    }
+
+    try {
+      const scanResult = await this.clamAVService.scanBuffer(
+        file.buffer,
+        file.originalname,
+      );
+
+      if (scanResult.isInfected) {
+        return {
+          status: 'infected',
+          file: file.originalname,
+          viruses: scanResult.viruses,
+        };
+      }
+
+      return {
+        status: 'clean',
+        file: file.originalname,
+      };
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new BadRequestException(
+        `Failed to scan file: ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Batch file upload endpoint with ClamAV scanning
+   * Supports scanning multiple files in a single request
+   */
+  @Post('scan/batch')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(UploadRateLimitGuard)
+  @UseInterceptors(
+    FilesInterceptor('files', 10, {
+      limits: {
+        fileSize: 100 * 1024 * 1024, // 100MB max per file
+      },
+    }),
+  )
+  @ApiOperation({
+    summary: 'Upload and scan multiple files with ClamAV',
+    description:
+      'Uploads multiple files and scans each with ClamAV. Returns batch scan results.',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        files: {
+          type: 'array',
+          items: { type: 'string', format: 'binary' },
+        },
+      },
+      required: ['files'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Batch file scan results',
+    type: BatchScanResponseDto,
+  })
+  @ApiResponse({ status: 400, description: 'Invalid files or request' })
+  async scanBatchFiles(
+    @UploadedFiles() files: any[],
+  ): Promise<BatchScanResponseDto> {
+    if (!files || files.length === 0) {
+      throw new BadRequestException('No files provided');
+    }
+
+    const results: FileScanResponseDto[] = [];
+    let cleanCount = 0;
+    let infectedCount = 0;
+
+    // Scan all files in parallel for better performance
+    // Future enhancement: Use a queue-based approach for very large batches
+    const scanPromises = files.map(async (file) => {
+      try {
+        const scanResult = await this.clamAVService.scanBuffer(
+          file.buffer,
+          file.originalname,
+        );
+
+        if (scanResult.isInfected) {
+          infectedCount++;
+          return {
+            status: 'infected' as const,
+            file: file.originalname,
+            viruses: scanResult.viruses,
+          };
+        } else {
+          cleanCount++;
+          return {
+            status: 'clean' as const,
+            file: file.originalname,
+          };
+        }
+      } catch (error) {
+        // Log error but continue processing other files
+        console.error(`Error scanning ${file.originalname}:`, error);
+        infectedCount++;
+        return {
+          status: 'infected' as const,
+          file: file.originalname,
+          viruses: [`Scan error: ${error.message}`],
+        };
+      }
+    });
+
+    results.push(...(await Promise.all(scanPromises)));
+
+    return {
+      total: files.length,
+      clean: cleanCount,
+      infected: infectedCount,
+      results,
+    };
   }
 }
 
