@@ -161,6 +161,14 @@ export class InspectionReportsController {
     return this.inspectionReportsService.findByApplicationIdAssessment(applicationId, userId, type);
   }
 
+  @Get('/application/:applicationId/type')
+  @ApiOperation({ summary: 'Get application type (operator or location) by application ID' })
+  @ApiResponse({ status: 200, description: 'Application type found' })
+  @ApiResponse({ status: 404, description: 'Application not found' })
+  getApplicationType(@Param('applicationId') applicationId: string) {
+    return this.inspectionReportsService.getApplicationType(applicationId);
+  }
+
   @Patch(':id/approve-reject')
   @ApiOperation({ summary: 'Approve or reject an inspection report' })
   @ApiResponse({ status: 200, description: 'Inspection report approved or rejected successfully' })

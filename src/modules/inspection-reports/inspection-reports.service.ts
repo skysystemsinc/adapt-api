@@ -21,6 +21,8 @@ import { InspectionReportHistory } from './entities/inspection-report-history.en
 import { AssessmentSubmissionHistory } from '../expert-assessment/assessment-submission/entities/assessment-submission-history.entity';
 import { AssignmentSection } from '../warehouse/operator/assignment/entities/assignment-section.entity';
 import { encryptBuffer, decryptBuffer } from 'src/common/utils/helper.utils';
+import { WarehouseOperatorApplicationRequest } from '../warehouse/entities/warehouse-operator-application-request.entity';
+import { WarehouseLocation } from '../warehouse-location/entities/warehouse-location.entity';
 
 @Injectable()
 export class InspectionReportsService {
@@ -37,6 +39,10 @@ export class InspectionReportsService {
     private readonly expertAssessmentRepository: Repository<ExpertAssessment>,
     @InjectRepository(ReviewEntity)
     private readonly reviewEntityRepository: Repository<ReviewEntity>,
+    @InjectRepository(WarehouseOperatorApplicationRequest)
+    private readonly warehouseOperatorApplicationRequestRepository: Repository<WarehouseOperatorApplicationRequest>,
+    @InjectRepository(WarehouseLocation)
+    private readonly warehouseLocationRepository: Repository<WarehouseLocation>,
     private readonly dataSource: DataSource
   ) { }
 
@@ -724,5 +730,29 @@ export class InspectionReportsService {
       mimeType: document.fileType || 'application/octet-stream',
       filename: document.fileName,
     };
+  }
+
+  async getApplicationType(applicationId: string): Promise<{ type: 'operator' | 'location' }> {
+    // Check if it's a warehouse operator application
+    const operatorApplication = await this.warehouseOperatorApplicationRequestRepository.findOne({
+      where: { id: applicationId },
+      select: { id: true },
+    });
+
+    if (operatorApplication) {
+      return { type: 'operator' };
+    }
+
+    // Check if it's a warehouse location application
+    const locationApplication = await this.warehouseLocationRepository.findOne({
+      where: { id: applicationId },
+      select: { id: true },
+    });
+
+    if (locationApplication) {
+      return { type: 'location' };
+    }
+
+    throw new NotFoundException(`Application with ID ${applicationId} not found`);
   }
 }
