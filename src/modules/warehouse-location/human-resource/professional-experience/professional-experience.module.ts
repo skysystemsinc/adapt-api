@@ -5,12 +5,14 @@ import { ProfessionalExperienceController } from './professional-experience.cont
 import { ProfessionalExperience } from './entities/professional-experience.entity';
 import { HumanResource } from '../entities/human-resource.entity';
 import { WarehouseDocument } from '../../../warehouse/entities/warehouse-document.entity';
+import { ClamAVModule } from '../../../clamav/clamav.module';
 
 @Module({
   controllers: [ProfessionalExperienceController],
   providers: [ProfessionalExperienceService],
   imports: [
     TypeOrmModule.forFeature([ProfessionalExperience, HumanResource, WarehouseDocument]),
+    ClamAVModule,
   ],
   exports: [ProfessionalExperienceService],
 })

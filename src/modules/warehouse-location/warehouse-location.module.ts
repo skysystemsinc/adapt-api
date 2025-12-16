@@ -25,6 +25,7 @@ import { StorageFacilitiesEntity } from './entities/checklist/storage-facilities
 import { RegistrationFeeChecklistEntity } from '../warehouse/entities/checklist/registration-fee.entity';
 import { DeclarationChecklistEntity } from '../warehouse/entities/checklist/declaration.entity';
 import { WarehouseDocument } from '../warehouse/entities/warehouse-document.entity';
+import { ClamAVModule } from '../clamav/clamav.module';
 
 @Module({
   controllers: [WarehouseLocationController, WarehouseLocationChecklistController],
@@ -59,6 +60,7 @@ import { WarehouseDocument } from '../warehouse/entities/warehouse-document.enti
     WeighingsModule,
     TechnicalQualitativeModule,
     HumanResourceModule,
+    ClamAVModule,
   ],
 })
 export class WarehouseLocationModule {}

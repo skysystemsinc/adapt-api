@@ -1,10 +1,11 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CreateProfessionalQualificationDto } from './dto/create-professional-qualification.dto';
 import { ProfessionalQualification } from './entities/professional-qualification.entity';
 import { HumanResource } from '../entities/human-resource.entity';
 import { WarehouseDocument } from '../../../warehouse/entities/warehouse-document.entity';
+import { ClamAVService } from '../../../clamav/clamav.service';
 import * as fs from 'fs/promises';
 import * as fsSync from 'fs';
 import * as path from 'path';
@@ -13,6 +14,7 @@ import { encryptBuffer, decryptBuffer } from 'src/common/utils/helper.utils';
 
 @Injectable()
 export class ProfessionalQualificationService {
+  private readonly logger = new Logger(ProfessionalQualificationService.name);
   private readonly uploadDir = 'uploads';
 
   constructor(
@@ -22,6 +24,7 @@ export class ProfessionalQualificationService {
     private readonly humanResourceRepository: Repository<HumanResource>,
     @InjectRepository(WarehouseDocument)
     private readonly warehouseDocumentRepository: Repository<WarehouseDocument>,
+    private readonly clamAVService: ClamAVService,
   ) {
     this.ensureUploadDirectory();
   }
@@ -59,6 +62,53 @@ export class ProfessionalQualificationService {
       throw new BadRequestException(
         `File size ${(file.size / 1024 / 1024).toFixed(2)}MB exceeds maximum allowed size of 10MB`,
       );
+    }
+
+    const isMandatory = this.clamAVService.getScanMandatory();
+    if(isMandatory) {
+      // Scan file with ClamAV before processing
+      try {
+        this.logger.log(`🔍 Scanning file with ClamAV: ${file.originalname}`);
+        const scanResult = await this.clamAVService.scanBuffer(
+          file.buffer,
+          file.originalname,
+        );
+  
+        if (scanResult.isInfected) {
+          this.logger.warn(
+            `🚨 Infected file detected: ${file.originalname}, Viruses: ${scanResult.viruses.join(', ')}`,
+          );
+          throw new BadRequestException(
+            `File is infected with malware: ${scanResult.viruses.join(', ')}. Upload rejected.`,
+          );
+        }
+  
+        this.logger.log(`✅ File passed ClamAV scan: ${file.originalname}`);
+      } catch (error) {
+        if (error instanceof BadRequestException) {
+          // Always reject infected files, regardless of CLAMAV_SCAN setting
+          throw error;
+        }
+        
+        // Handle ClamAV service failures (unavailable, timeout, etc.)
+        
+        if (isMandatory) {
+          // CLAMAV_SCAN=true: Block upload if scan fails
+          this.logger.error(
+            `ClamAV scan failed for ${file.originalname}: ${error.message}`,
+            error.stack,
+          );
+          throw new BadRequestException(
+            `Virus scanning unavailable: ${error.message}. Upload blocked due to mandatory scanning.`,
+          );
+        } else {
+          // CLAMAV_SCAN=false: Log warning but allow upload (bypass on failure)
+          this.logger.warn(
+            `ClamAV scan failed for ${file.originalname}: ${error.message}. Bypassing scan and allowing upload.`,
+            error.stack,
+          );
+        }
+      }
     }
 
     const sanitizedFilename = `${uuidv4()}${fileExtension}`;

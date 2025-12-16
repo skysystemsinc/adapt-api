@@ -6,6 +6,7 @@ import { WarehouseOperatorLocation } from './entities/warehouse-operator-locatio
 import { WarehouseDocument } from '../warehouse/entities/warehouse-document.entity';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
+import { ClamAVModule } from '../clamav/clamav.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { JwtModule } from '@nestjs/jwt';
       }),
       inject: [ConfigService],
     }),
+    ClamAVModule,
   ],
   controllers: [WarehouseOperatorLocationController],
   providers: [WarehouseOperatorLocationService],
