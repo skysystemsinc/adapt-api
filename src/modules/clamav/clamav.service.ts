@@ -22,23 +22,39 @@ export class ClamAVService {
   private readonly isScanMandatory: boolean;
 
   constructor(private readonly configService: ConfigService) {
-    const hostConfig = this.configService.get<string>('CLAMAV_HOST', 'localhost');
+    // Check if socket mode is enabled via CLAMAV_HOSTCONFIG
+    const hostConfig = this.configService.get<string>('CLAMAV_HOSTCONFIG', '');
+    const useSocket = hostConfig.toLowerCase() === 'socket';
     
-    // Detect connection type: unix:/path/to/socket or TCP host
-    if (hostConfig.startsWith('unix:')) {
+    if (useSocket) {
+      // Unix socket mode (server)
       this.connectionType = 'unix';
-      this.socketPath = hostConfig.substring(5); // Remove 'unix:' prefix
+      this.socketPath = this.configService.get<string>('CLAMAV_SOCKET', '/var/run/clamav/clamd.ctl');
       this.host = 'unix socket';
       this.port = 0; // Not used for Unix sockets
       this.logger.log(`ClamAV configured for Unix socket: ${this.socketPath}`);
     } else {
-      this.connectionType = 'tcp';
-      this.socketPath = null;
-      this.host = hostConfig;
-      // Parse port as number (environment variables are strings)
-      const portValue = this.configService.get<string | number>('CLAMAV_PORT', 3310);
-      this.port = typeof portValue === 'string' ? parseInt(portValue, 10) : portValue;
-      this.logger.log(`ClamAV configured for TCP: ${this.host}:${this.port}`);
+      // TCP mode (local development or when CLAMAV_HOSTCONFIG is not 'socket')
+      // Also support legacy unix: prefix format for backward compatibility
+      const hostValue = this.configService.get<string>('CLAMAV_HOST', 'localhost');
+      
+      if (hostValue.startsWith('unix:')) {
+        // Legacy format: unix:/path/to/socket
+        this.connectionType = 'unix';
+        this.socketPath = hostValue.substring(5); // Remove 'unix:' prefix
+        this.host = 'unix socket';
+        this.port = 0;
+        this.logger.log(`ClamAV configured for Unix socket (legacy format): ${this.socketPath}`);
+      } else {
+        // TCP connection
+        this.connectionType = 'tcp';
+        this.socketPath = null;
+        this.host = hostValue;
+        // Parse port as number (environment variables are strings)
+        const portValue = this.configService.get<string | number>('CLAMAV_PORT', 3310);
+        this.port = typeof portValue === 'string' ? parseInt(portValue, 10) : portValue;
+        this.logger.log(`ClamAV configured for TCP: ${this.host}:${this.port}`);
+      }
     }
     
     // Parse timeout as number (environment variables are strings)
