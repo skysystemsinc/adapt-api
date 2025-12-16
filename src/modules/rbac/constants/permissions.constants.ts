@@ -94,6 +94,9 @@ export enum Permissions {
   // Role Requests permissions
   MANAGE_ROLE_REQUESTS = 'manage_role_requests',
 
+  // User Requests permissions
+  MANAGE_USER_REQUESTS = 'manage_user_requests',
+
   // Dynamic Calculator permissions
   MANAGE_CALCULATOR = 'manage_calculator',
 }
