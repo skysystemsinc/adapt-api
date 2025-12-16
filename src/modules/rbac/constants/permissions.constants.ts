@@ -75,6 +75,7 @@ export enum Permissions {
   // Settings Tab Permissions
   VIEW_SETTINGS = 'view_settings',
   MANAGE_SETTINGS = 'manage_settings',
+  MANAGE_SETTING_REQUESTS = 'manage_setting_requests',
 
   // Organization permissions
   VIEW_ORGANIZATION = 'view_organization',
