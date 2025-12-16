@@ -14,6 +14,7 @@ import { WarehouseOperatorApplicationRequest } from '../warehouse/entities/wareh
 import { WarehouseLocation } from '../warehouse-location/entities/warehouse-location.entity';
 import { AuthModule } from '../auth/auth.module';
 import { RBACModule } from '../rbac/rbac.module';
+import { ClamAVModule } from '../clamav/clamav.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { RBACModule } from '../rbac/rbac.module';
       inject: [ConfigService],
     }),
     RBACModule,
+    ClamAVModule,
   ],
   controllers: [InspectionReportsController],
   providers: [InspectionReportsService],

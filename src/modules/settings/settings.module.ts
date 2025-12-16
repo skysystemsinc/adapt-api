@@ -7,11 +7,13 @@ import { SettingsController, SettingsAdminController } from './settings.controll
 import { SettingsDownloadController } from './self-assessment.controller';
 import { Setting } from './entities/setting.entity';
 import { RBACModule } from '../rbac/rbac.module';
+import { ClamAVModule } from '../clamav/clamav.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Setting]),
     RBACModule,
+    ClamAVModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({

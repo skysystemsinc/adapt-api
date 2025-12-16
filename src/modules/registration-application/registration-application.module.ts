@@ -14,6 +14,7 @@ import { RBACModule } from '../rbac/rbac.module';
 import { UsersModule } from '../users/users.module';
 import { Role } from '../rbac/entities/role.entity';
 import { FormField } from '../forms/entities/form-field.entity';
+import { ClamAVModule } from '../clamav/clamav.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { FormField } from '../forms/entities/form-field.entity';
     }),
     RBACModule,
     UsersModule,
+    ClamAVModule,
   ],
   controllers: [
     RegistrationApplicationController,

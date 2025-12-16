@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { AuthorizedSignatoryDto, CreateCompanyInformationRequestDto, CreateBankDetailsDto, CreateWarehouseOperatorApplicationRequestDto } from './dto/create-warehouse.dto';
 import { UpdateWarehouseDto } from './dto/update-warehouse.dto';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
@@ -69,8 +69,11 @@ import { ApplicantChecklistHistoryEntity } from './entities/applicant-checklist-
 import { RegistrationApplication } from '../registration-application/entities/registration-application.entity';
 import { RegistrationApplicationDetails } from '../registration-application/entities/registration-application-details.entity';
 import { FormField } from '../forms/entities/form-field.entity';
+import { WarehouseLocation } from '../warehouse-location/entities/warehouse-location.entity';
+import { ClamAVService } from '../clamav/clamav.service';
 
 export class WarehouseService {
+  private readonly logger = new Logger(WarehouseService.name);
   private readonly uploadDir = 'uploads';
 
   constructor(
@@ -125,6 +128,7 @@ export class WarehouseService {
     private readonly registrationApplicationDetailsRepository: Repository<RegistrationApplicationDetails>,
     @InjectRepository(FormField)
     private readonly formFieldRepository: Repository<FormField>,
+    private readonly clamAVService: ClamAVService,
   ) {
     // Ensure upload directory exists
     this.ensureUploadDirectory();
@@ -1569,7 +1573,7 @@ export class WarehouseService {
 
     // Find the first authorized signatory for this application
     const firstAuthorizedSignatory = await this.authorizedSignatoryRepository.findOne({
-      where: { 
+      where: {
         warehouseOperatorApplicationRequestId: application.id,
         isActive: true,
       },
@@ -1578,7 +1582,7 @@ export class WarehouseService {
 
     // Get legal status from registration application (same as registration API)
     let applicantLegalStatus: string | null = null;
-    
+
     try {
       // Step 1: Find registration_application by userId through user relation
       // Using QueryBuilder since userId is the actual column name (from JoinColumn)
@@ -1637,7 +1641,7 @@ export class WarehouseService {
       // Step 4: Find registration_application_details using those field keys and applicationId
       const applicationId = registrationApplication.id;
       let applicationTypeFromFormField: string | null = null;
-      
+
       const fieldKeys = Object.keys(fieldKeyToPropertyMap);
       if (fieldKeys.length > 0) {
         // Get details for this application with the specific field keys
@@ -4614,6 +4618,51 @@ export class WarehouseService {
       );
     }
 
+    // Scan file with ClamAV before processing
+    try {
+      this.logger.log(`🔍 Scanning file with ClamAV: ${file.originalname}`);
+      const scanResult = await this.clamAVService.scanBuffer(
+        file.buffer,
+        file.originalname,
+      );
+
+      if (scanResult.isInfected) {
+        this.logger.warn(
+          `🚨 Infected file detected: ${file.originalname}, Viruses: ${scanResult.viruses.join(', ')}`,
+        );
+        throw new BadRequestException(
+          `File is infected with malware: ${scanResult.viruses.join(', ')}. Upload rejected.`,
+        );
+      }
+
+      this.logger.log(`✅ File passed ClamAV scan: ${file.originalname}`);
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        // Always reject infected files, regardless of CLAMAV_SCAN setting
+        throw error;
+      }
+      
+      // Handle ClamAV service failures (unavailable, timeout, etc.)
+      const isMandatory = this.clamAVService.getScanMandatory();
+      
+      if (isMandatory) {
+        // CLAMAV_SCAN=true: Block upload if scan fails
+        this.logger.error(
+          `ClamAV scan failed for ${file.originalname}: ${error.message}`,
+          error.stack,
+        );
+        throw new BadRequestException(
+          `Virus scanning unavailable: ${error.message}. Upload blocked due to mandatory scanning.`,
+        );
+      } else {
+        // CLAMAV_SCAN=false: Log warning but allow upload (bypass on failure)
+        this.logger.warn(
+          `ClamAV scan failed for ${file.originalname}: ${error.message}. Bypassing scan and allowing upload.`,
+          error.stack,
+        );
+      }
+    }
+
     // Generate unique filename
     const sanitizedFilename = `${uuidv4()}${fileExtension}`;
     const filePath = path.join(this.uploadDir, sanitizedFilename);
@@ -5262,10 +5311,10 @@ export class WarehouseService {
   }
 
   async getResourceStatus(applicationId: string, userId: string, resourceType: 'bank-statement' | 'company-information' | 'tax-return' | 'other' | 'hr' | 'authorized-signatories' | 'financial-information' | 'applicant-checklist') {
-    if (!resourceType || !['bank-statement', 'company-information', 'tax-return', 'other', 'hr', 'authorized-signatories', 'financial-information', 'applicant-checklist'].includes(resourceType)) {
-      throw new BadRequestException('Invalid resource type.');
-    }
-    const application = await this.warehouseOperatorRepository.findOne({
+    let application: WarehouseOperatorApplicationRequest | WarehouseLocation | null = null;
+    let isLocationApplication = false;
+    // CHECK IF THE APPLICATION IS A WAREHOUSE OPERATOR APPLICATION
+    application = await this.warehouseOperatorRepository.findOne({
       where: {
         id: applicationId, userId
       },
@@ -5274,13 +5323,34 @@ export class WarehouseService {
       }
     });
     if (!application) {
+      // CHECK IF THE APPLICATION IS A WAREHOUSE LOCATION APPLICATION
+      application = await this.dataSource.getRepository(WarehouseLocation).findOne({
+        where: { id: applicationId },
+      });
+      isLocationApplication = true;
+    }
+    // IF THE APPLICATION IS NOT FOUND, THROW AN ERROR
+    if (!application) {
       throw new NotFoundException('Application not found');
+    }
+
+    let resourceArr: string[] = ['bank-statement', 'company-information', 'tax-return', 'other', 'hr', 'authorized-signatories', 'financial-information', 'applicant-checklist'];
+    if (isLocationApplication) {
+      resourceArr = [
+        'facility', 'contact', 'jurisdiction', 'security-fire-safety', 'weighing', 'technical-qualitative', 'human-resources', 'checklist'
+      ];
+    }
+
+    if (!resourceType || !resourceArr.includes(resourceType)) {
+      throw new BadRequestException('Invalid resource type.');
     }
 
     // check for assignments for the user and application
     const assignments = await this.assignmentRepository.find({
       where: {
-        applicationId,
+        ...(isLocationApplication ?
+          { applicationLocationId: applicationId } :
+          { applicationId: applicationId }),
         assignedTo: userId,
         level: AssignmentLevel.HOD_TO_APPLICANT
       }
@@ -5301,19 +5371,40 @@ export class WarehouseService {
 
       // get all sections
       const filteredSections = assignmentSections.filter(section => {
-        switch (resourceType) {
-          case 'hr':
-            return section.sectionType === '4-hr-information';
-          case 'authorized-signatories':
-            return section.sectionType === '1-authorize-signatory-information';
-          case 'bank-statement':
-            return section.sectionType === '3-bank-details';
-          case 'company-information':
-            return section.sectionType === '2-company-information';
-          case 'financial-information':
-            return section.sectionType === '5-financial-information';
-          case 'applicant-checklist':
-            return section.sectionType === '6-application-checklist-questionnaire';
+        if (isLocationApplication) {
+          switch (section.resourceType) {
+            case 'facility':
+              return section.sectionType === '1-facility';
+            case 'contact':
+              return section.sectionType === '2-contact';
+            case 'jurisdiction':
+              return section.sectionType === '3-jurisdiction';
+            case 'security-fire-safety':
+              return section.sectionType === '4-security-fire-safety';
+            case 'weighing':
+              return section.sectionType === '5-weighing';
+            case 'technical-qualitative':
+              return section.sectionType === '6-technical-qualitative';
+            case 'human-resources':
+              return section.sectionType === '7-human-resources';
+            case 'checklist':
+              return section.sectionType === '8-checklist';
+          }
+        } else {
+          switch (resourceType) {
+            case 'hr':
+              return section.sectionType === '4-hr-information';
+            case 'authorized-signatories':
+              return section.sectionType === '1-authorize-signatory-information';
+            case 'bank-statement':
+              return section.sectionType === '3-bank-details';
+            case 'company-information':
+              return section.sectionType === '2-company-information';
+            case 'financial-information':
+              return section.sectionType === '5-financial-information';
+            case 'applicant-checklist':
+              return section.sectionType === '6-application-checklist-questionnaire';
+          }
         }
       });
 
@@ -5337,14 +5428,22 @@ export class WarehouseService {
    * @returns Progress information including total rejected, resubmitted, remaining, and breakdown by section type
    */
   async getResubmissionProgress(applicationId: string, userId: string) {
+    let isLocationApplication = false;
     // Verify application exists and user owns it
-    const application = await this.warehouseOperatorRepository.findOne({
+    let application: WarehouseOperatorApplicationRequest | WarehouseLocation | null = null;
+    application = await this.warehouseOperatorRepository.findOne({
       where: { id: applicationId, userId },
       relations: ['rejections'],
     });
-
     if (!application) {
-      throw new NotFoundException('Warehouse operator application not found');
+      application = await this.dataSource.getRepository(WarehouseLocation).findOne({
+        where: { id: applicationId },
+        relations: ['rejections'],
+      });
+      isLocationApplication = true;
+    }
+    if (!application) {
+      throw new NotFoundException('Application not found');
     }
 
     // Only show progress for rejected applications
@@ -5362,28 +5461,56 @@ export class WarehouseService {
     }
 
     // Map normalized section types to display names
-    const sectionTypeMap: Record<string, string[]> = {
-      '1-authorize-signatory-information': ['1-authorize-signatory-information'],
-      '2-company-information': ['2-company-information'],
-      '3-bank-details': ['3-bank-details'],
-      '4-hr-information': ['4-hr-information'],
-      '5-financial-information': ['5-financial-information'],
-      '6-application-checklist-questionnaire': ['6-application-checklist-questionnaire'],
-    };
+    let sectionTypeMap: Record<string, string[]> = {};
+    if (isLocationApplication) {
+      sectionTypeMap = {
+        '1-facility': ['1-facility'],
+        '2-contact': ['2-contact'],
+        '3-jurisdiction': ['3-jurisdiction'],
+        '4-security-fire-safety': ['4-security-fire-safety'],
+        '5-weighing': ['5-weighing'],
+        '6-technical-qualitative': ['6-technical-qualitative'],
+        '7-human-resources': ['7-human-resources'],
+        '8-checklist': ['8-checklist'],
+      };
+    } else {
+      sectionTypeMap = {
+        '1-authorize-signatory-information': ['1-authorize-signatory-information'],
+        '2-company-information': ['2-company-information'],
+        '3-bank-details': ['3-bank-details'],
+        '4-hr-information': ['4-hr-information'],
+        '5-financial-information': ['5-financial-information'],
+        '6-application-checklist-questionnaire': ['6-application-checklist-questionnaire'],
+      };
+    }
 
+    let sectionDisplayNames: Record<string, string> = {};
     // Section type to human-readable name mapping
-    const sectionDisplayNames: Record<string, string> = {
-      '1-authorize-signatory-information': 'Authorized Signatory Information',
-      '2-company-information': 'Company Information',
-      '3-bank-details': 'Bank Details',
-      '4-hr-information': 'HR Information',
-      '5-financial-information': 'Financial Information',
-      '6-application-checklist-questionnaire': 'Applicant Checklist',
-    };
+    if (isLocationApplication) {
+      sectionDisplayNames = {
+        '1-facility': 'Facility Information',
+        '2-contact': 'Contact Information',
+        '3-jurisdiction': 'Jurisdiction',
+        '4-security-fire-safety': 'Security & Fire Safety',
+        '5-weighing': 'Weighing',
+        '6-technical-qualitative': 'Technical & Qualitative',
+        '7-human-resources': 'Human Resources',
+        '8-checklist': 'Checklist',
+      };
+    } else {
+      sectionDisplayNames = {
+        '1-authorize-signatory-information': 'Authorized Signatory Information',
+        '2-company-information': 'Company Information',
+        '3-bank-details': 'Bank Details',
+        '4-hr-information': 'HR Information',
+        '5-financial-information': 'Financial Information',
+        '6-application-checklist-questionnaire': 'Applicant Checklist',
+      };
+    }
 
     // Get all unique unlocked sections from rejections
     // unlockedSections is a JSONB array, so we need to parse if it's a string
-    const allUnlockedSections = application.rejections
+    const allUnlockedSections = (application.rejections || [])
       .flatMap((rejection) => {
         const sections = rejection.unlockedSections || [];
         // Handle both string and parsed JSON formats
@@ -5414,7 +5541,9 @@ export class WarehouseService {
     // Get all assignments for this application with HOD_TO_APPLICANT level and REJECTED status
     const assignments = await this.assignmentRepository.find({
       where: {
-        applicationId,
+        ...(isLocationApplication ?
+          { applicationLocationId: applicationId } :
+          { applicationId: applicationId }),
         level: AssignmentLevel.HOD_TO_APPLICANT,
         status: AssignmentStatus.REJECTED,
       },
@@ -5442,7 +5571,9 @@ export class WarehouseService {
 
     // Get all resubmitted sections for this application
     const resubmittedSections = await this.resubmittedSectionRepository.find({
-      where: { applicationId },
+      where: { ...(isLocationApplication ?
+        { warehouseLocationId: applicationId } :
+        { applicationId: applicationId }), },
     });
 
     // Group assignment sections by normalized section type
@@ -5872,7 +6003,7 @@ export class WarehouseService {
     // Collect unique section types and resourceIds from all assignments being moved
     const resubmittedSectionTypes = new Set<string>();
     const resubmittedResourcesBySection: Record<string, string[]> = {};
-    
+
     for (const assignment of assignmentsToMove) {
       if (assignment.sections && assignment.sections.length > 0) {
         for (const section of assignment.sections) {
@@ -5881,10 +6012,10 @@ export class WarehouseService {
             Array.from(normalizedRejectedTypes).some((rejectedType) =>
               section.sectionType.includes(rejectedType) || rejectedType.includes(section.sectionType)
             );
-          
+
           if (matchesRejected) {
             resubmittedSectionTypes.add(section.sectionType);
-            
+
             // Store resourceId for granular tracking (especially for HR and Financial subsections)
             if (section.resourceId) {
               if (!resubmittedResourcesBySection[section.sectionType]) {

@@ -9,6 +9,7 @@ import { Setting } from './entities/setting.entity';
 import { CreateSettingDto } from './dto/create-setting.dto';
 import { UpdateSettingDto } from './dto/update-setting.dto';
 import { encryptBuffer, decryptBuffer } from 'src/common/utils/helper.utils';
+import { ClamAVService } from '../clamav/clamav.service';
 
 /**
  * MIME type mappings for file extensions
@@ -35,6 +36,7 @@ export class SettingsService {
   constructor(
     @InjectRepository(Setting)
     private settingsRepository: Repository<Setting>,
+    private readonly clamAVService: ClamAVService,
   ) {
     // Ensure upload directory exists
     this.ensureUploadDirectory();
@@ -159,6 +161,51 @@ export class SettingsService {
     const mimeType = detectedMimeType || file.mimetype;
     
     this.logger.log(`📤 Storing file metadata for setting '${key}': originalName=${originalName}, mimeType=${mimeType}, extension=${fileExtension}`);
+
+    // Scan file with ClamAV before processing
+    try {
+      this.logger.log(`🔍 Scanning file with ClamAV: ${originalName}`);
+      const scanResult = await this.clamAVService.scanBuffer(
+        file.buffer,
+        originalName,
+      );
+
+      if (scanResult.isInfected) {
+        this.logger.warn(
+          `🚨 Infected file detected: ${originalName}, Viruses: ${scanResult.viruses.join(', ')}`,
+        );
+        throw new BadRequestException(
+          `File is infected with malware: ${scanResult.viruses.join(', ')}. Upload rejected.`,
+        );
+      }
+
+      this.logger.log(`✅ File passed ClamAV scan: ${originalName}`);
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        // Always reject infected files, regardless of CLAMAV_SCAN setting
+        throw error;
+      }
+      
+      // Handle ClamAV service failures (unavailable, timeout, etc.)
+      const isMandatory = this.clamAVService.getScanMandatory();
+      
+      if (isMandatory) {
+        // CLAMAV_SCAN=true: Block upload if scan fails
+        this.logger.error(
+          `ClamAV scan failed for ${originalName}: ${error.message}`,
+          error.stack,
+        );
+        throw new BadRequestException(
+          `Virus scanning unavailable: ${error.message}. Upload blocked due to mandatory scanning.`,
+        );
+      } else {
+        // CLAMAV_SCAN=false: Log warning but allow upload (bypass on failure)
+        this.logger.warn(
+          `ClamAV scan failed for ${originalName}: ${error.message}. Bypassing scan and allowing upload.`,
+          error.stack,
+        );
+      }
+    }
 
     // Check for existing setting and delete old file if exists
     try {
