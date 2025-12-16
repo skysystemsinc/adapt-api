@@ -12,9 +12,10 @@ import { ProfessionalQualification } from './professional-qualification/entities
 import { Training } from './training/entities/training.entity';
 import { ProfessionalExperience } from './professional-experience/entities/professional-experience.entity';
 import * as fs from 'fs/promises';
+import * as fsSync from 'fs';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import { encryptBuffer } from 'src/common/utils/helper.utils';
+import { encryptBuffer, decryptBuffer } from 'src/common/utils/helper.utils';
 
 @Injectable()
 export class HumanResourceService {
@@ -483,5 +484,45 @@ export class HumanResourceService {
 
   remove(id: number) {
     return `This action removes a #${id} humanResource`;
+  }
+
+  async downloadWarehouseDocument(documentId: string) {
+    const document = await this.warehouseDocumentRepository.findOne({
+      where: { id: documentId },
+    });
+
+    if (!document) {
+      throw new NotFoundException('Document not found');
+    }
+
+    // Construct full file path
+    const filename = path.basename(document.filePath);
+    const fullPath = path.join(this.uploadDir, filename);
+
+    if (!fsSync.existsSync(fullPath)) {
+      throw new NotFoundException('File not found on disk');
+    }
+
+    // Read encrypted file
+    const encryptedBuffer = fsSync.readFileSync(fullPath);
+
+    // Decrypt if iv and authTag are present
+    let decryptedBuffer: Buffer;
+    if (document.iv && document.authTag) {
+      try {
+        decryptedBuffer = decryptBuffer(encryptedBuffer, document.iv, document.authTag);
+      } catch (error: any) {
+        throw new BadRequestException(`Failed to decrypt document: ${error.message}`);
+      }
+    } else {
+      // Backward compatibility - assume unencrypted
+      decryptedBuffer = encryptedBuffer;
+    }
+
+    return {
+      buffer: decryptedBuffer,
+      mimeType: document.mimeType || 'application/octet-stream',
+      filename: document.originalFileName,
+    };
   }
 }

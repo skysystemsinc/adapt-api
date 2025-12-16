@@ -15,8 +15,10 @@ import { TrainingsEntity } from './entities/hr/trainings.entity/trainings.entity
 import { ExperienceEntity } from './entities/hr/experience.entity/experience.entity';
 import { DeclarationEntity } from './entities/hr/declaration.entity/declaration.entity';
 import * as fs from 'fs/promises';
+import * as fsSync from 'fs';
 import * as path from 'path';
 import { v4 as uuidv4, validate as uuidValidate } from 'uuid';
+import { encryptBuffer, decryptBuffer } from 'src/common/utils/helper.utils';
 import { StepStatus } from './entities/bank-details.entity';
 import { BankDetails } from './entities/bank-details.entity';
 import { UpsertHrInformationDto, HrPersonalDetailsDto, HrDeclarationDto, HrAcademicQualificationDto, HrProfessionalQualificationDto, HrTrainingDto, HrExperienceDto } from './dto/create-hr-information.dto';
@@ -67,7 +69,6 @@ import { ApplicantChecklistHistoryEntity } from './entities/applicant-checklist-
 import { RegistrationApplication } from '../registration-application/entities/registration-application.entity';
 import { RegistrationApplicationDetails } from '../registration-application/entities/registration-application-details.entity';
 import { FormField } from '../forms/entities/form-field.entity';
-import { encryptBuffer } from 'src/common/utils/helper.utils';
 
 export class WarehouseService {
   private readonly uploadDir = 'uploads';
@@ -6074,5 +6075,45 @@ export class WarehouseService {
 
     // Delete all rejections from active table
     await rejectionRepo.remove(rejections);
+  }
+
+  async downloadWarehouseDocument(documentId: string) {
+    const document = await this.warehouseDocumentRepository.findOne({
+      where: { id: documentId },
+    });
+
+    if (!document) {
+      throw new NotFoundException('Document not found');
+    }
+
+    // Construct full file path
+    const filename = path.basename(document.filePath);
+    const fullPath = path.join(this.uploadDir, filename);
+
+    if (!fsSync.existsSync(fullPath)) {
+      throw new NotFoundException('File not found on disk');
+    }
+
+    // Read encrypted file
+    const encryptedBuffer = fsSync.readFileSync(fullPath);
+
+    // Decrypt if iv and authTag are present
+    let decryptedBuffer: Buffer;
+    if (document.iv && document.authTag) {
+      try {
+        decryptedBuffer = decryptBuffer(encryptedBuffer, document.iv, document.authTag);
+      } catch (error: any) {
+        throw new BadRequestException(`Failed to decrypt document: ${error.message}`);
+      }
+    } else {
+      // Backward compatibility - assume unencrypted
+      decryptedBuffer = encryptedBuffer;
+    }
+
+    return {
+      buffer: decryptedBuffer,
+      mimeType: document.mimeType || 'application/octet-stream',
+      filename: document.originalFileName,
+    };
   }
 }

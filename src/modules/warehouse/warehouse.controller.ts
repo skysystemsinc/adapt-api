@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, UseInterceptors, UploadedFile, BadRequestException, UploadedFiles, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, UseInterceptors, UploadedFile, BadRequestException, UploadedFiles, Query, Res } from '@nestjs/common';
 import { WarehouseService } from './warehouse.service';
 import { CreateBankDetailsDto, CreateCompanyInformationRequestDto, CreateWarehouseOperatorApplicationRequestDto } from './dto/create-warehouse.dto';
 import { UpdateWarehouseDto } from './dto/update-warehouse.dto';
@@ -1239,5 +1239,24 @@ export class WarehouseController {
   getResubmissionProgress(@Param('applicationId') applicationId: string, @Request() request: any) {
     const user = request.user as User;
     return this.warehouseService.getResubmissionProgress(applicationId, user.id);
+  }
+
+  @Get('/documents/:id/download')
+  @ApiOperation({ summary: 'Download warehouse document' })
+  @ApiResponse({ status: 200, description: 'Document downloaded successfully' })
+  @ApiResponse({ status: 404, description: 'Document not found' })
+  async downloadDocument(
+    @Param('id') id: string,
+    @Res() res: any,
+  ) {
+    const { buffer, mimeType, filename } = await this.warehouseService.downloadWarehouseDocument(id);
+
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'");
+    res.setHeader('X-Frame-Options', 'DENY');
+
+    res.send(buffer);
   }
 }

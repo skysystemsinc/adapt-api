@@ -12,6 +12,7 @@ import { ReviewEntity } from '../warehouse/review/entities/review.entity';
 import { Permissions } from '../rbac/constants/permissions.constants';
 import { User } from '../users/entities/user.entity';
 import * as fs from 'fs/promises';
+import * as fsSync from 'fs';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { Assignment, AssignmentLevel, AssignmentStatus } from '../warehouse/operator/assignment/entities/assignment.entity';
@@ -19,7 +20,7 @@ import { ApproveOrRejectInspectionReportDto, ApproveOrRejectInspectionReportStat
 import { InspectionReportHistory } from './entities/inspection-report-history.entity';
 import { AssessmentSubmissionHistory } from '../expert-assessment/assessment-submission/entities/assessment-submission-history.entity';
 import { AssignmentSection } from '../warehouse/operator/assignment/entities/assignment-section.entity';
-import { encryptBuffer } from 'src/common/utils/helper.utils';
+import { encryptBuffer, decryptBuffer } from 'src/common/utils/helper.utils';
 
 @Injectable()
 export class InspectionReportsService {
@@ -679,5 +680,49 @@ export class InspectionReportsService {
     } finally {
       await queryRunner.release();
     }
+  }
+
+  async downloadDocument(documentId: string) {
+    const document = await this.assessmentDocumentRepository.findOne({
+      where: { id: documentId },
+    });
+
+    if (!document) {
+      throw new NotFoundException('Document not found');
+    }
+
+    // Construct full file path
+    const filename = path.basename(document.filePath);
+    // Determine which directory based on document type
+    const uploadDir = document.documentType === 'global_document' 
+      ? this.inspectionReportsUploadDir 
+      : this.uploadDir;
+    const fullPath = path.join(uploadDir, filename);
+
+    if (!fsSync.existsSync(fullPath)) {
+      throw new NotFoundException('File not found on disk');
+    }
+
+    // Read encrypted file
+    const encryptedBuffer = fsSync.readFileSync(fullPath);
+
+    // Decrypt if iv and authTag are present
+    let decryptedBuffer: Buffer;
+    if (document.iv && document.authTag) {
+      try {
+        decryptedBuffer = decryptBuffer(encryptedBuffer, document.iv, document.authTag);
+      } catch (error: any) {
+        throw new BadRequestException(`Failed to decrypt document: ${error.message}`);
+      }
+    } else {
+      // Backward compatibility - assume unencrypted
+      decryptedBuffer = encryptedBuffer;
+    }
+
+    return {
+      buffer: decryptedBuffer,
+      mimeType: document.fileType || 'application/octet-stream',
+      filename: document.fileName,
+    };
   }
 }

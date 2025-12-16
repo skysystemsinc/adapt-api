@@ -1,16 +1,20 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, Res } from '@nestjs/common';
 import { WarehouseLocationService } from './warehouse-location.service';
 import { FacilityService } from './facility/facility.service';
+import { HumanResourceService } from './human-resource/human-resource.service';
 import { CreateWarehouseLocationDto } from './dto/create-warehouse-location.dto';
 import { UpdateWarehouseLocationDto } from './dto/update-warehouse-location.dto';
 import { CreateFacilityDto } from './facility/dto/create-facility.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 
+@ApiTags('Warehouse Location')
 @Controller('warehouse-location')
 export class WarehouseLocationController {
   constructor(
     private readonly warehouseLocationService: WarehouseLocationService,
     private readonly facilityService: FacilityService,
+    private readonly humanResourceService: HumanResourceService,
   ) {}
 
   @Post()
@@ -82,5 +86,25 @@ export class WarehouseLocationController {
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.warehouseLocationService.remove(+id);
+  }
+
+  @Get('/documents/:id/download')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Download warehouse location document' })
+  @ApiResponse({ status: 200, description: 'Document downloaded successfully' })
+  @ApiResponse({ status: 404, description: 'Document not found' })
+  async downloadDocument(
+    @Param('id') id: string,
+    @Res() res: any,
+  ) {
+    const { buffer, mimeType, filename } = await this.humanResourceService.downloadWarehouseDocument(id);
+
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'");
+    res.setHeader('X-Frame-Options', 'DENY');
+
+    res.send(buffer);
   }
 }

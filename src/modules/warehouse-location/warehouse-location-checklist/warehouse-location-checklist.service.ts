@@ -14,9 +14,10 @@ import { RegistrationFeeChecklistEntity } from '../../warehouse/entities/checkli
 import { DeclarationChecklistEntity } from '../../warehouse/entities/checklist/declaration.entity';
 import { WarehouseDocument } from '../../warehouse/entities/warehouse-document.entity';
 import * as fs from 'fs/promises';
+import * as fsSync from 'fs';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import { encryptBuffer } from 'src/common/utils/helper.utils';
+import { encryptBuffer, decryptBuffer } from 'src/common/utils/helper.utils';
 
 @Injectable()
 export class WarehouseLocationChecklistService {
@@ -1862,6 +1863,42 @@ export class WarehouseLocationChecklistService {
             authorizeVerification: checklist.declaration.authorizeVerification,
           }
         : null,
+    };
+  }
+
+  async downloadWarehouseDocument(documentId: string) {
+    const document = await this.warehouseDocumentRepository.findOne({
+      where: { id: documentId },
+    });
+
+    if (!document) {
+      throw new NotFoundException('Document not found');
+    }
+
+    const filename = path.basename(document.filePath);
+    const fullPath = path.join(this.uploadDir, filename);
+
+    if (!fsSync.existsSync(fullPath)) {
+      throw new NotFoundException('File not found on disk');
+    }
+
+    const encryptedBuffer = fsSync.readFileSync(fullPath);
+
+    let decryptedBuffer: Buffer;
+    if (document.iv && document.authTag) {
+      try {
+        decryptedBuffer = decryptBuffer(encryptedBuffer, document.iv, document.authTag);
+      } catch (error: any) {
+        throw new BadRequestException(`Failed to decrypt document: ${error.message}`);
+      }
+    } else {
+      decryptedBuffer = encryptedBuffer;
+    }
+
+    return {
+      buffer: decryptedBuffer,
+      mimeType: document.mimeType || 'application/octet-stream',
+      filename: document.originalFileName,
     };
   }
 }
