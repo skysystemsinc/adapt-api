@@ -12,6 +12,7 @@ import { ReviewEntity } from '../warehouse/review/entities/review.entity';
 import { Permissions } from '../rbac/constants/permissions.constants';
 import { User } from '../users/entities/user.entity';
 import * as fs from 'fs/promises';
+import * as fsSync from 'fs';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { Assignment, AssignmentLevel, AssignmentStatus } from '../warehouse/operator/assignment/entities/assignment.entity';
@@ -19,7 +20,13 @@ import { ApproveOrRejectInspectionReportDto, ApproveOrRejectInspectionReportStat
 import { InspectionReportHistory } from './entities/inspection-report-history.entity';
 import { AssessmentSubmissionHistory } from '../expert-assessment/assessment-submission/entities/assessment-submission-history.entity';
 import { AssignmentSection } from '../warehouse/operator/assignment/entities/assignment-section.entity';
+<<<<<<< HEAD
+import { encryptBuffer, decryptBuffer } from 'src/common/utils/helper.utils';
+import { WarehouseOperatorApplicationRequest } from '../warehouse/entities/warehouse-operator-application-request.entity';
+import { WarehouseLocation } from '../warehouse-location/entities/warehouse-location.entity';
+=======
 import { ClamAVService } from '../clamav/clamav.service';
+>>>>>>> main
 
 @Injectable()
 export class InspectionReportsService {
@@ -38,8 +45,16 @@ export class InspectionReportsService {
     private readonly expertAssessmentRepository: Repository<ExpertAssessment>,
     @InjectRepository(ReviewEntity)
     private readonly reviewEntityRepository: Repository<ReviewEntity>,
+<<<<<<< HEAD
+    @InjectRepository(WarehouseOperatorApplicationRequest)
+    private readonly warehouseOperatorApplicationRequestRepository: Repository<WarehouseOperatorApplicationRequest>,
+    @InjectRepository(WarehouseLocation)
+    private readonly warehouseLocationRepository: Repository<WarehouseLocation>,
+    private readonly dataSource: DataSource
+=======
     private readonly dataSource: DataSource,
     private readonly clamAVService: ClamAVService,
+>>>>>>> main
   ) { }
 
   private readonly uploadDir = path.join(process.cwd(), 'uploads', 'assessment-documents');
@@ -149,8 +164,11 @@ export class InspectionReportsService {
       const globalFilePath = path.join(this.inspectionReportsUploadDir, globalSanitizedFilename);
       const globalDocumentPath = `/uploads/inspection-reports/${globalSanitizedFilename}`;
 
-      // Save global document to disk
-      await fs.writeFile(globalFilePath, globalDocumentFile.buffer);
+      // Encrypt file before saving
+      const { encrypted: globalEncrypted, iv: globalIv, authTag: globalAuthTag } = encryptBuffer(globalDocumentFile.buffer);
+
+      // Save encrypted global document to disk
+      await fs.writeFile(globalFilePath, globalEncrypted);
 
       // Step 2: Create Inspection Report
       const { assessments, ...reportData } = createInspectionReportDto;
@@ -171,6 +189,8 @@ export class InspectionReportsService {
         fileSize: globalDocumentFile.size,
         documentType: 'global_document',
         uploadedBy: userId,
+        iv: globalIv,
+        authTag: globalAuthTag,
       });
 
       await queryRunner.manager.save(AssessmentDocument, globalDocument);
@@ -303,8 +323,11 @@ export class InspectionReportsService {
           const filePath = path.join(this.uploadDir, sanitizedFilename);
           const documentPath = `/uploads/assessment-documents/${sanitizedFilename}`;
 
-          // Save file to disk
-          await fs.writeFile(filePath, file.buffer);
+          // Encrypt file before saving
+          const { encrypted, iv, authTag } = encryptBuffer(file.buffer);
+
+          // Save encrypted file to disk
+          await fs.writeFile(filePath, encrypted);
 
           // Create document record
           const document = this.assessmentDocumentRepository.create({
@@ -315,6 +338,8 @@ export class InspectionReportsService {
             fileSize: file.size,
             documentType: 'supporting_document',
             uploadedBy: userId,
+            iv,
+            authTag,
           });
 
           await queryRunner.manager.save(AssessmentDocument, document);
@@ -488,13 +513,19 @@ export class InspectionReportsService {
     const isFinalHOD = user.userRoles.some(role => role.role.rolePermissions.some(permission => permission.permission.name === Permissions.REVIEW_ASSESSMENT));
     const isCEO = user.userRoles.some(role => role.role.rolePermissions.some(permission => permission.permission.name === Permissions.REVIEW_FINAL_APPLICATION));
 
-    if(isFinalHOD || isCEO) {
+    if (isFinalHOD || isCEO) {
       // get inspection report by application id and assessment type
       const inspectionReport = await this.inspectionReportRepository.findOne({
-        where: {
-          warehouseOperatorApplicationId: applicationId,
-          assessmentType: type as AssessmentCategory,
-        },
+        where: [
+          {
+            warehouseOperatorApplicationId: applicationId,
+            assessmentType: type as AssessmentCategory,
+          },
+          {
+            warehouseLocationId: applicationId,
+            assessmentType: type as AssessmentCategory,
+          }
+        ],
         relations: ['assessmentSubmissions', 'assessmentSubmissions.documents', 'documents'],
       });
       if (!inspectionReport) {
@@ -653,8 +684,8 @@ export class InspectionReportsService {
         // get assignment
         const assignment = await queryRunner.manager.findOne(Assignment, {
           where: {
-            ...(isLocationReport ? 
-              { applicationLocationId: report.warehouseLocationId } : 
+            ...(isLocationReport ?
+              { applicationLocationId: report.warehouseLocationId } :
               { applicationId: report.warehouseOperatorApplicationId }),
             assignedBy: userId,
             level: AssignmentLevel.HOD_TO_EXPERT,
@@ -663,15 +694,15 @@ export class InspectionReportsService {
         });
         if (assignment) {
           // delete assignment HOD_TO_EXPERT
-          
+
           await queryRunner.manager.delete(Assignment, {
             id: assignment.id,
           });
         }
         const childAssignment = await queryRunner.manager.findOne(Assignment, {
           where: {
-            ...(isLocationReport ? 
-              { applicationLocationId: report.warehouseLocationId } : 
+            ...(isLocationReport ?
+              { applicationLocationId: report.warehouseLocationId } :
               { applicationId: report.warehouseOperatorApplicationId }),
             assignedTo: userId,
             level: AssignmentLevel.EXPERT_TO_HOD,
@@ -762,5 +793,73 @@ export class InspectionReportsService {
     } finally {
       await queryRunner.release();
     }
+  }
+
+  async downloadDocument(documentId: string) {
+    const document = await this.assessmentDocumentRepository.findOne({
+      where: { id: documentId },
+    });
+
+    if (!document) {
+      throw new NotFoundException('Document not found');
+    }
+
+    // Construct full file path
+    const filename = path.basename(document.filePath);
+    // Determine which directory based on document type
+    const uploadDir = document.documentType === 'global_document'
+      ? this.inspectionReportsUploadDir
+      : this.uploadDir;
+    const fullPath = path.join(uploadDir, filename);
+
+    if (!fsSync.existsSync(fullPath)) {
+      throw new NotFoundException('File not found on disk');
+    }
+
+    // Read encrypted file
+    const encryptedBuffer = fsSync.readFileSync(fullPath);
+
+    // Decrypt if iv and authTag are present
+    let decryptedBuffer: Buffer;
+    if (document.iv && document.authTag) {
+      try {
+        decryptedBuffer = decryptBuffer(encryptedBuffer, document.iv, document.authTag);
+      } catch (error: any) {
+        throw new BadRequestException(`Failed to decrypt document: ${error.message}`);
+      }
+    } else {
+      // Backward compatibility - assume unencrypted
+      decryptedBuffer = encryptedBuffer;
+    }
+
+    return {
+      buffer: decryptedBuffer,
+      mimeType: document.fileType || 'application/octet-stream',
+      filename: document.fileName,
+    };
+  }
+
+  async getApplicationType(applicationId: string): Promise<{ type: 'operator' | 'location' }> {
+    // Check if it's a warehouse operator application
+    const operatorApplication = await this.warehouseOperatorApplicationRequestRepository.findOne({
+      where: { id: applicationId },
+      select: { id: true },
+    });
+
+    if (operatorApplication) {
+      return { type: 'operator' };
+    }
+
+    // Check if it's a warehouse location application
+    const locationApplication = await this.warehouseLocationRepository.findOne({
+      where: { id: applicationId },
+      select: { id: true },
+    });
+
+    if (locationApplication) {
+      return { type: 'location' };
+    }
+
+    throw new NotFoundException(`Application with ID ${applicationId} not found`);
   }
 }

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, UploadedFiles, UseInterceptors, BadRequestException, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, UploadedFiles, UseInterceptors, BadRequestException, Query, Res } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { InspectionReportsService } from './inspection-reports.service';
 import { CreateInspectionReportDto } from './dto/create-inspection-report.dto';
@@ -12,6 +12,7 @@ import { ApproveOrRejectInspectionReportDto } from './dto/approve-reject-inspect
 import { Permissions } from '../rbac/constants/permissions.constants';
 import { PermissionsGuard } from 'src/common/guards/permissions.guard';
 import { RequirePermissions } from 'src/common/decorators/require-permissions.decorator';
+import type { Response as ExpressResponse } from 'express';
 
 @ApiTags('Inspection Reports')
 @Controller('inspection-reports')
@@ -160,6 +161,14 @@ export class InspectionReportsController {
     return this.inspectionReportsService.findByApplicationIdAssessment(applicationId, userId, type);
   }
 
+  @Get('/application/:applicationId/type')
+  @ApiOperation({ summary: 'Get application type (operator or location) by application ID' })
+  @ApiResponse({ status: 200, description: 'Application type found' })
+  @ApiResponse({ status: 404, description: 'Application not found' })
+  getApplicationType(@Param('applicationId') applicationId: string) {
+    return this.inspectionReportsService.getApplicationType(applicationId);
+  }
+
   @Patch(':id/approve-reject')
   @ApiOperation({ summary: 'Approve or reject an inspection report' })
   @ApiResponse({ status: 200, description: 'Inspection report approved or rejected successfully' })
@@ -173,5 +182,27 @@ export class InspectionReportsController {
   ) {
     const userId = req.user?.sub || req.user?.id;
     return this.inspectionReportsService.approveOrReject(id, approveOrRejectInspectionReportDto, userId);
+  }
+
+  @Get('/documents/:id/download')
+  @ApiOperation({ summary: 'Download assessment document' })
+  @ApiResponse({ status: 200, description: 'Document downloaded successfully' })
+  @ApiResponse({ status: 404, description: 'Document not found' })
+  async downloadDocument(
+    @Param('id') id: string,
+    @Res() res: ExpressResponse,
+  ) {
+    const { buffer, mimeType, filename } = await this.inspectionReportsService.downloadDocument(id);
+
+    // Ensure filename is properly encoded for Content-Disposition header
+    const encodedFilename = encodeURIComponent(filename);
+    
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodedFilename}`);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'");
+    res.setHeader('X-Frame-Options', 'DENY');
+
+    res.send(buffer);
   }
 }

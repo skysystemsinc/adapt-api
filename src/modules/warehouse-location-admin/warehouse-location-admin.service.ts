@@ -524,7 +524,9 @@ export class WarehouseLocationAdminService {
     }
 
     // If user is HOD or Expert, filter by assignment
-    if (user && (hasPermission(user, Permissions.IS_HOD) || hasPermission(user, Permissions.IS_EXPERT))) {
+    if (user &&
+      (!hasPermission(user, Permissions.REVIEW_FINAL_APPLICATION) &&
+        !hasPermission(user, Permissions.REVIEW_ASSESSMENT))) {
       const assignment = await this.dataSource.getRepository(Assignment).findOne({
         where: {
           applicationLocationId: id,  // Use applicationLocationId for location applications
@@ -533,10 +535,16 @@ export class WarehouseLocationAdminService {
         relations: ['sections', 'sections.fields'],
       });
 
-      if (assignment && assignment.sections) {
+      if (assignment && assignment.sections
+        && !hasPermission(user, Permissions.REVIEW_FINAL_APPLICATION)
+        && !hasPermission(user, Permissions.REVIEW_ASSESSMENT)) {
         this.filterApplicationByAssignment(warehouseLocation, assignment);
       } else {
         // If no assignment found, return empty data for HOD/Expert
+        // Note: WarehouseLocation doesn't have metadata field like WarehouseOperatorApplicationRequest
+        const resubmittedSections: string[] = [];
+        const resubmittedResourcesBySection: Record<string, any> = {};
+
         return {
           ...warehouseLocation,
           facility: null,
@@ -549,6 +557,8 @@ export class WarehouseLocationAdminService {
           humanResources: [],
           warehouseLocationChecklist: null,
           totalCount: 0,
+          resubmittedSections,
+          resubmittedResourcesBySection,
         };
       }
     }

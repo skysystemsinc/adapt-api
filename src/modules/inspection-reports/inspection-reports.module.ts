@@ -10,13 +10,15 @@ import { AssessmentDocument } from '../expert-assessment/assessment-documents/en
 import { AssessmentSubSection } from '../expert-assessment/assessment-sub-section/entities/assessment-sub-section.entity';
 import { ExpertAssessment } from '../expert-assessment/entities/expert-assessment.entity';
 import { ReviewEntity } from '../warehouse/review/entities/review.entity';
+import { WarehouseOperatorApplicationRequest } from '../warehouse/entities/warehouse-operator-application-request.entity';
+import { WarehouseLocation } from '../warehouse-location/entities/warehouse-location.entity';
 import { AuthModule } from '../auth/auth.module';
 import { RBACModule } from '../rbac/rbac.module';
 import { ClamAVModule } from '../clamav/clamav.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([InspectionReport, AssessmentSubmission, AssessmentDocument, AssessmentSubSection, ExpertAssessment, ReviewEntity]),
+    TypeOrmModule.forFeature([InspectionReport, AssessmentSubmission, AssessmentDocument, AssessmentSubSection, ExpertAssessment, ReviewEntity, WarehouseOperatorApplicationRequest, WarehouseLocation]),
     ConfigModule,
     AuthModule,
     JwtModule.registerAsync({

@@ -6,9 +6,11 @@ import { ProfessionalExperience } from './entities/professional-experience.entit
 import { HumanResource } from '../entities/human-resource.entity';
 import { WarehouseDocument } from '../../../warehouse/entities/warehouse-document.entity';
 import * as fs from 'fs/promises';
+import * as fsSync from 'fs';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import dayjs from 'dayjs';
+import { encryptBuffer, decryptBuffer } from 'src/common/utils/helper.utils';
 
 @Injectable()
 export class ProfessionalExperienceService {
@@ -64,7 +66,11 @@ export class ProfessionalExperienceService {
     const filePath = path.join(this.uploadDir, sanitizedFilename);
     const documentPath = `/uploads/${sanitizedFilename}`;
 
-    await fs.writeFile(filePath, file.buffer);
+    // Encrypt file before saving
+    const { encrypted, iv, authTag } = encryptBuffer(file.buffer);
+
+    // Save encrypted file to disk
+    await fs.writeFile(filePath, encrypted);
 
     const mimeType = file.mimetype || 'application/octet-stream';
 
@@ -76,6 +82,8 @@ export class ProfessionalExperienceService {
       originalFileName: file.originalname,
       filePath: documentPath,
       mimeType,
+      iv,
+      authTag,
       isActive: true,
     });
 
@@ -326,5 +334,41 @@ export class ProfessionalExperienceService {
 
   findOne(id: number) {
     return `This action returns a #${id} professionalExperience`;
+  }
+
+  async downloadWarehouseDocument(documentId: string) {
+    const document = await this.warehouseDocumentRepository.findOne({
+      where: { id: documentId },
+    });
+
+    if (!document) {
+      throw new NotFoundException('Document not found');
+    }
+
+    const filename = path.basename(document.filePath);
+    const fullPath = path.join(this.uploadDir, filename);
+
+    if (!fsSync.existsSync(fullPath)) {
+      throw new NotFoundException('File not found on disk');
+    }
+
+    const encryptedBuffer = fsSync.readFileSync(fullPath);
+
+    let decryptedBuffer: Buffer;
+    if (document.iv && document.authTag) {
+      try {
+        decryptedBuffer = decryptBuffer(encryptedBuffer, document.iv, document.authTag);
+      } catch (error: any) {
+        throw new BadRequestException(`Failed to decrypt document: ${error.message}`);
+      }
+    } else {
+      decryptedBuffer = encryptedBuffer;
+    }
+
+    return {
+      buffer: decryptedBuffer,
+      mimeType: document.mimeType || 'application/octet-stream',
+      filename: document.originalFileName,
+    };
   }
 }
