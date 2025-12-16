@@ -4663,7 +4663,6 @@ export class WarehouseService {
         }
       }
     }
-    }
 
     // Generate unique filename
     const sanitizedFilename = `${uuidv4()}${fileExtension}`;
