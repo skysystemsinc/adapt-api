@@ -4645,8 +4645,6 @@ export class WarehouseService {
         }
         
         // Handle ClamAV service failures (unavailable, timeout, etc.)
-        const isMandatory = this.clamAVService.getScanMandatory();
-        
         if (isMandatory) {
           // CLAMAV_SCAN=true: Block upload if scan fails
           this.logger.error(
@@ -4664,6 +4662,7 @@ export class WarehouseService {
           );
         }
       }
+    }
     }
 
     // Generate unique filename

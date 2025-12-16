@@ -108,47 +108,48 @@ export class InspectionReportsService {
       }
 
       // Scan global document with ClamAV before processing
-      try {
-        this.logger.log(`🔍 Scanning global document with ClamAV: ${globalDocumentFile.originalname}`);
-        const scanResult = await this.clamAVService.scanBuffer(
-          globalDocumentFile.buffer,
-          globalDocumentFile.originalname,
-        );
+      const isMandatory = this.clamAVService.getScanMandatory();
+      if (isMandatory) {
+        try {
+          this.logger.log(`🔍 Scanning global document with ClamAV: ${globalDocumentFile.originalname}`);
+          const scanResult = await this.clamAVService.scanBuffer(
+            globalDocumentFile.buffer,
+            globalDocumentFile.originalname,
+          );
 
-        if (scanResult.isInfected) {
-          this.logger.warn(
-            `🚨 Infected global document detected: ${globalDocumentFile.originalname}, Viruses: ${scanResult.viruses.join(', ')}`,
-          );
-          throw new BadRequestException(
-            `Global document is infected with malware: ${scanResult.viruses.join(', ')}. Upload rejected.`,
-          );
-        }
+          if (scanResult.isInfected) {
+            this.logger.warn(
+              `🚨 Infected global document detected: ${globalDocumentFile.originalname}, Viruses: ${scanResult.viruses.join(', ')}`,
+            );
+            throw new BadRequestException(
+              `Global document is infected with malware: ${scanResult.viruses.join(', ')}. Upload rejected.`,
+            );
+          }
 
-        this.logger.log(`✅ Global document passed ClamAV scan: ${globalDocumentFile.originalname}`);
-      } catch (error) {
-        if (error instanceof BadRequestException) {
-          // Always reject infected files, regardless of CLAMAV_SCAN setting
-          throw error;
-        }
-        
-        // Handle ClamAV service failures (unavailable, timeout, etc.)
-        const isMandatory = this.clamAVService.getScanMandatory();
-        
-        if (isMandatory) {
-          // CLAMAV_SCAN=true: Block upload if scan fails
-          this.logger.error(
-            `ClamAV scan failed for global document ${globalDocumentFile.originalname}: ${error.message}`,
-            error.stack,
-          );
-          throw new BadRequestException(
-            `Virus scanning unavailable: ${error.message}. Upload blocked due to mandatory scanning.`,
-          );
-        } else {
-          // CLAMAV_SCAN=false: Log warning but allow upload (bypass on failure)
-          this.logger.warn(
-            `ClamAV scan failed for global document ${globalDocumentFile.originalname}: ${error.message}. Bypassing scan and allowing upload.`,
-            error.stack,
-          );
+          this.logger.log(`✅ Global document passed ClamAV scan: ${globalDocumentFile.originalname}`);
+        } catch (error) {
+          if (error instanceof BadRequestException) {
+            // Always reject infected files, regardless of CLAMAV_SCAN setting
+            throw error;
+          }
+          
+          // Handle ClamAV service failures (unavailable, timeout, etc.)
+          if (isMandatory) {
+            // CLAMAV_SCAN=true: Block upload if scan fails
+            this.logger.error(
+              `ClamAV scan failed for global document ${globalDocumentFile.originalname}: ${error.message}`,
+              error.stack,
+            );
+            throw new BadRequestException(
+              `Virus scanning unavailable: ${error.message}. Upload blocked due to mandatory scanning.`,
+            );
+          } else {
+            // CLAMAV_SCAN=false: Log warning but allow upload (bypass on failure)
+            this.logger.warn(
+              `ClamAV scan failed for global document ${globalDocumentFile.originalname}: ${error.message}. Bypassing scan and allowing upload.`,
+              error.stack,
+            );
+          }
         }
       }
 
@@ -267,47 +268,48 @@ export class InspectionReportsService {
           }
 
           // Scan file with ClamAV before processing
-          try {
-            this.logger.log(`🔍 Scanning file with ClamAV: ${file.originalname}`);
-            const scanResult = await this.clamAVService.scanBuffer(
-              file.buffer,
-              file.originalname,
-            );
+          const isMandatory = this.clamAVService.getScanMandatory();
+          if (isMandatory) {
+            try {
+              this.logger.log(`🔍 Scanning file with ClamAV: ${file.originalname}`);
+              const scanResult = await this.clamAVService.scanBuffer(
+                file.buffer,
+                file.originalname,
+              );
 
-            if (scanResult.isInfected) {
-              this.logger.warn(
-                `🚨 Infected file detected: ${file.originalname}, Viruses: ${scanResult.viruses.join(', ')}`,
-              );
-              throw new BadRequestException(
-                `File is infected with malware: ${scanResult.viruses.join(', ')}. Upload rejected.`,
-              );
-            }
+              if (scanResult.isInfected) {
+                this.logger.warn(
+                  `🚨 Infected file detected: ${file.originalname}, Viruses: ${scanResult.viruses.join(', ')}`,
+                );
+                throw new BadRequestException(
+                  `File is infected with malware: ${scanResult.viruses.join(', ')}. Upload rejected.`,
+                );
+              }
 
-            this.logger.log(`✅ File passed ClamAV scan: ${file.originalname}`);
-          } catch (error) {
-            if (error instanceof BadRequestException) {
-              // Always reject infected files, regardless of CLAMAV_SCAN setting
-              throw error;
-            }
-            
-            // Handle ClamAV service failures (unavailable, timeout, etc.)
-            const isMandatory = this.clamAVService.getScanMandatory();
-            
-            if (isMandatory) {
-              // CLAMAV_SCAN=true: Block upload if scan fails
-              this.logger.error(
-                `ClamAV scan failed for ${file.originalname}: ${error.message}`,
-                error.stack,
-              );
-              throw new BadRequestException(
-                `Virus scanning unavailable: ${error.message}. Upload blocked due to mandatory scanning.`,
-              );
-            } else {
-              // CLAMAV_SCAN=false: Log warning but allow upload (bypass on failure)
-              this.logger.warn(
-                `ClamAV scan failed for ${file.originalname}: ${error.message}. Bypassing scan and allowing upload.`,
-                error.stack,
-              );
+              this.logger.log(`✅ File passed ClamAV scan: ${file.originalname}`);
+            } catch (error) {
+              if (error instanceof BadRequestException) {
+                // Always reject infected files, regardless of CLAMAV_SCAN setting
+                throw error;
+              }
+              
+              // Handle ClamAV service failures (unavailable, timeout, etc.)
+              if (isMandatory) {
+                // CLAMAV_SCAN=true: Block upload if scan fails
+                this.logger.error(
+                  `ClamAV scan failed for ${file.originalname}: ${error.message}`,
+                  error.stack,
+                );
+                throw new BadRequestException(
+                  `Virus scanning unavailable: ${error.message}. Upload blocked due to mandatory scanning.`,
+                );
+              } else {
+                // CLAMAV_SCAN=false: Log warning but allow upload (bypass on failure)
+                this.logger.warn(
+                  `ClamAV scan failed for ${file.originalname}: ${error.message}. Bypassing scan and allowing upload.`,
+                  error.stack,
+                );
+              }
             }
           }
 
