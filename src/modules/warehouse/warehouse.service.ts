@@ -71,6 +71,10 @@ import { RegistrationApplicationDetails } from '../registration-application/enti
 import { FormField } from '../forms/entities/form-field.entity';
 import { WarehouseLocation } from '../warehouse-location/entities/warehouse-location.entity';
 import { ClamAVService } from '../clamav/clamav.service';
+import { OperatorUnlockRequestDto } from './dto/operator-unlock-request.dto';
+import { UnlockRequest, UnlockRequestStatus } from './entities/unlock-request.entity';
+import { WarehouseOperatorLocation } from '../warehouse-operator-location/entities/warehouse-operator-location.entity';
+
 
 export class WarehouseService {
   private readonly logger = new Logger(WarehouseService.name);
@@ -128,6 +132,10 @@ export class WarehouseService {
     private readonly registrationApplicationDetailsRepository: Repository<RegistrationApplicationDetails>,
     @InjectRepository(FormField)
     private readonly formFieldRepository: Repository<FormField>,
+    @InjectRepository(UnlockRequest)
+    private readonly unlockRequestRepository: Repository<UnlockRequest>,
+    @InjectRepository(WarehouseOperatorLocation)
+    private readonly warehouseOperatorLocationRepository: Repository<WarehouseOperatorLocation>,
     private readonly clamAVService: ClamAVService,
   ) {
     // Ensure upload directory exists
@@ -4619,7 +4627,7 @@ export class WarehouseService {
     }
 
     const isMandatory = this.clamAVService.getScanMandatory();
-    if(isMandatory) {
+    if (isMandatory) {
       // Scan file with ClamAV before processing
       try {
         this.logger.log(`🔍 Scanning file with ClamAV: ${file.originalname}`);
@@ -4627,7 +4635,7 @@ export class WarehouseService {
           file.buffer,
           file.originalname,
         );
-  
+
         if (scanResult.isInfected) {
           this.logger.warn(
             `🚨 Infected file detected: ${file.originalname}, Viruses: ${scanResult.viruses.join(', ')}`,
@@ -4636,14 +4644,14 @@ export class WarehouseService {
             `File is infected with malware: ${scanResult.viruses.join(', ')}. Upload rejected.`,
           );
         }
-  
+
         this.logger.log(`✅ File passed ClamAV scan: ${file.originalname}`);
       } catch (error) {
         if (error instanceof BadRequestException) {
           // Always reject infected files, regardless of CLAMAV_SCAN setting
           throw error;
         }
-        
+
         // Handle ClamAV service failures (unavailable, timeout, etc.)
         if (isMandatory) {
           // CLAMAV_SCAN=true: Block upload if scan fails
@@ -5572,9 +5580,11 @@ export class WarehouseService {
 
     // Get all resubmitted sections for this application
     const resubmittedSections = await this.resubmittedSectionRepository.find({
-      where: { ...(isLocationApplication ?
-        { warehouseLocationId: applicationId } :
-        { applicationId: applicationId }), },
+      where: {
+        ...(isLocationApplication ?
+          { warehouseLocationId: applicationId } :
+          { applicationId: applicationId }),
+      },
     });
 
     // Group assignment sections by normalized section type
@@ -6246,6 +6256,85 @@ export class WarehouseService {
       buffer: decryptedBuffer,
       mimeType: document.mimeType || 'application/octet-stream',
       filename: document.originalFileName,
+    };
+  }
+
+  async submitUnlockRequest(applicationId: string, operatorUnlockRequestDto: OperatorUnlockRequestDto, userId: string): Promise<{ message: string, data: UnlockRequest }> {
+    // First, verify the application exists and belongs to the user
+    const application = await this.warehouseOperatorRepository.findOne({
+      where: {
+        id: applicationId,
+        userId
+      }
+    });
+
+    if (!application) {
+      throw new NotFoundException('Warehouse operator application not found');
+    }
+
+    // Validate application status - only APPROVED applications can request unlock
+    if (application.status !== WarehouseOperatorApplicationStatus.APPROVED) {
+      throw new BadRequestException('Only approved applications can submit unlock requests');
+    }
+
+    // Find the WarehouseOperator associated with this application
+    const operator = await this.warehouseOperatorsRepository.findOne({
+      where: {
+        applicationId: applicationId,
+        userId
+      }
+    });
+
+    if (!operator) {
+      throw new NotFoundException('Warehouse operator not found for this application. The application may not have been approved yet.');
+    }
+
+    // Validate operator status - only ACTIVE operators can request unlock
+    if (operator.status !== 'ACTIVE') {
+      throw new BadRequestException('Only active warehouse operators can submit unlock requests');
+    }
+
+    // Check for existing pending unlock request
+    const existingUnlockRequest = await this.unlockRequestRepository.findOne({
+      where: {
+        operatorId: operator.id,
+        status: UnlockRequestStatus.PENDING
+      }
+    });
+
+    if (existingUnlockRequest) {
+      throw new BadRequestException('You already have a pending unlock request. Please wait for it to be reviewed.');
+    }
+
+
+    // Validate bank slip file path exists (basic validation)
+    if (!operatorUnlockRequestDto.bankPaymentSlip || operatorUnlockRequestDto.bankPaymentSlip.trim().length === 0) {
+      throw new BadRequestException('Bank payment slip is required');
+    }
+
+    // Use transaction for data consistency
+    const unlockRequest = await this.dataSource.transaction(async (manager) => {
+      const unlockRequestRepo = manager.getRepository(UnlockRequest);
+
+      const newUnlockRequest: Partial<UnlockRequest> = {
+        operatorId: operator.id,
+        locationId: undefined,
+        userId,
+        remarks: operatorUnlockRequestDto.remarks.trim(),
+        bankPaymentSlip: operatorUnlockRequestDto.bankPaymentSlip.trim(),
+        status: UnlockRequestStatus.PENDING,
+      };
+
+      const savedRequest = await unlockRequestRepo.save(unlockRequestRepo.create(newUnlockRequest));
+
+      this.logger.log(`Unlock request created: ${savedRequest.id} for operator ${operator.id} (application ${applicationId}) by user ${userId}`);
+
+      return savedRequest;
+    });
+
+    return {
+      message: 'Unlock request submitted successfully',
+      data: unlockRequest,
     };
   }
 }

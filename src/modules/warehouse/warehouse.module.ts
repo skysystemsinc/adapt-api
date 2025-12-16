@@ -50,6 +50,9 @@ import { ResubmittedSectionEntity } from './entities/resubmitted-section.entity'
 import { RegistrationApplication } from '../registration-application/entities/registration-application.entity';
 import { RegistrationApplicationDetails } from '../registration-application/entities/registration-application-details.entity';
 import { FormField } from '../forms/entities/form-field.entity';
+import { UnlockRequest } from './entities/unlock-request.entity';
+import { WarehouseOperatorLocation } from '../warehouse-operator-location/entities/warehouse-operator-location.entity';
+
 
 @Module({
   controllers: [WarehouseController],
@@ -98,6 +101,8 @@ import { FormField } from '../forms/entities/form-field.entity';
       RegistrationApplication,
       RegistrationApplicationDetails,
       FormField,
+      UnlockRequest,
+      WarehouseOperatorLocation,
     ]),
     forwardRef(() => AuthModule),
     JwtModule.registerAsync({
