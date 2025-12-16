@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner } from "typeorm";
 
-export class CreateRoleRequestsTables1765280120910 implements MigrationInterface {
-    name = 'CreateRoleRequestsTables1765280120910'
+export class CreateRoleRequestsTables1766000000001 implements MigrationInterface {
+    name = 'CreateRoleRequestsTables1766000000001'
 
     public async up(queryRunner: QueryRunner): Promise<void> {
         await queryRunner.query(`CREATE TABLE "role_permissions_requests" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "roleRequestId" uuid NOT NULL, "permissionId" uuid NOT NULL, "originalRolePermissionId" uuid, "action" character varying NOT NULL DEFAULT 'unchanged', "version" character varying, "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "PK_7be279dfa974a131114558f1787" PRIMARY KEY ("id"))`);

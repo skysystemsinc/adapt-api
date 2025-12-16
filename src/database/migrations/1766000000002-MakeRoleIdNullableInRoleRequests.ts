@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner } from "typeorm";
 
-export class MakeRoleIdNullableInRoleRequests1765282565342 implements MigrationInterface {
-    name = 'MakeRoleIdNullableInRoleRequests1765282565342'
+export class MakeRoleIdNullableInRoleRequests1766000000002 implements MigrationInterface {
+    name = 'MakeRoleIdNullableInRoleRequests1766000000002'
 
    
     public async up(queryRunner: QueryRunner): Promise<void> {

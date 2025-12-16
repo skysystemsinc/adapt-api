@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner } from "typeorm";
 
-export class UpdateAdminRegistrationDocumentsAddENcryption1764944293308 implements MigrationInterface {
-    name = 'UpdateAdminRegistrationDocumentsAddENcryption1764944293308'
+export class UpdateAdminRegistrationDocumentsAddENcryption1774000000001 implements MigrationInterface {
+    name = 'UpdateAdminRegistrationDocumentsAddENcryption1774000000001'
 
     public async up(queryRunner: QueryRunner): Promise<void> {
         await queryRunner.query(`ALTER TABLE "admin_registration_documents" ADD "iv" text`);

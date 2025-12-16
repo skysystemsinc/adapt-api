@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner } from "typeorm";
 
-export class AddActionToRoleRequests1765299947684 implements MigrationInterface {
-    name = 'AddActionToRoleRequests1765299947684'
+export class AddActionToRoleRequests1766000000003 implements MigrationInterface {
+    name = 'AddActionToRoleRequests1766000000003'
 
     public async up(queryRunner: QueryRunner): Promise<void> {
         // Add action column to role_requests table with default 'update'
