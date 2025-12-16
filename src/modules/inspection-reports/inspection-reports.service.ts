@@ -412,13 +412,19 @@ export class InspectionReportsService {
     const isFinalHOD = user.userRoles.some(role => role.role.rolePermissions.some(permission => permission.permission.name === Permissions.REVIEW_ASSESSMENT));
     const isCEO = user.userRoles.some(role => role.role.rolePermissions.some(permission => permission.permission.name === Permissions.REVIEW_FINAL_APPLICATION));
 
-    if(isFinalHOD || isCEO) {
+    if (isFinalHOD || isCEO) {
       // get inspection report by application id and assessment type
       const inspectionReport = await this.inspectionReportRepository.findOne({
-        where: {
-          warehouseOperatorApplicationId: applicationId,
-          assessmentType: type as AssessmentCategory,
-        },
+        where: [
+          {
+            warehouseOperatorApplicationId: applicationId,
+            assessmentType: type as AssessmentCategory,
+          },
+          {
+            warehouseLocationId: applicationId,
+            assessmentType: type as AssessmentCategory,
+          }
+        ],
         relations: ['assessmentSubmissions', 'assessmentSubmissions.documents', 'documents'],
       });
       if (!inspectionReport) {
@@ -577,8 +583,8 @@ export class InspectionReportsService {
         // get assignment
         const assignment = await queryRunner.manager.findOne(Assignment, {
           where: {
-            ...(isLocationReport ? 
-              { applicationLocationId: report.warehouseLocationId } : 
+            ...(isLocationReport ?
+              { applicationLocationId: report.warehouseLocationId } :
               { applicationId: report.warehouseOperatorApplicationId }),
             assignedBy: userId,
             level: AssignmentLevel.HOD_TO_EXPERT,
@@ -587,15 +593,15 @@ export class InspectionReportsService {
         });
         if (assignment) {
           // delete assignment HOD_TO_EXPERT
-          
+
           await queryRunner.manager.delete(Assignment, {
             id: assignment.id,
           });
         }
         const childAssignment = await queryRunner.manager.findOne(Assignment, {
           where: {
-            ...(isLocationReport ? 
-              { applicationLocationId: report.warehouseLocationId } : 
+            ...(isLocationReport ?
+              { applicationLocationId: report.warehouseLocationId } :
               { applicationId: report.warehouseOperatorApplicationId }),
             assignedTo: userId,
             level: AssignmentLevel.EXPERT_TO_HOD,
@@ -700,8 +706,8 @@ export class InspectionReportsService {
     // Construct full file path
     const filename = path.basename(document.filePath);
     // Determine which directory based on document type
-    const uploadDir = document.documentType === 'global_document' 
-      ? this.inspectionReportsUploadDir 
+    const uploadDir = document.documentType === 'global_document'
+      ? this.inspectionReportsUploadDir
       : this.uploadDir;
     const fullPath = path.join(uploadDir, filename);
 
