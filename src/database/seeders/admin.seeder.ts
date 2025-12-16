@@ -8,6 +8,7 @@ import { RBACService } from '../../modules/rbac/services/rbac.service';
 import { UserRole } from '../../modules/rbac/entities/user-role.entity';
 import { RolePermission } from '../../modules/rbac/entities/role-permission.entity';
 import { Permission } from '../../modules/rbac/entities/permission.entity';
+import { Organization } from '../../modules/organization/entities/organization.entity';
 
 export class AdminSeeder {
     public async run(dataSource: DataSource): Promise<void> {
@@ -521,6 +522,143 @@ export class AdminSeeder {
             console.log(`✓ Assigned super admin role to user: ${superAdminUser.email}`);
         } else {
             console.log(`- Super admin user already exists: ${superAdminUser.email}`);
+        }
+
+        // Create Scrutiny Officer user
+        const scrutinyOfficerRole = await roleRepository.findOne({
+            where: { name: 'Scrutiny Officer' },
+        });
+
+        const scrutinyOfficerUser = {
+            email: 'officer@ncmcl.com',
+            password: 'Password@123',
+            firstName: 'Scrutiny',
+            lastName: 'Officer',
+            isActive: true,
+        };
+
+        const existingScrutinyOfficerUser = await userRepository.findOne({
+            where: { email: scrutinyOfficerUser.email },
+        });
+
+        if (!existingScrutinyOfficerUser) {
+            const hashedPassword = await bcrypt.hash(scrutinyOfficerUser.password, 10);
+            const newScrutinyOfficerUser = userRepository.create({
+                ...scrutinyOfficerUser,
+                password: hashedPassword
+            });
+            const savedScrutinyOfficerUser = await userRepository.save(newScrutinyOfficerUser);
+            console.log(`✓ Created scrutiny officer user: ${savedScrutinyOfficerUser.email}`);
+            
+            if (scrutinyOfficerRole) {
+                await rbacService.assignRolesToUser(savedScrutinyOfficerUser.id, [scrutinyOfficerRole.id]);
+                console.log(`✓ Assigned Scrutiny Officer role to user: ${scrutinyOfficerUser.email}`);
+            } else {
+                console.log(`⚠️  Scrutiny Officer role not found. Please ensure RBACSeeder runs before AdminSeeder.`);
+            }
+        } else {
+            // Check if user already has Scrutiny Officer role
+            const userRoles = await rbacService.getUserRoles(existingScrutinyOfficerUser.id);
+            const hasRole = scrutinyOfficerRole && userRoles.some(r => r.id === scrutinyOfficerRole.id);
+            
+            if (!hasRole && scrutinyOfficerRole) {
+                await rbacService.assignRolesToUser(existingScrutinyOfficerUser.id, [scrutinyOfficerRole.id]);
+                console.log(`✓ Assigned Scrutiny Officer role to existing user: ${scrutinyOfficerUser.email}`);
+            } else {
+                console.log(`- Scrutiny Officer user already exists: ${scrutinyOfficerUser.email}`);
+            }
+        }
+
+        // Assign NCMCL organization to all HOD and Expert users
+        console.log('\n🌱 Assigning NCMCL organization to HOD and Expert users...\n');
+        const organizationRepository = dataSource.getRepository(Organization);
+        const ncmclOrganization = await organizationRepository.findOne({
+            where: { name: 'NCMCL' },
+        });
+
+        if (!ncmclOrganization) {
+            console.log('⚠️  NCMCL organization not found. Please ensure OrganisationSeeder runs before AdminSeeder.');
+        } else {
+            // Define HOD and Expert role names
+            const hodAndExpertRoleNames = [
+                'HOD - Finance',
+                'HOD - Legal',
+                'HOD - HR',
+                'HOD - Technical',
+                'HOD - ESG',
+                'HOD - Inspection',
+                'HOD - Security',
+                'HOD - Final Review',
+                'Expert Maker - Finance',
+                'Expert Checker - Finance',
+                'Expert Maker - Legal',
+                'Expert Checker - Legal',
+                'Expert Maker - HR',
+                'Expert Checker - HR',
+                'Expert Maker - Inspection',
+                'Expert Checker - Inspection',
+                'Expert Maker - Security',
+                'Expert Checker - Security',
+                'Expert Maker - Technical',
+                'Expert Checker - Technical',
+                'Expert Maker - ESG',
+                'Expert Checker - ESG',
+            ];
+
+            // Get all HOD and Expert roles
+            const hodAndExpertRoles = await roleRepository.find({
+                where: hodAndExpertRoleNames.map(name => ({ name })),
+            });
+
+            if (hodAndExpertRoles.length === 0) {
+                console.log('⚠️  No HOD or Expert roles found.');
+            } else {
+                const roleIds = hodAndExpertRoles.map(role => role.id);
+
+                // Find all users with HOD or Expert roles
+                const userRoles = await dataSource.getRepository(UserRole).find({
+                    where: roleIds.map(roleId => ({ roleId })),
+                    relations: ['user'],
+                });
+
+                // Get unique user IDs
+                const userIds = [...new Set(userRoles.map(ur => ur.userId))];
+
+                if (userIds.length === 0) {
+                    console.log('⚠️  No users found with HOD or Expert roles.');
+                } else {
+                    // Update users to assign NCMCL organization
+                    let updatedCount = 0;
+                    let skippedCount = 0;
+
+                    for (const userId of userIds) {
+                        // Check if user already has NCMCL organization assigned
+                        const user = await userRepository.findOne({
+                            where: { id: userId },
+                            relations: ['organization'],
+                        });
+
+                        if (!user) {
+                            continue;
+                        }
+
+                        if (!user.organization || user.organization.id !== ncmclOrganization.id) {
+                            user.organization = ncmclOrganization;
+                            await userRepository.save(user);
+                            updatedCount++;
+                            console.log(`✓ Assigned NCMCL organization to user: ${user.email}`);
+                        } else {
+                            skippedCount++;
+                            console.log(`- User ${user.email} already has NCMCL organization assigned`);
+                        }
+                    }
+
+                    console.log(`\n✅ Assigned NCMCL organization to ${updatedCount} HOD and Expert users.`);
+                    if (skippedCount > 0) {
+                        console.log(`- Skipped ${skippedCount} users (already assigned).`);
+                    }
+                }
+            }
         }
         
         console.log('\n✅ Super admin user seeding completed!');
