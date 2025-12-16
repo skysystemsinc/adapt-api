@@ -2,10 +2,16 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, In } from 'typeorm';
 import { plainToInstance } from 'class-transformer';
+import * as fs from 'fs/promises';
+import * as path from 'path';
+import { v4 as uuidv4 } from 'uuid';
+import { fileTypeFromBuffer } from 'file-type';
+import { encryptBuffer } from 'src/common/utils/helper.utils';
 import { SettingRequest, SettingRequestStatus, SettingRequestAction } from '../entities/setting-request.entity';
 import { Setting } from '../entities/setting.entity';
 import { CreateSettingRequestDto } from '../dto/create-setting-request.dto';
@@ -13,8 +19,24 @@ import { ReviewSettingRequestDto } from '../dto/review-setting-request.dto';
 import { SettingRequestResponseDto } from '../dto/setting-request-response.dto';
 import { SettingsService } from '../settings.service';
 
+const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx', '.xlsx'];
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const SETTINGS_UPLOAD_DIR = 'uploads/settings';
+const FILE_MIME_TYPE_MAP: Record<string, string[]> = {
+  '.pdf': ['application/pdf'],
+  '.doc': ['application/msword'],
+  '.docx': [
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  ],
+  '.xlsx': [
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ],
+};
+
 @Injectable()
 export class SettingRequestsService {
+  private readonly logger = new Logger(SettingRequestsService.name);
+
   constructor(
     @InjectRepository(SettingRequest)
     private readonly settingRequestRepository: Repository<SettingRequest>,
@@ -22,7 +44,39 @@ export class SettingRequestsService {
     private readonly settingRepository: Repository<Setting>,
     private readonly settingsService: SettingsService,
     private readonly dataSource: DataSource,
-  ) { }
+  ) {
+    this.ensureUploadDirectory();
+  }
+
+  private async ensureUploadDirectory(): Promise<void> {
+    try {
+      await fs.access(SETTINGS_UPLOAD_DIR);
+    } catch {
+      await fs.mkdir(SETTINGS_UPLOAD_DIR, { recursive: true });
+      this.logger.log(`📁 Created upload directory: ${SETTINGS_UPLOAD_DIR}`);
+    }
+  }
+
+  private async detectMimeType(buffer: Buffer, fileExtension?: string): Promise<string> {
+    try {
+      const fileType = await fileTypeFromBuffer(buffer);
+      if (fileType) {
+        return fileType.mime;
+      }
+    } catch (error) {
+      this.logger.warn('Failed to detect MIME type from buffer', error);
+    }
+
+    // Fallback to extension-based MIME type
+    if (fileExtension) {
+      const mimeTypes = FILE_MIME_TYPE_MAP[fileExtension.toLowerCase()];
+      if (mimeTypes && mimeTypes.length > 0) {
+        return mimeTypes[0];
+      }
+    }
+
+    return 'application/octet-stream';
+  }
 
   /**
    * Create a setting request for approval
@@ -157,6 +211,74 @@ export class SettingRequestsService {
     return this.findOne(savedRequest.id);
   }
 
+  /**
+   * Create a setting request with file upload
+   */
+  async createWithFile(
+    createDto: CreateSettingRequestDto,
+    file: any,
+    requestedBy?: string,
+  ): Promise<SettingRequestResponseDto> {
+    if (!file) {
+      throw new BadRequestException('No file provided');
+    }
+
+    // Validate file size
+    if (file.size > MAX_FILE_SIZE) {
+      throw new BadRequestException(
+        `File size ${(file.size / 1024 / 1024).toFixed(2)}MB exceeds maximum allowed size of ${(MAX_FILE_SIZE / 1024 / 1024).toFixed(0)}MB`,
+      );
+    }
+
+    // Validate file extension
+    const fileExtension = path.extname(file.originalname).toLowerCase();
+    if (!ALLOWED_EXTENSIONS.includes(fileExtension)) {
+      throw new BadRequestException(
+        `File type '${fileExtension}' is not allowed. Allowed types: ${ALLOWED_EXTENSIONS.join(', ')}`,
+      );
+    }
+
+    // Validate MIME type
+    const detectedMimeType = await this.detectMimeType(file.buffer, fileExtension);
+    const expectedMimeTypes = FILE_MIME_TYPE_MAP[fileExtension] || [];
+    if (
+      expectedMimeTypes.length > 0 &&
+      !expectedMimeTypes.includes(detectedMimeType)
+    ) {
+      throw new BadRequestException(
+        `File MIME type '${detectedMimeType}' does not match extension '${fileExtension}'. Possible file type mismatch or malicious file.`,
+      );
+    }
+
+    // Store original filename and MIME type
+    const originalName = file.originalname;
+    const mimeType = detectedMimeType || file.mimetype;
+
+    // Generate unique filename for request: requests/{requestId}-{uuid}.{extension}
+    const requestId = uuidv4();
+    const sanitizedFilename = `request-${requestId}${fileExtension}`;
+    const filePath = path.join(SETTINGS_UPLOAD_DIR, sanitizedFilename);
+
+    // Encrypt file buffer
+    const { encrypted, iv, authTag } = encryptBuffer(file.buffer);
+
+    // Save encrypted file to disk
+    await fs.writeFile(filePath, encrypted);
+
+    this.logger.log(
+      `📤 File uploaded for setting request: ${sanitizedFilename} (${(file.size / 1024).toFixed(2)}KB)`,
+    );
+
+    // Create request with file path
+    const createDtoWithFile: CreateSettingRequestDto = {
+      ...createDto,
+      value: filePath,
+      mimeType,
+      originalName,
+    };
+
+    return this.create(createDtoWithFile, requestedBy);
+  }
 
   /**
    * Get all setting requests
@@ -260,10 +382,28 @@ export class SettingRequestsService {
           );
         }
 
+        // Handle file path if it's a file setting
+        let finalValue = request.value;
+        if (request.value && request.value.startsWith('uploads/settings/request-')) {
+          // Move file from request path to final path
+          const fileExtension = path.extname(request.value);
+          const finalFilename = `${request.key}-${uuidv4()}${fileExtension}`;
+          const finalPath = path.join(SETTINGS_UPLOAD_DIR, finalFilename);
+          
+          try {
+            await fs.rename(request.value, finalPath);
+            finalValue = finalPath;
+            this.logger.log(`📁 Moved file from request to final location: ${finalPath}`);
+          } catch (error) {
+            this.logger.error(`Failed to move file from ${request.value} to ${finalPath}`, error);
+            throw new BadRequestException('Failed to process file for approved request');
+          }
+        }
+
         // Create new setting from request data
         const newSetting = manager.create(Setting, {
           key: request.key,
-          value: request.value,
+          value: finalValue,
           iv: request.iv,
           authTag: request.authTag,
           mimeType: request.mimeType,
@@ -301,9 +441,37 @@ export class SettingRequestsService {
           }
         }
 
+        // Handle file path if it's a file setting
+        let finalValue = request.value;
+        if (request.value && request.value.startsWith('uploads/settings/request-')) {
+          // Delete old file if it exists
+          if (existingSetting.value && existingSetting.value.startsWith('uploads/')) {
+            try {
+              await fs.unlink(existingSetting.value);
+              this.logger.log(`🗑️  Deleted old file: ${existingSetting.value}`);
+            } catch (error) {
+              this.logger.warn(`Failed to delete old file: ${existingSetting.value}`, error);
+            }
+          }
+
+          // Move file from request path to final path
+          const fileExtension = path.extname(request.value);
+          const finalFilename = `${request.key}-${uuidv4()}${fileExtension}`;
+          const finalPath = path.join(SETTINGS_UPLOAD_DIR, finalFilename);
+          
+          try {
+            await fs.rename(request.value, finalPath);
+            finalValue = finalPath;
+            this.logger.log(`📁 Moved file from request to final location: ${finalPath}`);
+          } catch (error) {
+            this.logger.error(`Failed to move file from ${request.value} to ${finalPath}`, error);
+            throw new BadRequestException('Failed to process file for approved request');
+          }
+        }
+
         // Apply proposed changes
         existingSetting.key = request.key;
-        existingSetting.value = request.value;
+        existingSetting.value = finalValue;
         existingSetting.iv = request.iv;
         existingSetting.authTag = request.authTag;
         existingSetting.mimeType = request.mimeType;
