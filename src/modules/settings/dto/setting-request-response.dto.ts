@@ -50,7 +50,6 @@ export class SettingRequestResponseDto {
   @Expose()
   updatedAt: Date;
 
-  // Snapshot of original setting (for reviewers)
   @Expose()
   originalKey?: string;
 

@@ -44,6 +44,15 @@ export class SettingRequest {
   @Column({ type: 'text', nullable: true })
   originalName?: string;
 
+  @Column({ type: 'text', nullable: true })
+  originalValue?: string;
+
+  @Column({ type: 'text', nullable: true })
+  originalMimeType?: string;
+
+  @Column({ type: 'text', nullable: true })
+  originalOriginalName?: string;
+
   @Column({ type: 'enum', enum: SettingRequestStatus, default: SettingRequestStatus.PENDING })
   status: SettingRequestStatus;
 

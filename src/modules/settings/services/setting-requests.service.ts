@@ -4,7 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, In } from 'typeorm';
 import { plainToInstance } from 'class-transformer';
 import { SettingRequest, SettingRequestStatus, SettingRequestAction } from '../entities/setting-request.entity';
 import { Setting } from '../entities/setting.entity';
@@ -22,7 +22,7 @@ export class SettingRequestsService {
     private readonly settingRepository: Repository<Setting>,
     private readonly settingsService: SettingsService,
     private readonly dataSource: DataSource,
-  ) {}
+  ) { }
 
   /**
    * Create a setting request for approval
@@ -34,17 +34,19 @@ export class SettingRequestsService {
     const isNewSetting = !createDto.settingId;
     let setting: Setting | null = null;
 
-    // If updating/deleting existing setting, verify it exists
+    // Validate existing setting for UPDATE / DELETE
     if (!isNewSetting && createDto.settingId) {
       setting = await this.settingRepository.findOne({
         where: { id: createDto.settingId },
       });
 
       if (!setting) {
-        throw new NotFoundException(`Setting with ID '${createDto.settingId}' not found`);
+        throw new NotFoundException(
+          `Setting with ID '${createDto.settingId}' not found`,
+        );
       }
 
-      // Check for pending setting requests for this setting
+      // Prevent multiple pending requests for same setting
       const pendingRequest = await this.settingRequestRepository.findOne({
         where: {
           settingId: createDto.settingId,
@@ -54,45 +56,44 @@ export class SettingRequestsService {
 
       if (pendingRequest) {
         throw new BadRequestException(
-          'This setting already has a pending request. Please resolve it before creating a new one.',
+          'This setting already has a pending request. Please resolve it first.',
         );
       }
     }
 
-    // Determine action: create (new setting), update (existing setting), or delete
+    // Determine action
     let action: SettingRequestAction;
     if (createDto.action) {
-      // Use explicitly provided action
-      action = createDto.action as SettingRequestAction;
+      action = createDto.action;
     } else if (isNewSetting) {
       action = SettingRequestAction.CREATE;
     } else {
       action = SettingRequestAction.UPDATE;
     }
 
-    // For DELETE action, validate that settingId is provided
+    // DELETE requires settingId
     if (action === SettingRequestAction.DELETE && !createDto.settingId) {
       throw new BadRequestException('settingId is required for DELETE action');
     }
 
-    // For CREATE/UPDATE actions, validate required fields
-    if (action !== SettingRequestAction.DELETE) {
+    // CREATE validations
+    if (action === SettingRequestAction.CREATE) {
       if (!createDto.key) {
-        throw new BadRequestException('key is required for CREATE/UPDATE actions');
+        throw new BadRequestException('key is required for CREATE action');
       }
 
-      // For CREATE, check if key already exists in settings or pending requests
-      if (action === SettingRequestAction.CREATE) {
-        const existingSetting = await this.settingRepository.findOne({
-          where: { key: createDto.key },
-        });
+      const existingSetting = await this.settingRepository.findOne({
+        where: { key: createDto.key },
+      });
 
-        if (existingSetting) {
-          throw new BadRequestException(`Setting with key "${createDto.key}" already exists`);
-        }
+      if (existingSetting) {
+        throw new BadRequestException(
+          `Setting with key "${createDto.key}" already exists`,
+        );
+      }
 
-        // Check for pending CREATE request with same key
-        const pendingCreateRequest = await this.settingRequestRepository.findOne({
+      const pendingCreateRequest =
+        await this.settingRequestRepository.findOne({
           where: {
             key: createDto.key,
             status: SettingRequestStatus.PENDING,
@@ -100,79 +101,62 @@ export class SettingRequestsService {
           },
         });
 
-        if (pendingCreateRequest) {
-          throw new BadRequestException(
-            `A pending CREATE request already exists for key "${createDto.key}"`,
-          );
-        }
-      }
-
-      // For UPDATE, check if key is being changed and if new key already exists
-      if (action === SettingRequestAction.UPDATE && setting && createDto.key !== setting.key) {
-        const existingSettingWithNewKey = await this.settingRepository.findOne({
-          where: { key: createDto.key },
-        });
-
-        if (existingSettingWithNewKey) {
-          throw new BadRequestException(`Setting with key "${createDto.key}" already exists`);
-        }
-
-        // Check for pending request with new key
-        const pendingRequestWithNewKey = await this.settingRequestRepository.findOne({
-          where: {
-            key: createDto.key,
-            status: SettingRequestStatus.PENDING,
-          },
-        });
-
-        if (pendingRequestWithNewKey) {
-          throw new BadRequestException(
-            `A pending request already exists for key "${createDto.key}"`,
-          );
-        }
+      if (pendingCreateRequest) {
+        throw new BadRequestException(
+          `A pending CREATE request already exists for key "${createDto.key}"`,
+        );
       }
     }
 
-    // Prepare the value - for file settings, encryption is handled by SettingsService
-    // For now, we'll store the value as-is. If encryption is needed, it should be handled
-    // when the request is approved and applied.
-    let value = createDto.value || '';
-    let iv: string | undefined = undefined;
-    let authTag: string | undefined = undefined;
-    let mimeType: string | undefined = createDto.mimeType;
-    let originalName: string | undefined = createDto.originalName;
+    // Prepare value fields
+    let value = createDto.value ?? '';
+    let iv: string | undefined;
+    let authTag: string | undefined;
+    let mimeType = createDto.mimeType;
+    let originalName = createDto.originalName;
 
-    // If this is an UPDATE and value is not provided, use existing value
-    if (action === SettingRequestAction.UPDATE && setting && !createDto.value) {
+    // UPDATE without value → keep existing value
+    if (action === SettingRequestAction.UPDATE && setting && createDto.value === undefined) {
       value = setting.value;
       iv = setting.iv;
       authTag = setting.authTag;
-      mimeType = setting.mimeType || mimeType;
-      originalName = setting.originalName || originalName;
+      mimeType = setting.mimeType ?? mimeType;
+      originalName = setting.originalName ?? originalName;
     }
 
-    // Use existing key if not provided for UPDATE
-    const key = createDto.key || (setting?.key || '');
+    // 🔒 Key is immutable — always use existing key for UPDATE
+    const key =
+      action === SettingRequestAction.CREATE
+        ? createDto.key!
+        : setting!.key;
 
-    // Create setting request
+    const originalValue = action !== SettingRequestAction.CREATE && setting ? setting.value : undefined;
+    const originalMimeType = action !== SettingRequestAction.CREATE && setting ? setting.mimeType : undefined;
+    const originalOriginalName = action !== SettingRequestAction.CREATE && setting ? setting.originalName : undefined;
+
+    // Create request
     const settingRequest = this.settingRequestRepository.create({
-      settingId: createDto.settingId || null,
+      settingId: createDto.settingId ?? null,
       key,
       value,
       iv,
       authTag,
       mimeType,
       originalName,
+      originalValue,
+      originalMimeType,
+      originalOriginalName,
       status: SettingRequestStatus.PENDING,
       action,
-      requestedBy: requestedBy || null,
+      requestedBy: requestedBy ?? null,
     });
 
-    const savedRequest = await this.settingRequestRepository.save(settingRequest);
+    const savedRequest =
+      await this.settingRequestRepository.save(settingRequest);
 
-    // Return with original setting snapshot if applicable
     return this.findOne(savedRequest.id);
   }
+
 
   /**
    * Get all setting requests
@@ -356,38 +340,63 @@ export class SettingRequestsService {
   /**
    * Build response DTOs with original setting snapshot
    */
-  private async buildResponseDtos(requests: SettingRequest[]): Promise<SettingRequestResponseDto[]> {
-    // Collect setting IDs for requests that are tied to an existing setting
+  private async buildResponseDtos(
+    requests: SettingRequest[],
+  ): Promise<SettingRequestResponseDto[]> {
+    // Collect setting IDs only where fallback MAY be needed
     const settingIds = Array.from(
       new Set(
         requests
-          .map((req) => req.settingId)
-          .filter((id): id is string => !!id),
+          .filter(
+            (req) =>
+              req.settingId &&
+              (req.originalValue === null || req.originalValue === undefined),
+          )
+          .map((req) => req.settingId!),
       ),
     );
-
+  
     const settingMap = new Map<string, Setting>();
+  
     if (settingIds.length > 0) {
       const settings = await this.settingRepository.find({
-        where: { id: settingIds as any },
+        where: { id: In(settingIds) },
       });
-      settings.forEach((setting) => settingMap.set(setting.id, setting));
+  
+      settings.forEach((setting) => {
+        settingMap.set(setting.id, setting);
+      });
     }
-
+  
     return requests.map((request) => {
-      const originalSetting = request.settingId ? settingMap.get(request.settingId) : undefined;
-
+      let originalValue = request.originalValue;
+      let originalMimeType = request.originalMimeType;
+      let originalOriginalName = request.originalOriginalName;
+  
+      // Fallback ONLY if snapshot is missing (legacy data)
+      if (
+        request.settingId &&
+        (originalValue === null || originalValue === undefined)
+      ) {
+        const originalSetting = settingMap.get(request.settingId);
+  
+        if (originalSetting) {
+          originalValue = originalSetting.value;
+          originalMimeType = originalSetting.mimeType;
+          originalOriginalName = originalSetting.originalName;
+        }
+      }
+  
       return plainToInstance(
         SettingRequestResponseDto,
         {
           ...request,
-          originalKey: originalSetting?.key,
-          originalValue: originalSetting?.value,
-          originalMimeType: originalSetting?.mimeType,
-          originalOriginalName: originalSetting?.originalName,
+          originalValue,
+          originalMimeType,
+          originalOriginalName,
         },
         { excludeExtraneousValues: true },
       );
     });
-  }
+  }  
 }
