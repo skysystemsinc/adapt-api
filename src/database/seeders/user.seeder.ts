@@ -10,13 +10,6 @@ export class UserSeeder {
 
     const users = [
       {
-        email: 'admin@example.com',
-        password: 'Admin@123',
-        firstName: 'Admin',
-        lastName: 'User',
-        isActive: true,
-      },
-      {
         email: 'john.doe@example.com',
         password: 'User@123',
         firstName: 'John',

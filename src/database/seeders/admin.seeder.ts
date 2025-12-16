@@ -370,6 +370,7 @@ export class AdminSeeder {
                 emailPrefix = `${department}-expert-checker`;
             } else if (roleLower === 'super admin') {
                 emailPrefix = 'admin';
+                return `${emailPrefix}@example.com`;
             } else if (roleLower === 'ceo/committee') {
                 emailPrefix = 'ceo-committee';
             } else {
@@ -495,7 +496,7 @@ export class AdminSeeder {
         }
 
         const superAdminUser = {
-            email: 'admin@ncmcl.com',
+            email: 'admin@example.com',
             password: 'Admin@123',
             firstName: 'Super',
             lastName: 'Admin',
