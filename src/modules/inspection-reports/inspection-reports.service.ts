@@ -20,13 +20,10 @@ import { ApproveOrRejectInspectionReportDto, ApproveOrRejectInspectionReportStat
 import { InspectionReportHistory } from './entities/inspection-report-history.entity';
 import { AssessmentSubmissionHistory } from '../expert-assessment/assessment-submission/entities/assessment-submission-history.entity';
 import { AssignmentSection } from '../warehouse/operator/assignment/entities/assignment-section.entity';
-<<<<<<< HEAD
 import { encryptBuffer, decryptBuffer } from 'src/common/utils/helper.utils';
 import { WarehouseOperatorApplicationRequest } from '../warehouse/entities/warehouse-operator-application-request.entity';
 import { WarehouseLocation } from '../warehouse-location/entities/warehouse-location.entity';
-=======
 import { ClamAVService } from '../clamav/clamav.service';
->>>>>>> main
 
 @Injectable()
 export class InspectionReportsService {
@@ -45,16 +42,12 @@ export class InspectionReportsService {
     private readonly expertAssessmentRepository: Repository<ExpertAssessment>,
     @InjectRepository(ReviewEntity)
     private readonly reviewEntityRepository: Repository<ReviewEntity>,
-<<<<<<< HEAD
     @InjectRepository(WarehouseOperatorApplicationRequest)
     private readonly warehouseOperatorApplicationRequestRepository: Repository<WarehouseOperatorApplicationRequest>,
     @InjectRepository(WarehouseLocation)
     private readonly warehouseLocationRepository: Repository<WarehouseLocation>,
-    private readonly dataSource: DataSource
-=======
     private readonly dataSource: DataSource,
     private readonly clamAVService: ClamAVService,
->>>>>>> main
   ) { }
 
   private readonly uploadDir = path.join(process.cwd(), 'uploads', 'assessment-documents');
