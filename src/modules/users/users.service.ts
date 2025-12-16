@@ -116,6 +116,7 @@ export class UsersService {
         firstName: true,
         lastName: true,
         email: true,
+        isActive: true,
         organization: {
           id: true,
           name: true,
