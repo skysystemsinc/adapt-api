@@ -24,6 +24,12 @@ export enum Permissions {
   UPDATE_USERS = 'update_users',
   DELETE_USERS = 'delete_users',
 
+  // Super Admin - Operators & Operator Locations
+  VIEW_OPERATORS = 'view_operators',
+  VIEW_OPERATOR_DETAILS = 'view_operator_details',
+  VIEW_OPERATOR_LOCATIONS = 'view_operator_locations',
+  VIEW_OPERATOR_LOCATION_DETAILS = 'view_operator_location_details',
+
   // Registration application admin
   VIEW_ALL_APPLICATIONS = 'view_all_applications',
   APPROVE_APPLICATION = 'approve_application',
