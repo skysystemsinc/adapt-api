@@ -19,6 +19,7 @@ import { Role } from '../../rbac/entities/role.entity';
 import { Organization } from '../../organization/entities/organization.entity';
 import { hasPermission } from 'src/common/utils/helper.utils';
 import { Permissions } from 'src/modules/rbac/constants/permissions.constants';
+import { QueryUserRequestsDto } from '../dto/query-user-requests.dto';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -206,15 +207,21 @@ export class UserRequestsService {
   }
 
   /**
-   * Get all user requests
+   * Get all user requests with pagination and search
    * Optionally filter by approval stage:
    * - firstApproval: status=PENDING, adminStatus=null (for manage_user_requests)
    * - finalApproval: status!=PENDING, adminStatus=PENDING (for final_approval_user)
    */
   async findAll(
     userId: string,
-  ): Promise<UserRequestResponseDto[]> {
-    let whereCondition: any = {};
+    query: QueryUserRequestsDto,
+  ): Promise<{
+    data: UserRequestResponseDto[];
+    meta: { total: number; page: number; limit: number; totalPages: number };
+  }> {
+    const { page = 1, limit = 10, search } = query;
+    const skip = (page - 1) * limit;
+
     const user = await this.userRepository.findOne({
       where: { id: userId },
       relations: ['userRoles', 'userRoles.role', 'userRoles.role.rolePermissions', 'userRoles.role.rolePermissions.permission'],
@@ -224,19 +231,42 @@ export class UserRequestsService {
 
     const isCEO = hasPermission(user, Permissions.FINAL_APPROVAL_USER);
 
+    const queryBuilder = this.userRequestRepository
+      .createQueryBuilder('request')
+      .skip(skip)
+      .take(limit)
+      .orderBy('request.createdAt', 'DESC');
+
+    // Apply permission-based filtering
     if (isCEO) {
-      // If user is CEO, show all requests except pending
-      whereCondition = {
-        status: Not(UserRequestStatus.PENDING)
-      };
+      queryBuilder.where('request.status != :pendingStatus', {
+        pendingStatus: UserRequestStatus.PENDING,
+      });
     }
 
-    const requests = await this.userRequestRepository.find({
-      where: whereCondition,
-      order: { createdAt: 'DESC' },
-    });
+    // Apply search filter
+    if (search) {
+      const searchTerm = `%${search.trim()}%`;
+      queryBuilder.andWhere(
+        '(request.email LIKE :search OR request.firstName LIKE :search OR request.lastName LIKE :search)',
+        { search: searchTerm },
+      );
+    }
 
-    return this.buildResponseDtos(requests);
+    const [requests, total] = await queryBuilder.getManyAndCount();
+    const totalPages = Math.ceil(total / limit);
+
+    const data = await this.buildResponseDtos(requests);
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages,
+      },
+    };
   }
 
   /**

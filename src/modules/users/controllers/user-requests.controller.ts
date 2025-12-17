@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   HttpCode,
   HttpStatus,
   ParseUUIDPipe,
@@ -24,6 +25,7 @@ import { UserRequestsService } from '../services/user-requests.service';
 import { CreateUserRequestDto } from '../dto/create-user-request.dto';
 import { ReviewUserRequestDto } from '../dto/review-user-request.dto';
 import { UserRequestResponseDto } from '../dto/user-request-response.dto';
+import { QueryUserRequestsDto } from '../dto/query-user-requests.dto';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../../common/decorators/require-permissions.decorator';
@@ -60,16 +62,42 @@ export class UserRequestsController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all user requests' })
+  @ApiOperation({ summary: 'Get all user requests with pagination and search' })
   @ApiResponse({
     status: 200,
-    description: 'List of all user requests',
-    type: [UserRequestResponseDto],
+    description: 'Paginated list of user requests',
+    schema: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/UserRequestResponseDto' },
+        },
+        meta: {
+          type: 'object',
+          properties: {
+            total: { type: 'number' },
+            page: { type: 'number' },
+            limit: { type: 'number' },
+            totalPages: { type: 'number' },
+          },
+        },
+      },
+    },
   })
   @RequirePermissions(Permissions.MANAGE_USER_REQUESTS, Permissions.FINAL_APPROVAL_USER)
-  async findAll(@Request() req: any): Promise<UserRequestResponseDto[]> {
-    const user = req.user;
-    return this.userRequestsService.findAll(user.id);
+  async findAll(
+    @Query() query: QueryUserRequestsDto,
+    @Request() req: any,
+  ): Promise<{
+    data: UserRequestResponseDto[];
+    meta: { total: number; page: number; limit: number; totalPages: number };
+  }> {
+    const userId = req.user?.sub || req.user?.id;
+    if (!userId) {
+      throw new Error('User ID not found in request');
+    }
+    return this.userRequestsService.findAll(userId, query);
   }
 
   @Get(':id')
