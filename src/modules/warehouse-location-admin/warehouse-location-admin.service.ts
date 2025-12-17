@@ -525,7 +525,8 @@ export class WarehouseLocationAdminService {
 
     // If user is HOD or Expert, filter by assignment
     if (user &&
-      (!hasPermission(user, Permissions.REVIEW_FINAL_APPLICATION) &&
+      (!hasPermission(user, Permissions.IS_OFFICER) &&
+      !hasPermission(user, Permissions.REVIEW_FINAL_APPLICATION) &&
         !hasPermission(user, Permissions.REVIEW_ASSESSMENT))) {
       const assignment = await this.dataSource.getRepository(Assignment).findOne({
         where: {
