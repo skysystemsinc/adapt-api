@@ -102,5 +102,8 @@ export enum Permissions {
 
   // Dynamic Calculator permissions
   MANAGE_CALCULATOR = 'manage_calculator',
+
+  // Warehouse Admin permissions
+  IS_OFFICER = 'is_officer',
 }
 
