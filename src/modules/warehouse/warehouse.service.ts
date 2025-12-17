@@ -5319,7 +5319,9 @@ export class WarehouseService {
     };
   }
 
-  async getResourceStatus(applicationId: string, userId: string, resourceType: 'bank-statement' | 'company-information' | 'tax-return' | 'other' | 'hr' | 'authorized-signatories' | 'financial-information' | 'applicant-checklist') {
+  async getResourceStatus(applicationId: string, userId: string,
+    resourceType: 'bank-statement' | 'company-information' | 'tax-return' | 'other' | 'hr' | 'authorized-signatories' | 'financial-information' | 'applicant-checklist'
+      | 'facility-information' | 'contact-information' | 'jurisdiction' | 'security-fire-safety' | 'weighing' | 'technical-qualitative' | 'human-resources' | 'checklist') {
     let application: WarehouseOperatorApplicationRequest | WarehouseLocation | null = null;
     let isLocationApplication = false;
     // CHECK IF THE APPLICATION IS A WAREHOUSE OPERATOR APPLICATION
@@ -5346,7 +5348,7 @@ export class WarehouseService {
     let resourceArr: string[] = ['bank-statement', 'company-information', 'tax-return', 'other', 'hr', 'authorized-signatories', 'financial-information', 'applicant-checklist'];
     if (isLocationApplication) {
       resourceArr = [
-        'facility', 'contact', 'jurisdiction', 'security-fire-safety', 'weighing', 'technical-qualitative', 'human-resources', 'checklist'
+        'facility-information', 'contact-information', 'jurisdiction', 'security-fire-safety', 'weighing', 'technical-qualitative', 'human-resources', 'checklist'
       ];
     }
 
@@ -5381,11 +5383,11 @@ export class WarehouseService {
       // get all sections
       const filteredSections = assignmentSections.filter(section => {
         if (isLocationApplication) {
-          switch (section.resourceType) {
-            case 'facility':
-              return section.sectionType === '1-facility';
-            case 'contact':
-              return section.sectionType === '2-contact';
+          switch (resourceType) {
+            case 'facility-information':
+              return section.sectionType === '1-facility-information';
+            case 'contact-information':
+              return section.sectionType === '2-contact-information';
             case 'jurisdiction':
               return section.sectionType === '3-jurisdiction';
             case 'security-fire-safety':
@@ -5417,6 +5419,7 @@ export class WarehouseService {
         }
       });
 
+      console.log(filteredSections, 'filteredSections------');
       unlockedSections = filteredSections.map((section) => section.resourceId as string).filter((id): id is string => id !== null && id !== undefined);
     }
 
