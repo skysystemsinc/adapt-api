@@ -15,6 +15,12 @@ export enum UserRequestStatus {
   REJECTED = 'rejected',
 }
 
+export enum SuperAdminRequestStatus {
+  PENDING = 'pending',
+  APPROVED = 'approved',
+  REJECTED = 'rejected',
+}
+
 export enum UserRequestAction {
   CREATE = 'create',
   UPDATE = 'update',
@@ -49,6 +55,9 @@ export class UserRequest {
 
   @Column({ type: 'enum', enum: UserRequestStatus, default: UserRequestStatus.PENDING })
   status: UserRequestStatus;
+
+  @Column({ type: 'enum', enum: SuperAdminRequestStatus, nullable: true })
+  adminStatus: SuperAdminRequestStatus | null;
 
   @Column({ type: 'varchar', default: UserRequestAction.UPDATE })
   action: UserRequestAction;

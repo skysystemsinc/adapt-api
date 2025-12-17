@@ -99,5 +99,8 @@ export enum Permissions {
 
   // Dynamic Calculator permissions
   MANAGE_CALCULATOR = 'manage_calculator',
+
+  // User Final Approval
+  FINAL_APPROVAL_USER = 'final_approval_user',
 }
 

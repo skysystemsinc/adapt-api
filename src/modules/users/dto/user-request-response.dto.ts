@@ -1,5 +1,5 @@
 import { Expose } from 'class-transformer';
-import { UserRequestStatus, UserRequestAction } from '../entities/user-request.entity';
+import { UserRequestStatus, UserRequestAction, SuperAdminRequestStatus } from '../entities/user-request.entity';
 
 export class UserRequestResponseDto {
   @Expose()
@@ -28,6 +28,9 @@ export class UserRequestResponseDto {
 
   @Expose()
   status: UserRequestStatus;
+
+  @Expose()
+  adminStatus: SuperAdminRequestStatus;
 
   @Expose()
   action: UserRequestAction;

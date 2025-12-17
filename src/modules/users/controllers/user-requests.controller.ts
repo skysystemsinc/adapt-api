@@ -28,14 +28,18 @@ import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../../common/decorators/require-permissions.decorator';
 import { Permissions } from '../../rbac/constants/permissions.constants';
+import { RBACService } from '../../rbac/services/rbac.service';
 
 @ApiTags('User Requests')
 @Controller('admin/users/user-requests')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
-@RequirePermissions(Permissions.MANAGE_USER_REQUESTS)
+@RequirePermissions(Permissions.MANAGE_USER_REQUESTS, Permissions.FINAL_APPROVAL_USER)
 @ApiBearerAuth('JWT-auth')
 export class UserRequestsController {
-  constructor(private readonly userRequestsService: UserRequestsService) {}
+  constructor(
+    private readonly userRequestsService: UserRequestsService,
+    private readonly rbacService: RBACService,
+  ) {}
 
   @Post()
   @ApiOperation({ summary: 'Create a user request for approval' })
@@ -62,8 +66,10 @@ export class UserRequestsController {
     description: 'List of all user requests',
     type: [UserRequestResponseDto],
   })
-  async findAll(): Promise<UserRequestResponseDto[]> {
-    return this.userRequestsService.findAll();
+  @RequirePermissions(Permissions.MANAGE_USER_REQUESTS, Permissions.FINAL_APPROVAL_USER)
+  async findAll(@Request() req: any): Promise<UserRequestResponseDto[]> {
+    const user = req.user;
+    return this.userRequestsService.findAll(user.id);
   }
 
   @Get(':id')
@@ -93,13 +99,17 @@ export class UserRequestsController {
   })
   @ApiResponse({ status: 404, description: 'User request not found' })
   @ApiResponse({ status: 400, description: 'Request already reviewed' })
+  @RequirePermissions(Permissions.MANAGE_USER_REQUESTS, Permissions.FINAL_APPROVAL_USER)
   async review(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() reviewDto: ReviewUserRequestDto,
     @Request() req: any,
   ): Promise<UserRequestResponseDto> {
-    const reviewedBy = req.user?.id;
-    return this.userRequestsService.review(id, reviewDto, reviewedBy);
+    const reviewedBy = req.user?.sub || req.user?.id;
+    const userId = req.user?.sub || req.user?.id;
+    // Check if user has final approval permission
+    const hasFinalApprovalPermission = await this.rbacService.userHasPermission(userId, Permissions.FINAL_APPROVAL_USER);
+    return this.userRequestsService.review(id, reviewDto, reviewedBy, hasFinalApprovalPermission);
   }
 
   @Delete(':id')

@@ -6,10 +6,9 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, In } from 'typeorm';
+import { Repository, DataSource, In, Not } from 'typeorm';
 import { plainToInstance } from 'class-transformer';
-import * as bcrypt from 'bcrypt';
-import { UserRequest, UserRequestStatus, UserRequestAction } from '../entities/user-request.entity';
+import { UserRequest, UserRequestStatus, UserRequestAction, SuperAdminRequestStatus } from '../entities/user-request.entity';
 import { User } from '../entities/user.entity';
 import { CreateUserRequestDto } from '../dto/create-user-request.dto';
 import { ReviewUserRequestDto } from '../dto/review-user-request.dto';
@@ -18,6 +17,9 @@ import { RBACService } from '../../rbac/services/rbac.service';
 import { UserRole } from '../../rbac/entities/user-role.entity';
 import { Role } from '../../rbac/entities/role.entity';
 import { Organization } from '../../organization/entities/organization.entity';
+import { hasPermission } from 'src/common/utils/helper.utils';
+import { Permissions } from 'src/modules/rbac/constants/permissions.constants';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class UserRequestsService {
@@ -34,7 +36,7 @@ export class UserRequestsService {
     private readonly organizationRepository: Repository<Organization>,
     private readonly rbacService: RBACService,
     private readonly dataSource: DataSource,
-  ) {}
+  ) { }
 
   /**
    * Create a user request for approval
@@ -169,9 +171,8 @@ export class UserRequestsService {
       // Capture original isActive value from the user
       // user.isActive is a boolean (true/false) per User entity definition
       originalIsActive = user.isActive;
-      console.log('originalIsActive-----------------------', originalIsActive);
       originalOrganizationId = user.organization?.id || null;
-      
+
       // Get current role ID
       if (user.userRoles && user.userRoles.length > 0) {
         originalRoleId = user.userRoles[0].role.id;
@@ -206,9 +207,32 @@ export class UserRequestsService {
 
   /**
    * Get all user requests
+   * Optionally filter by approval stage:
+   * - firstApproval: status=PENDING, adminStatus=null (for manage_user_requests)
+   * - finalApproval: status!=PENDING, adminStatus=PENDING (for final_approval_user)
    */
-  async findAll(): Promise<UserRequestResponseDto[]> {
+  async findAll(
+    userId: string,
+  ): Promise<UserRequestResponseDto[]> {
+    let whereCondition: any = {};
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['userRoles', 'userRoles.role', 'userRoles.role.rolePermissions', 'userRoles.role.rolePermissions.permission'],
+    });
+
+    if (!user) throw new NotFoundException('User not found');
+
+    const isCEO = hasPermission(user, Permissions.FINAL_APPROVAL_USER);
+
+    if (isCEO) {
+      // If user is CEO, show all requests except pending
+      whereCondition = {
+        status: Not(UserRequestStatus.PENDING)
+      };
+    }
+
     const requests = await this.userRequestRepository.find({
+      where: whereCondition,
       order: { createdAt: 'DESC' },
     });
 
@@ -232,11 +256,15 @@ export class UserRequestsService {
 
   /**
    * Review (approve/reject) a user request
+   * Supports two-stage approval:
+   * 1. First approval (manage_user_requests): status=PENDING -> status=APPROVED, adminStatus=PENDING
+   * 2. Final approval (final_approval_user): status=APPROVED, adminStatus=PENDING -> adminStatus=APPROVED (and apply changes)
    */
   async review(
     id: string,
     reviewDto: ReviewUserRequestDto,
     reviewedBy: string,
+    hasFinalApprovalPermission: boolean = false,
   ): Promise<UserRequestResponseDto> {
     const request = await this.userRequestRepository.findOne({
       where: { id },
@@ -246,25 +274,33 @@ export class UserRequestsService {
       throw new NotFoundException(`User request with ID '${id}' not found`);
     }
 
-    if (request.status !== UserRequestStatus.PENDING) {
+    if (hasFinalApprovalPermission && request.adminStatus == null) {
       throw new BadRequestException(
-        `User request is already ${request.status}. Only pending requests can be reviewed.`,
+        'This request has not been reviewed yet.',
       );
     }
 
-    // Update request status
-    request.status = reviewDto.status;
-    request.reviewedBy = reviewedBy;
-    request.reviewedAt = new Date();
-    request.reviewNotes = reviewDto.reviewNotes || null;
-
-    await this.userRequestRepository.save(request);
-
-    // If approved, apply the changes to the actual user
-    if (reviewDto.status === UserRequestStatus.APPROVED) {
-      await this.applyApprovedRequest(request);
+    // Handle first approval
+    if (!hasFinalApprovalPermission) {
+      // Handle first approval
+      request.status = reviewDto.status;
+      request.adminStatus = SuperAdminRequestStatus.PENDING;
+      request.reviewedBy = reviewedBy;
+      request.reviewedAt = new Date();
+      request.reviewNotes = reviewDto.reviewNotes || null;
+      await this.userRequestRepository.save(request);
+    } else {
+      // Handle final approval
+      request.adminStatus = reviewDto.status === UserRequestStatus.APPROVED ?
+        SuperAdminRequestStatus.APPROVED : SuperAdminRequestStatus.REJECTED;
+      request.reviewedBy = reviewedBy;
+      request.reviewedAt = new Date();
+      request.reviewNotes = reviewDto.reviewNotes || null;
+      if (reviewDto.status === UserRequestStatus.APPROVED) {
+        await this.applyApprovedRequest(request);
+      }
+      await this.userRequestRepository.save(request);
     }
-
     return this.findOne(id);
   }
 
@@ -314,7 +350,9 @@ export class UserRequestsService {
 
         // Generate temporary password (user will need to reset)
         const saltRounds = 10;
-        const temporaryPassword = `Temp${Date.now()}${Math.random().toString(36).slice(2)}`;
+        // TODO: Uncomment this when we have a notifications API
+        // const temporaryPassword = `Temp${Date.now()}${Math.random().toString(36).slice(2)}`;
+        const temporaryPassword = 'Password@123';
         const hashedPassword = await bcrypt.hash(temporaryPassword, saltRounds);
 
         // Create new user from request data
