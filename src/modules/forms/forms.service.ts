@@ -333,7 +333,31 @@ export class FormsService {
 
       // Update old form: set isActive = false and change slug
       oldForm.isActive = false;
-      oldForm.slug = `registration-form-${currentVersion}`;
+      
+      // Generate unique slug for the old form
+      // Check if the base slug already exists
+      const baseSlug = `registration-form-${currentVersion}`;
+      let newSlug = baseSlug;
+      
+      // Check if slug already exists (excluding current form)
+      const existingForm = await manager.findOne(Form, {
+        where: { slug: baseSlug },
+      });
+      
+      if (existingForm && existingForm.id !== oldForm.id) {
+        // Slug already exists, append form ID suffix to make it unique
+        const formIdSuffix = oldForm.id.substring(0, 8);
+        newSlug = `${baseSlug}-${formIdSuffix}`;
+        
+        // Double-check this slug doesn't exist either
+        let counter = 1;
+        while (await manager.findOne(Form, { where: { slug: newSlug } })) {
+          newSlug = `${baseSlug}-${formIdSuffix}-${counter}`;
+          counter++;
+        }
+      }
+      
+      oldForm.slug = newSlug;
       await manager.save(oldForm);
 
       // Get old form fields to copy
@@ -389,7 +413,31 @@ export class FormsService {
 
       // Update old form: set isActive = false and change slug
       oldForm.isActive = false;
-      oldForm.slug = `registration-form-${currentVersion}`;
+      
+      // Generate unique slug for the old form
+      // Check if the base slug already exists
+      const baseSlug = `registration-form-${currentVersion}`;
+      let newSlug = baseSlug;
+      
+      // Check if slug already exists (excluding current form)
+      const existingForm = await manager.findOne(Form, {
+        where: { slug: baseSlug },
+      });
+      
+      if (existingForm && existingForm.id !== oldForm.id) {
+        // Slug already exists, append form ID suffix to make it unique
+        const formIdSuffix = oldForm.id.substring(0, 8);
+        newSlug = `${baseSlug}-${formIdSuffix}`;
+        
+        // Double-check this slug doesn't exist either
+        let counter = 1;
+        while (await manager.findOne(Form, { where: { slug: newSlug } })) {
+          newSlug = `${baseSlug}-${formIdSuffix}-${counter}`;
+          counter++;
+        }
+      }
+      
+      oldForm.slug = newSlug;
       await manager.save(oldForm);
 
       // Get old form fields to copy
