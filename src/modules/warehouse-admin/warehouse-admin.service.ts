@@ -571,7 +571,8 @@ export class WarehouseAdminService {
     }
 
     if (user && 
-      (!hasPermission(user, Permissions.REVIEW_ASSESSMENT) && 
+      (!hasPermission(user, Permissions.IS_OFFICER) && 
+      !hasPermission(user, Permissions.REVIEW_ASSESSMENT) && 
       !hasPermission(user, Permissions.REVIEW_FINAL_APPLICATION))) {
       // Fetch assignment for this user and application
       const assignment = await this.dataSource.getRepository(Assignment).findOne({
