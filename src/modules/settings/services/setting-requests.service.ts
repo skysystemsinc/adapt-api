@@ -17,6 +17,7 @@ import { Setting } from '../entities/setting.entity';
 import { CreateSettingRequestDto } from '../dto/create-setting-request.dto';
 import { ReviewSettingRequestDto } from '../dto/review-setting-request.dto';
 import { SettingRequestResponseDto } from '../dto/setting-request-response.dto';
+import { QuerySettingRequestsDto } from '../dto/query-setting-requests.dto';
 import { SettingsService } from '../settings.service';
 
 const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx', '.xlsx'];
@@ -281,14 +282,43 @@ export class SettingRequestsService {
   }
 
   /**
-   * Get all setting requests
+   * Get all setting requests with pagination and search
    */
-  async findAll(): Promise<SettingRequestResponseDto[]> {
-    const requests = await this.settingRequestRepository.find({
-      order: { createdAt: 'DESC' },
-    });
+  async findAll(
+    query: QuerySettingRequestsDto,
+  ): Promise<{
+    data: SettingRequestResponseDto[];
+    meta: { total: number; page: number; limit: number; totalPages: number };
+  }> {
+    const { page = 1, limit = 10, search } = query;
+    const skip = (page - 1) * limit;
 
-    return this.buildResponseDtos(requests);
+    const queryBuilder = this.settingRequestRepository
+      .createQueryBuilder('request')
+      .skip(skip)
+      .take(limit)
+      .orderBy('request.createdAt', 'DESC');
+
+    // Apply search filter
+    if (search) {
+      const searchTerm = `%${search.trim()}%`;
+      queryBuilder.andWhere('request.key LIKE :search', { search: searchTerm });
+    }
+
+    const [requests, total] = await queryBuilder.getManyAndCount();
+    const totalPages = Math.ceil(total / limit);
+
+    const data = await this.buildResponseDtos(requests);
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages,
+      },
+    };
   }
 
   /**

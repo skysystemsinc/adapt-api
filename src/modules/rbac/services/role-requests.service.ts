@@ -11,6 +11,7 @@ import { RolePermissionRequest, RolePermissionAction } from '../entities/role-pe
 import { CreateRoleRequestDto } from '../dto/create-role-request.dto';
 import { ReviewRoleRequestDto } from '../dto/review-role-request.dto';
 import { RoleRequestResponseDto, RolePermissionRequestResponseDto } from '../dto/role-request-response.dto';
+import { QueryRoleRequestsDto } from '../dto/query-role-requests.dto';
 import { Role } from '../entities/role.entity';
 import { RolePermission } from '../entities/role-permission.entity';
 import { Permission } from '../entities/permission.entity';
@@ -195,15 +196,47 @@ export class RoleRequestsService {
   }
 
   /**
-   * Get all role requests
+   * Get all role requests with pagination and search
    */
-  async findAll(): Promise<RoleRequestResponseDto[]> {
-    const requests = await this.roleRequestRepository.find({
-      relations: ['permissionRequests'],
-      order: { createdAt: 'DESC' },
-    });
+  async findAll(
+    query: QueryRoleRequestsDto,
+  ): Promise<{
+    data: RoleRequestResponseDto[];
+    meta: { total: number; page: number; limit: number; totalPages: number };
+  }> {
+    const { page = 1, limit = 10, search } = query;
+    const skip = (page - 1) * limit;
 
-    return this.buildResponseDtos(requests);
+    const queryBuilder = this.roleRequestRepository
+      .createQueryBuilder('request')
+      .leftJoinAndSelect('request.permissionRequests', 'permissionRequests')
+      .skip(skip)
+      .take(limit)
+      .orderBy('request.createdAt', 'DESC');
+
+    // Apply search filter
+    if (search) {
+      const searchTerm = `%${search.trim()}%`;
+      queryBuilder.andWhere(
+        '(request.name LIKE :search OR request.description LIKE :search)',
+        { search: searchTerm },
+      );
+    }
+
+    const [requests, total] = await queryBuilder.getManyAndCount();
+    const totalPages = Math.ceil(total / limit);
+
+    const data = await this.buildResponseDtos(requests);
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages,
+      },
+    };
   }
 
   /**

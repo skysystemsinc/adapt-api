@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   HttpCode,
   HttpStatus,
   ParseUUIDPipe,
@@ -27,6 +28,7 @@ import { SettingRequestsService } from '../services/setting-requests.service';
 import { CreateSettingRequestDto } from '../dto/create-setting-request.dto';
 import { ReviewSettingRequestDto } from '../dto/review-setting-request.dto';
 import { SettingRequestResponseDto } from '../dto/setting-request-response.dto';
+import { QuerySettingRequestsDto } from '../dto/query-setting-requests.dto';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../../common/decorators/require-permissions.decorator';
@@ -114,14 +116,36 @@ export class SettingRequestsController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all setting requests' })
+  @ApiOperation({ summary: 'Get all setting requests with pagination and search' })
   @ApiResponse({
     status: 200,
-    description: 'List of all setting requests',
-    type: [SettingRequestResponseDto],
+    description: 'Paginated list of setting requests',
+    schema: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/SettingRequestResponseDto' },
+        },
+        meta: {
+          type: 'object',
+          properties: {
+            total: { type: 'number' },
+            page: { type: 'number' },
+            limit: { type: 'number' },
+            totalPages: { type: 'number' },
+          },
+        },
+      },
+    },
   })
-  async findAll(): Promise<SettingRequestResponseDto[]> {
-    return this.settingRequestsService.findAll();
+  async findAll(
+    @Query() query: QuerySettingRequestsDto,
+  ): Promise<{
+    data: SettingRequestResponseDto[];
+    meta: { total: number; page: number; limit: number; totalPages: number };
+  }> {
+    return this.settingRequestsService.findAll(query);
   }
 
   @Get(':id')
