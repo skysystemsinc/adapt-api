@@ -7,6 +7,7 @@ import { WeighingsController } from './weighings.controller';
 import { Weighing } from './entities/weighing.entity';
 import { WarehouseLocation } from '../entities/warehouse-location.entity';
 import { WarehouseDocument } from '../../warehouse/entities/warehouse-document.entity';
+import { ClamAVModule } from '../../clamav/clamav.module';
 
 @Module({
   controllers: [WeighingsController],
@@ -21,6 +22,7 @@ import { WarehouseDocument } from '../../warehouse/entities/warehouse-document.e
       }),
       inject: [ConfigService],
     }),
+    ClamAVModule,
   ],
   exports: [WeighingsService],
 })

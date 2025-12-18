@@ -5,12 +5,14 @@ import { AcademicQualificationController } from './academic-qualification.contro
 import { AcademicQualification } from './entities/academic-qualification.entity';
 import { HumanResource } from '../entities/human-resource.entity';
 import { WarehouseDocument } from '../../../warehouse/entities/warehouse-document.entity';
+import { ClamAVModule } from '../../../clamav/clamav.module';
 
 @Module({
   controllers: [AcademicQualificationController],
   providers: [AcademicQualificationService],
   imports: [
     TypeOrmModule.forFeature([AcademicQualification, HumanResource, WarehouseDocument]),
+    ClamAVModule,
   ],
   exports: [AcademicQualificationService],
 })

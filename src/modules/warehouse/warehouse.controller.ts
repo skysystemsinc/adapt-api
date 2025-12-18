@@ -30,6 +30,7 @@ import {
 import { ListWarehouseOperatorApplicationDto } from './dto/list-warehouse.dto';
 import { CreateAuthorizedSignatoryDto } from './dto/create-authorized-signatory.dto';
 import { ResubmitOperatorApplicationDto } from './dto/resubmit-warehouse.dto';
+import { OperatorUnlockRequestDto } from './dto/operator-unlock-request.dto';
 
 
 @ApiTags('Warehouse')
@@ -1258,5 +1259,14 @@ export class WarehouseController {
     res.setHeader('X-Frame-Options', 'DENY');
 
     res.send(buffer);
+  }
+  @ApiOperation({ summary: 'Submit unlock request for a warehouse operator application' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiParam({ name: 'applicationId', description: 'The ID of the warehouse operator application' })
+  @ApiBody({ type: OperatorUnlockRequestDto })
+  @Post('/operator/application/:applicationId/unlock-request')
+  submitUnlockRequest(@Param('applicationId') applicationId: string, @Body() operatorUnlockRequestDto: OperatorUnlockRequestDto, @Request() request: any) {
+    const user = request.user as User;
+    return this.warehouseService.submitUnlockRequest(applicationId, operatorUnlockRequestDto, user.id);
   }
 }

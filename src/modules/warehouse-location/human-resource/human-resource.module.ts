@@ -17,6 +17,7 @@ import { AcademicQualification } from './academic-qualification/entities/academi
 import { ProfessionalQualification } from './professional-qualification/entities/professional-qualification.entity';
 import { Training } from './training/entities/training.entity';
 import { ProfessionalExperience } from './professional-experience/entities/professional-experience.entity';
+import { ClamAVModule } from '../../clamav/clamav.module';
 
 @Module({
   controllers: [HumanResourceController],
@@ -45,6 +46,7 @@ import { ProfessionalExperience } from './professional-experience/entities/profe
     TrainingModule,
     ProfessionalExperienceModule,
     DeclarationModule,
+    ClamAVModule,
   ],
   exports: [HumanResourceService],
 })

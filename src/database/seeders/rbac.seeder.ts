@@ -167,7 +167,11 @@ export class RBACSeeder {
         Permissions.VIEW_APPLICATION,
         Permissions.REVIEW_KYC,
         Permissions.VERIFY_KYC,
+        Permissions.VIEW_KYC,
         Permissions.UPDATE_APPLICATION_STATUS,
+        Permissions.VIEW_WAREHOUSE_APPLICATION_ASSIGNMENT,
+        Permissions.MANAGE_WAREHOUSE_APPLICATION_ASSIGNMENT,
+        Permissions.IS_OFFICER,
       ];
 
       for (const permissionName of scrutinyPermissions) {
