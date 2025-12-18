@@ -362,11 +362,6 @@ export class RoleRequestsService {
         const versionNumber = parseInt(currentVersion.replace('v', '')) || 1;
         const nextVersion = `v${versionNumber + 1}`;
 
-        // Deactivate old role by renaming it
-        const oldName = originalRole.name;
-        originalRole.name = `${oldName}-${currentVersion}`;
-        await manager.save(originalRole);
-
         // Create new role version
         const newRole = manager.create(Role, {
           name: request.name,

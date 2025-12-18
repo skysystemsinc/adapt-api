@@ -1,10 +1,14 @@
 import { Module } from '@nestjs/common';
 import { InspectionReportsService } from './inspection-reports.service';
 import { InspectionReportsController } from './inspection-reports.controller';
+import { InspectionReportRequestsService } from './services/inspection-report-requests.service';
+import { InspectionReportRequestsController } from './controllers/inspection-report-requests.controller';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { InspectionReport } from './entities/inspection-report.entity';
+import { InspectionReportRequest } from './entities/inspection-report-request.entity';
+import { AssessmentSubmissionRequest } from './entities/assessment-submission-request.entity';
 import { AssessmentSubmission } from '../expert-assessment/assessment-submission/entities/assessment-submission.entity';
 import { AssessmentDocument } from '../expert-assessment/assessment-documents/entities/assessment-document.entity';
 import { AssessmentSubSection } from '../expert-assessment/assessment-sub-section/entities/assessment-sub-section.entity';
@@ -18,7 +22,18 @@ import { ClamAVModule } from '../clamav/clamav.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([InspectionReport, AssessmentSubmission, AssessmentDocument, AssessmentSubSection, ExpertAssessment, ReviewEntity, WarehouseOperatorApplicationRequest, WarehouseLocation]),
+    TypeOrmModule.forFeature([
+      InspectionReport,
+      InspectionReportRequest,
+      AssessmentSubmissionRequest,
+      AssessmentSubmission,
+      AssessmentDocument,
+      AssessmentSubSection,
+      ExpertAssessment,
+      ReviewEntity,
+      WarehouseOperatorApplicationRequest,
+      WarehouseLocation,
+    ]),
     ConfigModule,
     AuthModule,
     JwtModule.registerAsync({
@@ -32,8 +47,8 @@ import { ClamAVModule } from '../clamav/clamav.module';
     RBACModule,
     ClamAVModule,
   ],
-  controllers: [InspectionReportsController],
-  providers: [InspectionReportsService],
+  controllers: [InspectionReportsController, InspectionReportRequestsController],
+  providers: [InspectionReportsService, InspectionReportRequestsService],
   exports: [InspectionReportsService],
 })
 export class InspectionReportsModule {}

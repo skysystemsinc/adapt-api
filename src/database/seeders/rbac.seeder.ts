@@ -762,7 +762,8 @@ export class RBACSeeder {
         Permissions.VIEW_WAREHOUSE_APPLICATION_ASSIGNMENT,
         Permissions.VIEW_KYC,
         Permissions.REVIEW_FINAL_APPLICATION,
-        Permissions.FINAL_APPROVAL_USER
+        Permissions.FINAL_APPROVAL_USER,
+        Permissions.MANAGE_EXPERT_ASSESSMENT,
       ];
 
       for (const permissionName of ceoCommitteePermissions) {
