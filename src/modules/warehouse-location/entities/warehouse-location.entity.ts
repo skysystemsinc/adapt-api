@@ -19,6 +19,7 @@ export enum WarehouseLocationStatus {
     REJECTED = 'REJECTED',
     DRAFT = 'DRAFT',
     SUBMITTED = 'SUBMITTED',
+    RESUBMITTED = 'RESUBMITTED',
 }
 
 @Entity('warehouse_location')
