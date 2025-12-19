@@ -1,10 +1,14 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { CreateSecurityDto } from './dto/create-security.dto';
 import { UpdateSecurityDto } from './dto/update-security.dto';
 import { Security } from './entities/security.entity';
 import { WarehouseLocation, WarehouseLocationStatus } from '../entities/warehouse-location.entity';
+import { WarehouseService } from '../../warehouse/warehouse.service';
+import { AssignmentSection } from '../../warehouse/operator/assignment/entities/assignment-section.entity';
+import { Assignment, AssignmentLevel, AssignmentStatus } from '../../warehouse/operator/assignment/entities/assignment.entity';
+import { SecurityHistory } from './entities/security-history.entity';
 
 @Injectable()
 export class SecurityService {
@@ -13,7 +17,17 @@ export class SecurityService {
     private readonly securityRepository: Repository<Security>,
     @InjectRepository(WarehouseLocation)
     private readonly warehouseLocationRepository: Repository<WarehouseLocation>,
-  ) {}
+    private readonly dataSource: DataSource,
+
+    @InjectRepository(Assignment)
+    private readonly assignmentRepository: Repository<Assignment>,
+
+    @InjectRepository(AssignmentSection)
+    private readonly assignmentSectionRepository: Repository<AssignmentSection>,
+
+    @Inject(forwardRef(() => WarehouseService))
+    private readonly warehouseService: WarehouseService,
+  ) { }
 
   /**
    * Get security by warehouse location ID
@@ -89,20 +103,90 @@ export class SecurityService {
       throw new NotFoundException('Warehouse location application not found');
     }
 
-    if (warehouseLocation.status !== WarehouseLocationStatus.DRAFT) {
+    if (![WarehouseLocationStatus.DRAFT, WarehouseLocationStatus.REJECTED, WarehouseLocationStatus.RESUBMITTED].includes(warehouseLocation.status)) {
       throw new BadRequestException('Security can only be updated while application is in draft status');
     }
 
-    const security = await this.securityRepository.findOne({
+    const existingSecurity = await this.securityRepository.findOne({
       where: { warehouseLocationId },
     });
 
-    if (!security) {
+    if (!existingSecurity) {
       throw new NotFoundException('Security not found for this application');
     }
 
-    Object.assign(security, updateSecurityDto);
-    return this.securityRepository.save(security);
+    const result = await this.dataSource.transaction(async (manager) => {
+      const securityRepo = manager.getRepository(Security);
+      const securityHistoryRepo = manager.getRepository(SecurityHistory);
+
+      if (![WarehouseLocationStatus.DRAFT, WarehouseLocationStatus.REJECTED, WarehouseLocationStatus.RESUBMITTED].includes(warehouseLocation.status)) {
+        throw new BadRequestException('Security can only be updated while application is in draft or rejected status');
+      };
+
+      if (warehouseLocation.status === WarehouseLocationStatus.REJECTED) {
+        // Save history of security if application is rejected (before overwriting)
+        const historyRecord = securityHistoryRepo.create({
+          securityId: existingSecurity.id,
+          warehouseLocationId,
+          guardsDeployed: existingSecurity.guardsDeployed,
+          NumberOfCameras: existingSecurity.NumberOfCameras,
+          otherSecurityMeasures: existingSecurity.otherSecurityMeasures,
+          isActive: false,
+        });
+        historyRecord.createdAt = existingSecurity.createdAt;
+        await securityHistoryRepo.save(historyRecord);
+      }
+
+      // Overwrite existing security with new information
+      existingSecurity.guardsDeployed = updateSecurityDto.guardsDeployed;
+      existingSecurity.NumberOfCameras = updateSecurityDto.NumberOfCameras;
+      existingSecurity.otherSecurityMeasures = updateSecurityDto.otherSecurityMeasures;
+
+      return securityRepo.save(existingSecurity);
+    });
+
+    const updatedApplication = await this.warehouseLocationRepository.findOne({
+      where: { id: warehouseLocationId },
+    });
+
+    if (updatedApplication?.status === WarehouseLocationStatus.REJECTED) {
+      const assignments = await this.assignmentRepository.find({
+        where: {
+          applicationLocationId: warehouseLocationId,
+          level: AssignmentLevel.HOD_TO_APPLICANT,
+          status: AssignmentStatus.REJECTED,
+        },
+      });
+
+      let assignmentSectionId: string | null = null;
+      if (assignments.length > 0) {
+        const assignmentSections = await this.assignmentSectionRepository.find({
+          where: {
+            assignmentId: In(assignments.map((a) => a.id)),
+            sectionType: '4-security-fire-safety',
+            resourceId: existingSecurity.id,
+          },
+        });
+
+        if (assignmentSections.length > 0) {
+          assignmentSectionId = assignmentSections[0].id;
+        }
+      }
+
+      await this.warehouseService['trackResubmissionAndUpdateStatus'](
+        warehouseLocationId,
+        '4-security-fire-safety',
+        existingSecurity.id,
+        assignmentSectionId ?? undefined,
+      );
+    }
+
+    return {
+      message: 'Security updated successfully',
+      securityId: existingSecurity.id,
+      applicationId: warehouseLocationId,
+    };
+
   }
 
   findAll() {
