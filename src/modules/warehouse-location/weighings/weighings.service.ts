@@ -1,6 +1,6 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { CreateWeighingDto } from './dto/create-weighing.dto';
 import { UpdateWeighingDto } from './dto/update-weighing.dto';
 import { Weighing } from './entities/weighing.entity';
@@ -12,6 +12,11 @@ import * as fsSync from 'fs';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { encryptBuffer, decryptBuffer } from 'src/common/utils/helper.utils';
+import { WarehouseService } from '../../warehouse/warehouse.service';
+import { AssignmentSection } from '../../warehouse/operator/assignment/entities/assignment-section.entity';
+import { Assignment, AssignmentLevel, AssignmentStatus } from '../../warehouse/operator/assignment/entities/assignment.entity';
+import { In } from 'typeorm';
+import { WeighingHistory } from './entities/weighing-history.entity';
 
 @Injectable()
 export class WeighingsService {
@@ -26,6 +31,18 @@ export class WeighingsService {
     @InjectRepository(WarehouseDocument)
     private readonly warehouseDocumentRepository: Repository<WarehouseDocument>,
     private readonly clamAVService: ClamAVService,
+
+
+    private readonly dataSource: DataSource,
+
+    @InjectRepository(Assignment)
+    private readonly assignmentRepository: Repository<Assignment>,
+
+    @InjectRepository(AssignmentSection)
+    private readonly assignmentSectionRepository: Repository<AssignmentSection>,
+
+    @Inject(forwardRef(() => WarehouseService))
+    private readonly warehouseService: WarehouseService,
   ) {
     // Ensure upload directory exists
     this.ensureUploadDirectory();
@@ -69,7 +86,7 @@ export class WeighingsService {
     }
 
     const isMandatory = this.clamAVService.getScanMandatory();
-    if(isMandatory) {
+    if (isMandatory) {
       // Scan file with ClamAV before processing
       try {
         this.logger.log(`🔍 Scanning file with ClamAV: ${file.originalname}`);
@@ -77,7 +94,7 @@ export class WeighingsService {
           file.buffer,
           file.originalname,
         );
-  
+
         if (scanResult.isInfected) {
           this.logger.warn(
             `🚨 Infected file detected: ${file.originalname}, Viruses: ${scanResult.viruses.join(', ')}`,
@@ -86,16 +103,16 @@ export class WeighingsService {
             `File is infected with malware: ${scanResult.viruses.join(', ')}. Upload rejected.`,
           );
         }
-  
+
         this.logger.log(`✅ File passed ClamAV scan: ${file.originalname}`);
       } catch (error) {
         if (error instanceof BadRequestException) {
           // Always reject infected files, regardless of CLAMAV_SCAN setting
           throw error;
         }
-        
+
         // Handle ClamAV service failures (unavailable, timeout, etc.)
-        
+
         if (isMandatory) {
           // CLAMAV_SCAN=true: Block upload if scan fails
           this.logger.error(
@@ -161,7 +178,7 @@ export class WeighingsService {
         const filePath = document.filePath.startsWith('/')
           ? path.join(process.cwd(), document.filePath.substring(1))
           : path.join(process.cwd(), document.filePath);
-        
+
         await fs.unlink(filePath);
       } catch (error) {
         // File might not exist, log but don't fail
@@ -298,6 +315,7 @@ export class WeighingsService {
     userId: string,
     weighbridgeCalibrationCertificateFile?: any
   ) {
+    // Verify warehouse location exists and belongs to user
     const warehouseLocation = await this.warehouseLocationRepository.findOne({
       where: { id: warehouseLocationId, userId },
     });
@@ -306,37 +324,82 @@ export class WeighingsService {
       throw new NotFoundException('Warehouse location application not found');
     }
 
-    if (warehouseLocation.status !== WarehouseLocationStatus.DRAFT) {
+    if (![WarehouseLocationStatus.DRAFT, WarehouseLocationStatus.REJECTED, WarehouseLocationStatus.RESUBMITTED].includes(warehouseLocation.status)) {
       throw new BadRequestException('Weighing can only be updated while application is in draft status');
     }
 
-    const weighing = await this.weighingRepository.findOne({
+    const existingWeighing = await this.weighingRepository.findOne({
       where: { warehouseLocationId },
       relations: ['weighbridgeCalibrationCertificate'],
     });
 
-    if (!weighing) {
+    if (!existingWeighing) {
       throw new NotFoundException('Weighing not found for this application');
     }
 
-    // Remove file field from DTO before saving
-    const { weighbridgeCalibrationCertificate, ...weighingData } = updateWeighingDto;
+    const result = await this.dataSource.transaction(async (manager) => {
+      const weighingRepo = manager.getRepository(Weighing);
+      const weighingHistoryRepo = manager.getRepository(WeighingHistory);
 
-    Object.assign(weighing, weighingData);
-    const savedWeighing = await this.weighingRepository.save(weighing);
+      // Re-validate application status inside transaction to prevent race conditions
+      if (![WarehouseLocationStatus.DRAFT, WarehouseLocationStatus.REJECTED].includes(warehouseLocation.status)) {
+        throw new BadRequestException('Cannot update weighing after application is approved or submitted');
+      }
 
-    // Handle file upload/update
+      if (warehouseLocation.status === WarehouseLocationStatus.REJECTED) {
+        // Save history of weighing if application is rejected (before overwriting)
+        const historyRecord = weighingHistoryRepo.create({
+          weighingId: existingWeighing.id,
+          warehouseLocationId,
+          weighbridgeAvailable: existingWeighing.weighbridgeAvailable,
+          weighbridgeLocation: existingWeighing.weighbridgeLocation,
+          weighbridgeCapacity: existingWeighing.weighbridgeCapacity,
+          weighbridgeMakeModel: existingWeighing.weighbridgeMakeModel ?? null,
+          weighbridgeInstallationDate: existingWeighing.weighbridgeInstallationDate ?? null,
+          weighbridgeCalibrationStatus: existingWeighing.weighbridgeCalibrationStatus ?? null,
+          weighbridgeNextCalibrationDueDate: existingWeighing.weighbridgeNextCalibrationDueDate ?? null,
+          weighbridgeOwnerOperatorName: existingWeighing.weighbridgeOwnerOperatorName ?? null,
+          weighbridgeAddressLocation: existingWeighing.weighbridgeAddressLocation ?? null,
+          weighbridgeDistanceFromFacility: existingWeighing.weighbridgeDistanceFromFacility ?? null,
+          weighbridgeCalibrationCertificate: existingWeighing.weighbridgeCalibrationCertificate ?? null,
+          isActive: false,
+        } as Partial<WeighingHistory>);
+        historyRecord.createdAt = existingWeighing.createdAt;
+        await weighingHistoryRepo.save(historyRecord);
+      }
+
+      // Remove file field from DTO before saving
+      const { weighbridgeCalibrationCertificate, ...weighingData } = updateWeighingDto;
+
+      // Overwrite existing weighing with new information
+      existingWeighing.weighbridgeAvailable = weighingData.weighbridgeAvailable;
+      existingWeighing.weighbridgeLocation = weighingData.weighbridgeLocation;
+      existingWeighing.weighbridgeCapacity = weighingData.weighbridgeCapacity;
+      existingWeighing.weighbridgeMakeModel = weighingData.weighbridgeMakeModel ?? undefined;
+      existingWeighing.weighbridgeInstallationDate = weighingData.weighbridgeInstallationDate ?? undefined;
+      existingWeighing.weighbridgeCalibrationStatus = weighingData.weighbridgeCalibrationStatus ?? null;
+      existingWeighing.weighbridgeNextCalibrationDueDate = weighingData.weighbridgeNextCalibrationDueDate ?? null;
+      existingWeighing.weighbridgeOwnerOperatorName = weighingData.weighbridgeOwnerOperatorName ?? undefined;
+      existingWeighing.weighbridgeAddressLocation = weighingData.weighbridgeAddressLocation ?? undefined;
+      existingWeighing.weighbridgeDistanceFromFacility = weighingData.weighbridgeDistanceFromFacility ?? undefined;
+      // Remove this line - document relation is handled after transaction
+      // existingWeighing.weighbridgeCalibrationCertificate = weighbridgeCalibrationCertificate ?? undefined;
+
+      return weighingRepo.save(existingWeighing);
+    });
+
+    // Handle file upload/update (outside transaction)
     if (weighbridgeCalibrationCertificateFile) {
       // New file provided - delete old file and upload new one
-      if (weighing.weighbridgeCalibrationCertificate) {
-        await this.deleteWarehouseDocument(weighing.weighbridgeCalibrationCertificate.id);
+      if (result.weighbridgeCalibrationCertificate) {
+        await this.deleteWarehouseDocument(result.weighbridgeCalibrationCertificate.id);
       }
 
       const documentResult = await this.uploadWarehouseDocument(
         weighbridgeCalibrationCertificateFile,
         userId,
         'Weighing',
-        savedWeighing.id,
+        result.id,
         'weighbridgeCalibrationCertificate'
       );
 
@@ -345,18 +408,20 @@ export class WeighingsService {
       });
 
       if (certificateDocument) {
-        savedWeighing.weighbridgeCalibrationCertificate = certificateDocument;
-        await this.weighingRepository.save(savedWeighing);
+        result.weighbridgeCalibrationCertificate = certificateDocument;
+        await this.weighingRepository.save(result);
       }
     } else {
       // No new file provided - handle string (document ID) in DTO or keep existing
+      const { weighbridgeCalibrationCertificate } = updateWeighingDto;
+
       if (weighbridgeCalibrationCertificate && typeof weighbridgeCalibrationCertificate === 'string') {
         // User sent document ID as string - validate it exists and belongs to this weighing
         const existingDocument = await this.warehouseDocumentRepository.findOne({
-          where: { 
+          where: {
             id: weighbridgeCalibrationCertificate,
             documentableType: 'Weighing',
-            documentableId: savedWeighing.id,
+            documentableId: result.id,
             documentType: 'weighbridgeCalibrationCertificate'
           }
         });
@@ -366,20 +431,63 @@ export class WeighingsService {
         }
 
         // Keep the existing document
-        savedWeighing.weighbridgeCalibrationCertificate = existingDocument;
-        await this.weighingRepository.save(savedWeighing);
+        result.weighbridgeCalibrationCertificate = existingDocument;
+        await this.weighingRepository.save(result);
       } else {
         // No file and no document ID in DTO - ensure existing certificate is preserved
-        if (!weighing.weighbridgeCalibrationCertificate) {
+        if (!existingWeighing.weighbridgeCalibrationCertificate) {
           throw new BadRequestException('Weighbridge calibration certificate is required');
         }
         // Keep existing certificate
-        savedWeighing.weighbridgeCalibrationCertificate = weighing.weighbridgeCalibrationCertificate;
-        await this.weighingRepository.save(savedWeighing);
+        result.weighbridgeCalibrationCertificate = existingWeighing.weighbridgeCalibrationCertificate;
+        await this.weighingRepository.save(result);
       }
     }
 
-    return savedWeighing;
+    // Reload application to get latest status after transaction
+    const updatedApplication = await this.warehouseLocationRepository.findOne({
+      where: { id: warehouseLocationId },
+    });
+
+    // If application is rejected, track resubmission and update status if all sections are complete
+    if (updatedApplication?.status === WarehouseLocationStatus.REJECTED) {
+      const assignments = await this.assignmentRepository.find({
+        where: {
+          applicationLocationId: warehouseLocationId,
+          level: AssignmentLevel.HOD_TO_APPLICANT,
+          status: AssignmentStatus.REJECTED,
+        },
+      });
+
+      let assignmentSectionId: string | null = null;
+      if (assignments.length > 0) {
+        const assignmentSections = await this.assignmentSectionRepository.find({
+          where: {
+            assignmentId: In(assignments.map((a) => a.id)),
+            sectionType: '5-weighing',
+            resourceId: existingWeighing.id,
+          },
+        });
+
+        if (assignmentSections.length > 0) {
+          assignmentSectionId = assignmentSections[0].id;
+        }
+      }
+
+      // Call helper function to track resubmission and update status
+      await this.warehouseService['trackResubmissionAndUpdateStatus'](
+        warehouseLocationId,
+        '5-weighing',
+        existingWeighing.id,
+        assignmentSectionId ?? undefined,
+      );
+    }
+
+    return {
+      message: 'Weighing updated successfully',
+      weighingId: existingWeighing.id,
+      applicationId: warehouseLocationId,
+    };
   }
 
   findAll() {
