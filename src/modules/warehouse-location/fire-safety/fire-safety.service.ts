@@ -1,10 +1,14 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { CreateFireSafetyDto } from './dto/create-fire-safety.dto';
 import { UpdateFireSafetyDto } from './dto/update-fire-safety.dto';
 import { FireSafety } from './entities/fire-safety.entity';
 import { WarehouseLocation, WarehouseLocationStatus } from '../entities/warehouse-location.entity';
+import { WarehouseService } from '../../warehouse/warehouse.service';
+import { AssignmentSection } from '../../warehouse/operator/assignment/entities/assignment-section.entity';
+import { Assignment, AssignmentLevel, AssignmentStatus } from '../../warehouse/operator/assignment/entities/assignment.entity';
+import { FireSafetyHistory } from './entities/fire-safety-history.entity';
 
 @Injectable()
 export class FireSafetyService {
@@ -13,6 +17,16 @@ export class FireSafetyService {
     private readonly fireSafetyRepository: Repository<FireSafety>,
     @InjectRepository(WarehouseLocation)
     private readonly warehouseLocationRepository: Repository<WarehouseLocation>,
+    private readonly dataSource: DataSource,
+
+    @InjectRepository(Assignment)
+    private readonly assignmentRepository: Repository<Assignment>,
+
+    @InjectRepository(AssignmentSection)
+    private readonly assignmentSectionRepository: Repository<AssignmentSection>,
+
+    @Inject(forwardRef(() => WarehouseService))
+    private readonly warehouseService: WarehouseService,
   ) {}
 
   /**
@@ -89,20 +103,94 @@ export class FireSafetyService {
       throw new NotFoundException('Warehouse location application not found');
     }
 
-    if (warehouseLocation.status !== WarehouseLocationStatus.DRAFT) {
+    if (![WarehouseLocationStatus.DRAFT, WarehouseLocationStatus.REJECTED, WarehouseLocationStatus.RESUBMITTED].includes(warehouseLocation.status)) {
       throw new BadRequestException('Fire safety can only be updated while application is in draft status');
     }
 
-    const fireSafety = await this.fireSafetyRepository.findOne({
+    const existingFireSafety = await this.fireSafetyRepository.findOne({
       where: { warehouseLocationId },
     });
 
-    if (!fireSafety) {
+    if (!existingFireSafety) {
       throw new NotFoundException('Fire safety not found for this application');
     }
 
-    Object.assign(fireSafety, updateFireSafetyDto);
-    return this.fireSafetyRepository.save(fireSafety);
+    const result = await this.dataSource.transaction(async (manager) => {
+      const fireSafetyRepo = manager.getRepository(FireSafety);
+      const fireSafetyHistoryRepo = manager.getRepository(FireSafetyHistory);
+
+      if (![WarehouseLocationStatus.DRAFT, WarehouseLocationStatus.REJECTED, WarehouseLocationStatus.RESUBMITTED].includes(warehouseLocation.status)) {
+        throw new BadRequestException('Security can only be updated while application is in draft or rejected status');
+      };
+
+      if (warehouseLocation.status === WarehouseLocationStatus.REJECTED) {
+        // Save history of security if application is rejected (before overwriting)
+        const historyRecord = fireSafetyHistoryRepo.create({
+          fireSafetyId: existingFireSafety.id,
+          warehouseLocationId,
+          fireExtinguishers: existingFireSafety.fireExtinguishers,
+          fireBuckets: existingFireSafety.fireBuckets,
+          waterArrangements: existingFireSafety.waterArrangements,
+          fireSafetyAlarms: existingFireSafety.fireSafetyAlarms,
+          otherFireSafetyMeasures: existingFireSafety.otherFireSafetyMeasures,
+          isActive: false,
+        });
+        historyRecord.createdAt = existingFireSafety.createdAt;
+        await fireSafetyHistoryRepo.save(historyRecord);
+      }
+
+      // Overwrite existing security with new information
+      existingFireSafety.fireExtinguishers = updateFireSafetyDto.fireExtinguishers;
+      existingFireSafety.fireBuckets = updateFireSafetyDto.fireBuckets;
+      existingFireSafety.waterArrangements = updateFireSafetyDto.waterArrangements;
+      existingFireSafety.fireSafetyAlarms = updateFireSafetyDto.fireSafetyAlarms;
+      existingFireSafety.otherFireSafetyMeasures = updateFireSafetyDto.otherFireSafetyMeasures ?? '';
+
+      return fireSafetyRepo.save(existingFireSafety);
+    });
+
+    const updatedApplication = await this.warehouseLocationRepository.findOne({
+      where: { id: warehouseLocationId },
+    });
+
+    if (updatedApplication?.status === WarehouseLocationStatus.REJECTED) {
+      const assignments = await this.assignmentRepository.find({
+        where: {
+          applicationLocationId: warehouseLocationId,
+          level: AssignmentLevel.HOD_TO_APPLICANT,
+          status: AssignmentStatus.REJECTED,
+        },
+      });
+
+      let assignmentSectionId: string | null = null;
+      if (assignments.length > 0) {
+        const assignmentSections = await this.assignmentSectionRepository.find({
+          where: {
+            assignmentId: In(assignments.map((a) => a.id)),
+            sectionType: '4-security-fire-safety',
+            resourceId: existingFireSafety.id,
+          },
+        });
+
+        if (assignmentSections.length > 0) {
+          assignmentSectionId = assignmentSections[0].id;
+        }
+      }
+
+      await this.warehouseService['trackResubmissionAndUpdateStatus'](
+        warehouseLocationId,
+        '4-security-fire-safety',
+        existingFireSafety.id,
+        assignmentSectionId ?? undefined,
+      );
+    }
+
+    return {
+      message: 'Fire safety updated successfully',
+      fireSafetyId: existingFireSafety.id,
+      applicationId: warehouseLocationId,
+    };
+
   }
 
   findAll() {
