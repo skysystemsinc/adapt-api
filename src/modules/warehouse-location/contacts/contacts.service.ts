@@ -104,24 +104,24 @@ export class ContactsService {
       throw new NotFoundException('Warehouse location application not found');
     }
 
-    if (warehouseLocation.status !== WarehouseLocationStatus.DRAFT) {
+    if (![WarehouseLocationStatus.DRAFT, WarehouseLocationStatus.REJECTED].includes(warehouseLocation.status)) {
       throw new BadRequestException('Contact can only be updated while application is in draft status');
     }
 
-    const contact = await this.contactRepository.findOne({
+    const existingContact = await this.contactRepository.findOne({
       where: { warehouseLocationId },
     });
 
-    if (!contact) {
+    if (!existingContact) {
       throw new NotFoundException('Contact not found for this application');
     }
 
     // Map DTO field to entity field
-    contact.name = updateContactDto.facilityContactPerson;
-    contact.email = updateContactDto.email;
-    contact.phoneNumber = updateContactDto.phoneNumber;
-    contact.mobileNumber = updateContactDto.mobileNumber;
-    return this.contactRepository.save(contact);
+    // contact.name = updateContactDto.facilityContactPerson;
+    // contact.email = updateContactDto.email;
+    // contact.phoneNumber = updateContactDto.phoneNumber;
+    // contact.mobileNumber = updateContactDto.mobileNumber;
+    // return this.contactRepository.save(contact);
   }
 
   findAll() {

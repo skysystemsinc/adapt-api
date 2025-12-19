@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { CreateFacilityDto } from './dto/create-facility.dto';
@@ -10,6 +10,7 @@ import { Assignment, AssignmentLevel } from '../../warehouse/operator/assignment
 import { AssignmentStatus } from '../../warehouse/operator/assignment/entities/assignment.entity';
 import { AssignmentSection } from '../../warehouse/operator/assignment/entities/assignment-section.entity';
 import { In } from 'typeorm';
+import { WarehouseService } from '../../warehouse/warehouse.service';
 
 @Injectable()
 export class FacilityService {
@@ -19,8 +20,12 @@ export class FacilityService {
     @InjectRepository(WarehouseLocation)
     private readonly warehouseLocationRepository: Repository<WarehouseLocation>,
     private readonly dataSource: DataSource,
+    @InjectRepository(Assignment)
     private readonly assignmentRepository: Repository<Assignment>,
+    @InjectRepository(AssignmentSection)
     private readonly assignmentSectionRepository: Repository<AssignmentSection>,
+    @Inject(forwardRef(() => WarehouseService))
+    private readonly warehouseService: WarehouseService,
   ) { }
 
   async create(warehouseLocationId: string, createFacilityDto: CreateFacilityDto, userId: string) {
@@ -233,7 +238,7 @@ export class FacilityService {
       }
 
       // Call helper function to track resubmission and update status
-      await this.trackResubmissionAndUpdateStatus(
+      await this.warehouseService['trackResubmissionAndUpdateStatus'](
         warehouseLocationId,
         '1-facility-information',
         existingFacility.id,
