@@ -62,5 +62,6 @@ import { ClamAVModule } from '../clamav/clamav.module';
     HumanResourceModule,
     ClamAVModule,
   ],
+  exports: [WarehouseLocationService],
 })
 export class WarehouseLocationModule {}
