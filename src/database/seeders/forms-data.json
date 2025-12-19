@@ -1,0 +1,740 @@
+{
+  "forms": [
+    {
+      "id": "10a2609c-8c8e-43aa-8727-954a1acf1f4b",
+      "title": "Registration Form",
+      "slug": "registration-form",
+      "description": null,
+      "schema": {
+        "id": "b38a7ef0-151e-490c-8903-eb3477a6fdc8",
+        "steps": [],
+        "title": "Registration Form",
+        "description": ""
+      },
+      "isPublic": true,
+      "status": "published",
+      "createdBy": null,
+      "version": "v4",
+      "isActive": true
+    }
+  ],
+  "formFields": [
+    {
+      "id": "55fda1b7-4721-4fc1-8955-177971085c7e",
+      "formId": "10a2609c-8c8e-43aa-8727-954a1acf1f4b",
+      "fieldKey": "5db8142b-c70e-41a9-8c30-d573c9896a01",
+      "label": null,
+      "title": "Enter the details below sss",
+      "type": "heading",
+      "options": null,
+      "required": false,
+      "isSingle": false,
+      "placeholder": null,
+      "validation": null,
+      "conditions": null,
+      "order": 1,
+      "step": 0,
+      "metadata": null,
+      "width": "full",
+      "includeInKycVerification": false,
+      "documentTypeId": null
+    },
+    {
+      "id": "35b3c205-ecff-4167-b7c0-773b73b6262a",
+      "formId": "10a2609c-8c8e-43aa-8727-954a1acf1f4b",
+      "fieldKey": "069f194d-133b-45a4-b1d0-ba301db92427",
+      "label": "Please select your application type:",
+      "title": null,
+      "type": "radio",
+      "options": [
+        {
+          "id": "6f9b6a5c-f543-4499-becc-36c5fd88016f",
+          "label": "Indivisual",
+          "value": "indivisual"
+        },
+        {
+          "id": "d415fe67-d2dd-4c7e-bc75-1d1fcb5c6229",
+          "label": "Partnership",
+          "value": "partnership"
+        },
+        {
+          "id": "ec69c1ea-7b63-4813-bf4e-a3d0bc7fcdcf",
+          "label": "Private Limited",
+          "value": "private-limited"
+        },
+        {
+          "id": "06fc30fe-0768-4c7e-aa9b-51ebae530a8b",
+          "label": "Public Limited",
+          "value": "public-limited"
+        },
+        {
+          "id": "50dbc499-d3a4-4592-bd18-c09ab3cb80e3",
+          "label": "Test",
+          "value": "test"
+        }
+      ],
+      "required": true,
+      "isSingle": false,
+      "placeholder": null,
+      "validation": null,
+      "conditions": [],
+      "order": 0,
+      "step": 0,
+      "metadata": {
+        "width": "full"
+      },
+      "width": "full",
+      "includeInKycVerification": false,
+      "documentTypeId": null
+    },
+    {
+      "id": "4e81ff01-8f24-4e76-8413-fa1cec64f07a",
+      "formId": "10a2609c-8c8e-43aa-8727-954a1acf1f4b",
+      "fieldKey": "39df8541-13b5-41b8-b116-82ca494655f0",
+      "label": "Remarks",
+      "title": null,
+      "type": "textarea",
+      "options": null,
+      "required": true,
+      "isSingle": false,
+      "placeholder": null,
+      "validation": {
+        "maxLength": 200,
+        "minLength": 1
+      },
+      "conditions": null,
+      "order": 22,
+      "step": 0,
+      "metadata": null,
+      "width": "full",
+      "includeInKycVerification": false,
+      "documentTypeId": null
+    },
+    {
+      "id": "bcfda94f-d2c5-4395-977f-b4de5c057a7e",
+      "formId": "10a2609c-8c8e-43aa-8727-954a1acf1f4b",
+      "fieldKey": "5ef1a3c0-776b-44d1-acc6-2a5c18f3cb50",
+      "label": "Dummy Text Field",
+      "title": null,
+      "type": "text",
+      "options": null,
+      "required": true,
+      "isSingle": false,
+      "placeholder": null,
+      "validation": null,
+      "conditions": [],
+      "order": 23,
+      "step": 0,
+      "metadata": {
+        "width": "full"
+      },
+      "width": "full",
+      "includeInKycVerification": true,
+      "documentTypeId": null
+    },
+    {
+      "id": "8c410ab9-a962-44a6-b74d-a4cb1d3ba764",
+      "formId": "10a2609c-8c8e-43aa-8727-954a1acf1f4b",
+      "fieldKey": "692155d0-9764-4e47-a5bb-a19e9ed83040",
+      "label": "Name of Applicant as per CNIC",
+      "title": null,
+      "type": "text",
+      "options": null,
+      "required": true,
+      "isSingle": false,
+      "placeholder": "Mohammad Ali",
+      "validation": {
+        "maxLength": 15,
+        "minLength": 3
+      },
+      "conditions": null,
+      "order": 2,
+      "step": 0,
+      "metadata": {
+        "width": "full",
+        "conditionalLabels": {
+          "labels": {
+            "test": "testign123",
+            "indivisual": "Business / Applicant Name (as per CNIC)",
+            "partnership": "Business Name of Partnership (as per registration)",
+            "public-limited": "Company Name (as per SECP Registration)",
+            "private-limited": "Company Name (as per SECP Registration)"
+          },
+          "dependsOn": "069f194d-133b-45a4-b1d0-ba301db92427",
+          "dependsOnId": "ab24230e-a98a-4c2e-9541-5098223c9642",
+          "defaultLabel": "Business / Company Name"
+        }
+      },
+      "width": "full",
+      "includeInKycVerification": true,
+      "documentTypeId": null
+    },
+    {
+      "id": "5bcb3426-0dc0-4474-81a1-5fa0694dbcb3",
+      "formId": "10a2609c-8c8e-43aa-8727-954a1acf1f4b",
+      "fieldKey": "7281c3fa-f2a7-4e0d-8dee-8445f6f15160",
+      "label": "e-CIB",
+      "title": null,
+      "type": "file",
+      "options": null,
+      "required": true,
+      "isSingle": false,
+      "placeholder": null,
+      "validation": {
+        "maxSize": 5,
+        "allowedTypes": [
+          ".pdf",
+          ".doc",
+          ".jpg",
+          ".png",
+          ".jpeg"
+        ]
+      },
+      "conditions": null,
+      "order": 4,
+      "step": 0,
+      "metadata": null,
+      "width": "half",
+      "includeInKycVerification": false,
+      "documentTypeId": null
+    },
+    {
+      "id": "6fb1062b-853e-4ce1-b9cb-8b7c1cf02d73",
+      "formId": "10a2609c-8c8e-43aa-8727-954a1acf1f4b",
+      "fieldKey": "b2031abb-aa0f-4cf3-be8a-a9f0038259b8",
+      "label": "Applicant Official Bank Account / IBAN",
+      "title": null,
+      "type": "text",
+      "options": null,
+      "required": true,
+      "isSingle": false,
+      "placeholder": null,
+      "validation": {
+        "maxLength": 24,
+        "minLength": 24
+      },
+      "conditions": [],
+      "order": 5,
+      "step": 0,
+      "metadata": {
+        "width": "full",
+        "conditionalLabels": {
+          "labels": {
+            "indivisual": "Official Bank Account Number / IBAN",
+            "partnership": "Official Bank Account Number / IBAN (in name of Firm)",
+            "public-limited": "Official Bank Account Number / IBAN (in name of Company)",
+            "private-limited": "Official Bank Account Number / IBAN (in name of Company)"
+          },
+          "dependsOn": "069f194d-133b-45a4-b1d0-ba301db92427",
+          "dependsOnId": "ab24230e-a98a-4c2e-9541-5098223c9642",
+          "defaultLabel": "Official Bank Account Number / IBAN"
+        }
+      },
+      "width": "full",
+      "includeInKycVerification": false,
+      "documentTypeId": null
+    },
+    {
+      "id": "c0355178-5a61-4629-bef6-29b6cec97c88",
+      "formId": "10a2609c-8c8e-43aa-8727-954a1acf1f4b",
+      "fieldKey": "42be165c-c990-4d37-bbf1-a9dd942935f4",
+      "label": "Active Filer Status of the Applicant",
+      "title": null,
+      "type": "radio",
+      "options": [
+        {
+          "id": "a6b72483-8dc9-4d03-b73e-2fecf21104ae",
+          "label": "Yes",
+          "value": "yes"
+        },
+        {
+          "id": "d633cc74-fb59-4478-aedd-f8aa6b1fdeba",
+          "label": "No",
+          "value": "no"
+        }
+      ],
+      "required": true,
+      "isSingle": false,
+      "placeholder": null,
+      "validation": null,
+      "conditions": null,
+      "order": 6,
+      "step": 0,
+      "metadata": {
+        "width": "full"
+      },
+      "width": "full",
+      "includeInKycVerification": false,
+      "documentTypeId": null
+    },
+    {
+      "id": "e68a82f1-c920-490b-9135-259a55ad197b",
+      "formId": "10a2609c-8c8e-43aa-8727-954a1acf1f4b",
+      "fieldKey": "db09a58e-751d-46e3-a431-99e0a8aa3a4a",
+      "label": "Name of Applicant Authorized Signatory",
+      "title": null,
+      "type": "text",
+      "options": null,
+      "required": true,
+      "isSingle": false,
+      "placeholder": null,
+      "validation": {
+        "maxLength": 50,
+        "minLength": 1
+      },
+      "conditions": null,
+      "order": 7,
+      "step": 0,
+      "metadata": {
+        "width": "half"
+      },
+      "width": "half",
+      "includeInKycVerification": false,
+      "documentTypeId": null
+    },
+    {
+      "id": "e83b6de7-2ca7-476e-9a62-dd0690076b47",
+      "formId": "10a2609c-8c8e-43aa-8727-954a1acf1f4b",
+      "fieldKey": "5fb9c979-e4a5-4e81-89bb-673229e99340",
+      "label": "Designation",
+      "title": null,
+      "type": "text",
+      "options": null,
+      "required": true,
+      "isSingle": false,
+      "placeholder": null,
+      "validation": {
+        "maxLength": 50,
+        "minLength": 1
+      },
+      "conditions": null,
+      "order": 8,
+      "step": 0,
+      "metadata": null,
+      "width": "half",
+      "includeInKycVerification": false,
+      "documentTypeId": null
+    },
+    {
+      "id": "f70e14cb-e9e6-4b61-9d6e-d83d5a81ce0d",
+      "formId": "10a2609c-8c8e-43aa-8727-954a1acf1f4b",
+      "fieldKey": "64fa8d4f-409a-44d9-9bd7-1dda8879b649",
+      "label": "CNIC of Applicant",
+      "title": null,
+      "type": "checkbox",
+      "options": [
+        {
+          "id": "c8c013f8-10e1-477c-a08e-0c86838b7436",
+          "label": "Yes",
+          "value": "yes"
+        },
+        {
+          "id": "675778cc-7c82-4fe0-9171-8ead2fa7baf0",
+          "label": "No",
+          "value": "no"
+        }
+      ],
+      "required": true,
+      "isSingle": false,
+      "placeholder": null,
+      "validation": null,
+      "conditions": null,
+      "order": 9,
+      "step": 0,
+      "metadata": null,
+      "width": "half",
+      "includeInKycVerification": false,
+      "documentTypeId": null
+    },
+    {
+      "id": "d1779e76-a909-4948-a350-ad11b6ac3630",
+      "formId": "10a2609c-8c8e-43aa-8727-954a1acf1f4b",
+      "fieldKey": "f3c154ca-46d6-4b10-88e8-b4e22f24bca6",
+      "label": "CNIC Number",
+      "title": null,
+      "type": "text",
+      "options": null,
+      "required": true,
+      "isSingle": false,
+      "placeholder": "42101-1234567-8",
+      "validation": {
+        "maxLength": 15,
+        "minLength": 1
+      },
+      "conditions": null,
+      "order": 10,
+      "step": 0,
+      "metadata": {
+        "width": "half"
+      },
+      "width": "half",
+      "includeInKycVerification": true,
+      "documentTypeId": null
+    },
+    {
+      "id": "1d63da74-197e-4ba4-bd10-23cfc2159d57",
+      "formId": "10a2609c-8c8e-43aa-8727-954a1acf1f4b",
+      "fieldKey": "f8d36cc6-483d-4611-99cc-9ebd2536b9ee",
+      "label": "CNIC Copy",
+      "title": null,
+      "type": "file",
+      "options": null,
+      "required": true,
+      "isSingle": false,
+      "placeholder": null,
+      "validation": {
+        "maxSize": 5,
+        "allowedTypes": [
+          ".pdf",
+          ".doc",
+          ".jpg",
+          ".png",
+          ".jpeg"
+        ]
+      },
+      "conditions": null,
+      "order": 11,
+      "step": 0,
+      "metadata": {
+        "width": "half"
+      },
+      "width": "half",
+      "includeInKycVerification": true,
+      "documentTypeId": null
+    },
+    {
+      "id": "fe67f3e9-bb6e-4522-9600-77ac3aa6805f",
+      "formId": "10a2609c-8c8e-43aa-8727-954a1acf1f4b",
+      "fieldKey": "66e189f1-290a-4cc4-aa93-bc8080d93efd",
+      "label": "Date of Issuance of CNIC of Applicant Authrotrized Signatory",
+      "title": null,
+      "type": "date",
+      "options": null,
+      "required": true,
+      "isSingle": false,
+      "placeholder": null,
+      "validation": null,
+      "conditions": null,
+      "order": 12,
+      "step": 0,
+      "metadata": {
+        "width": "half"
+      },
+      "width": "half",
+      "includeInKycVerification": false,
+      "documentTypeId": null
+    },
+    {
+      "id": "c5ec074e-fa1c-443d-a4bc-e61bd3486dbc",
+      "formId": "10a2609c-8c8e-43aa-8727-954a1acf1f4b",
+      "fieldKey": "5d3885f6-50c6-4e4b-8dc9-7b53935247b5",
+      "label": "Level of Financial Authorization",
+      "title": null,
+      "type": "select",
+      "options": [
+        {
+          "id": "cb43da42-017c-4ead-9dbd-61d2446e4bd0",
+          "label": "1ML",
+          "value": "1"
+        },
+        {
+          "id": "1aaf8707-6c47-4d25-833d-1b5dad619a03",
+          "label": "5ML",
+          "value": "5"
+        },
+        {
+          "id": "92c1a3e1-2f17-4654-98c4-8be0fe160cb8",
+          "label": "10ML",
+          "value": "10"
+        },
+        {
+          "id": "d1d04c2f-66aa-4136-87a5-e5e6b8faf2ac",
+          "label": "50ML",
+          "value": "50"
+        },
+        {
+          "id": "c886e920-3d32-4c18-8d55-dc52ba6c6f95",
+          "label": "100ML",
+          "value": "100"
+        }
+      ],
+      "required": true,
+      "isSingle": false,
+      "placeholder": null,
+      "validation": null,
+      "conditions": null,
+      "order": 13,
+      "step": 0,
+      "metadata": null,
+      "width": "half",
+      "includeInKycVerification": false,
+      "documentTypeId": null
+    },
+    {
+      "id": "149260a4-01a7-4ade-a192-1d2698d1ac3f",
+      "formId": "10a2609c-8c8e-43aa-8727-954a1acf1f4b",
+      "fieldKey": "1520ebf5-5c5f-4084-99cd-dd4b9d7bf9fa",
+      "label": "Select an option",
+      "title": null,
+      "type": "radio",
+      "options": [
+        {
+          "id": "d2d60001-221c-4515-bf75-89095f98c000",
+          "label": "Power of Attorney",
+          "value": "power_of_attorney"
+        },
+        {
+          "id": "21ab8f68-3430-4f5a-a3c0-1caad3cc3cd2",
+          "label": "Board Resolution",
+          "value": "board_resolution"
+        }
+      ],
+      "required": true,
+      "isSingle": false,
+      "placeholder": null,
+      "validation": null,
+      "conditions": null,
+      "order": 14,
+      "step": 0,
+      "metadata": null,
+      "width": "half",
+      "includeInKycVerification": false,
+      "documentTypeId": null
+    },
+    {
+      "id": "daebc16c-d2df-415c-b8e0-c40d3cd74b47",
+      "formId": "10a2609c-8c8e-43aa-8727-954a1acf1f4b",
+      "fieldKey": "6130e6f0-9b15-48a3-98fa-11fa26b46949",
+      "label": "Registered Mobile No. of Applicant Authorized Signatory",
+      "title": null,
+      "type": "number",
+      "options": null,
+      "required": true,
+      "isSingle": false,
+      "placeholder": "3321234567",
+      "validation": {
+        "maxDigits": 15,
+        "minDigits": 10
+      },
+      "conditions": [],
+      "order": 17,
+      "step": 0,
+      "metadata": {
+        "width": "half"
+      },
+      "width": "half",
+      "includeInKycVerification": false,
+      "documentTypeId": null
+    },
+    {
+      "id": "203526df-51a5-4f0e-956b-652d89a6d35b",
+      "formId": "10a2609c-8c8e-43aa-8727-954a1acf1f4b",
+      "fieldKey": "6844f5d1-09b3-4ab9-b13f-827f0f32e284",
+      "label": "Valid Email ID of Applicant Authorized Signatory",
+      "title": null,
+      "type": "email",
+      "options": null,
+      "required": true,
+      "isSingle": false,
+      "placeholder": "abc@example.com",
+      "validation": null,
+      "conditions": null,
+      "order": 18,
+      "step": 0,
+      "metadata": null,
+      "width": "half",
+      "includeInKycVerification": false,
+      "documentTypeId": null
+    },
+    {
+      "id": "ff66c0b0-9673-4108-979c-59afb4cada6b",
+      "formId": "10a2609c-8c8e-43aa-8727-954a1acf1f4b",
+      "fieldKey": "50b390ce-dc06-429c-834b-d6d42d27abad",
+      "label": null,
+      "title": "Bank payment for 30,000 is required",
+      "type": "heading",
+      "options": null,
+      "required": false,
+      "isSingle": false,
+      "placeholder": null,
+      "validation": null,
+      "conditions": null,
+      "order": 19,
+      "step": 0,
+      "metadata": {},
+      "width": "full",
+      "includeInKycVerification": false,
+      "documentTypeId": null
+    },
+    {
+      "id": "c9a617f6-e815-406f-8c42-feec2aa39614",
+      "formId": "10a2609c-8c8e-43aa-8727-954a1acf1f4b",
+      "fieldKey": "f69adef2-31c5-4cee-8a50-37c508a2877f",
+      "label": "Bank Payment Slip in specific required bank",
+      "title": null,
+      "type": "checkbox",
+      "options": [
+        {
+          "id": "0f73676f-aed0-48dd-890b-20d437667b85",
+          "label": "Option 1",
+          "value": "option1"
+        },
+        {
+          "id": "190bf499-f7f6-4e64-ac5d-edddbcefe11f",
+          "label": "Option 2",
+          "value": "option2"
+        }
+      ],
+      "required": false,
+      "isSingle": true,
+      "placeholder": null,
+      "validation": null,
+      "conditions": null,
+      "order": 20,
+      "step": 0,
+      "metadata": null,
+      "width": "half",
+      "includeInKycVerification": false,
+      "documentTypeId": null
+    },
+    {
+      "id": "50861af6-33dc-4291-98fb-d9ad2bb9deef",
+      "formId": "10a2609c-8c8e-43aa-8727-954a1acf1f4b",
+      "fieldKey": "6370fe84-351f-489d-82e5-fea6098d9068",
+      "label": "Bank Slip",
+      "title": null,
+      "type": "file",
+      "options": null,
+      "required": true,
+      "isSingle": false,
+      "placeholder": null,
+      "validation": {
+        "maxSize": 5,
+        "allowedTypes": [
+          ".pdf",
+          ".doc",
+          ".jpg",
+          ".png",
+          ".jpeg"
+        ]
+      },
+      "conditions": null,
+      "order": 21,
+      "step": 0,
+      "metadata": null,
+      "width": "half",
+      "includeInKycVerification": false,
+      "documentTypeId": null
+    },
+    {
+      "id": "4c7e89d2-03bf-4439-8d7f-61ffc36a7bc0",
+      "formId": "10a2609c-8c8e-43aa-8727-954a1acf1f4b",
+      "fieldKey": "2e3c4699-cfa2-4a6d-918a-6cf0daada8e0",
+      "label": "Borrower Code of Applicant",
+      "title": null,
+      "type": "text",
+      "options": null,
+      "required": true,
+      "isSingle": false,
+      "placeholder": null,
+      "validation": {
+        "maxLength": 50,
+        "minLength": 1
+      },
+      "conditions": [
+        {
+          "field": "35b3c205-ecff-4167-b7c0-773b73b6262a",
+          "value": "test",
+          "operator": "!="
+        }
+      ],
+      "order": 3,
+      "step": 0,
+      "metadata": {
+        "width": "half",
+        "conditionalLabels": {
+          "labels": {
+            "indivisual": "BCOA"
+          },
+          "dependsOn": "069f194d-133b-45a4-b1d0-ba301db92427",
+          "dependsOnId": "ab24230e-a98a-4c2e-9541-5098223c9642",
+          "defaultLabel": "Borrower Code of Applicant"
+        }
+      },
+      "width": "half",
+      "includeInKycVerification": true,
+      "documentTypeId": null
+    },
+    {
+      "id": "fb2796c2-f3d9-41a1-893c-47a70d9e9a05",
+      "formId": "10a2609c-8c8e-43aa-8727-954a1acf1f4b",
+      "fieldKey": "308ad4a7-607d-4279-b8af-9bfe919faf3c",
+      "label": "Upload Power of Attorney",
+      "title": null,
+      "type": "file",
+      "options": null,
+      "required": true,
+      "isSingle": false,
+      "placeholder": null,
+      "validation": {
+        "maxSize": 10,
+        "allowedTypes": [
+          ".pdf",
+          ".doc",
+          ".jpg",
+          ".png",
+          ".jpeg"
+        ]
+      },
+      "conditions": [
+        {
+          "field": "149260a4-01a7-4ade-a192-1d2698d1ac3f",
+          "value": "power_of_attorney",
+          "operator": "=="
+        }
+      ],
+      "order": 15,
+      "step": 0,
+      "metadata": null,
+      "width": "full",
+      "includeInKycVerification": false,
+      "documentTypeId": null
+    },
+    {
+      "id": "b9f64d63-326f-4845-9512-98b9692b4add",
+      "formId": "10a2609c-8c8e-43aa-8727-954a1acf1f4b",
+      "fieldKey": "5a2eac58-f399-4a11-a541-6153cf2812ae",
+      "label": "Board Resolution",
+      "title": null,
+      "type": "file",
+      "options": null,
+      "required": true,
+      "isSingle": false,
+      "placeholder": null,
+      "validation": {
+        "maxSize": 10,
+        "allowedTypes": [
+          ".pdf",
+          ".doc",
+          ".jpg",
+          ".png",
+          ".jpeg"
+        ]
+      },
+      "conditions": [
+        {
+          "field": "149260a4-01a7-4ade-a192-1d2698d1ac3f",
+          "value": "board_resolution",
+          "operator": "=="
+        }
+      ],
+      "order": 16,
+      "step": 0,
+      "metadata": null,
+      "width": "full",
+      "includeInKycVerification": false,
+      "documentTypeId": null
+    }
+  ],
+  "exportedAt": "2025-12-19T11:25:20.831Z"
+}
