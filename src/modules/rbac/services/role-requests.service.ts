@@ -336,8 +336,7 @@ export class RoleRequestsService {
       }
 
       const isNewRole = !request.roleId;
-      let originalRole: Role | null = null;
-      let savedNewRole: Role;
+      let savedRole: Role;
 
       if (isNewRole) {
         // Create new role (no existing role to update)
@@ -346,43 +345,35 @@ export class RoleRequestsService {
           description: request.description,
           version: 'v1',
         });
-        savedNewRole = await manager.save(newRole);
+        savedRole = await manager.save(newRole);
       } else {
-        // Get the original role
-        originalRole = await manager.findOne(Role, {
+        // Get the existing role to update
+        const existingRole = await manager.findOne(Role, {
           where: { id: request.roleId! },
         });
 
-        if (!originalRole) {
+        if (!existingRole) {
           throw new NotFoundException(`Role with ID '${request.roleId}' not found`);
         }
 
-        // Create new version (versioning logic)
-        const currentVersion = originalRole.version || 'v1';
+        // Calculate next version
+        const currentVersion = existingRole.version || 'v1';
         const versionNumber = parseInt(currentVersion.replace('v', '')) || 1;
         const nextVersion = `v${versionNumber + 1}`;
 
-        // Deactivate old role by renaming it
-        const oldName = originalRole.name;
-        originalRole.name = `${oldName}-${currentVersion}`;
-        await manager.save(originalRole);
+        // Update the existing role (don't create a new one)
+        existingRole.name = request.name;
+        existingRole.description = request.description;
+        existingRole.version = nextVersion;
 
-        // Create new role version
-        const newRole = manager.create(Role, {
-          name: request.name,
-          description: request.description,
-          version: nextVersion,
-        });
-
-        savedNewRole = await manager.save(newRole);
-
+        savedRole = await manager.save(existingRole);
       } // end isNewRole check
 
       // Get original role permissions to build ID mapping (only if updating existing role)
       let originalRolePermissions: RolePermission[] = [];
-      if (!isNewRole && originalRole) {
+      if (!isNewRole) {
         originalRolePermissions = await manager.find(RolePermission, {
-          where: { roleId: originalRole.id },
+          where: { roleId: savedRole.id },
         });
       }
 
@@ -435,24 +426,20 @@ export class RoleRequestsService {
 
         // Create role permission from request
         const newRolePermission = manager.create(RolePermission, {
-          roleId: savedNewRole.id,
+          roleId: savedRole.id,
           permissionId: permissionRequest.permissionId,
         });
         permissionsToCreate.push(newRolePermission);
       }
 
+      // Delete existing permissions for the role (only if updating existing role)
+      if (!isNewRole && originalRolePermissions.length > 0) {
+        await manager.delete(RolePermission, { roleId: savedRole.id });
+      }
+
       // Save all permissions
       if (permissionsToCreate.length > 0) {
         await manager.save(permissionsToCreate);
-      }
-
-      // Migrate user-role assignments from old role to new role (only if updating existing role)
-      // This ensures users get the new role version
-      if (!isNewRole && originalRole) {
-        await manager.query(
-          `UPDATE user_roles SET "roleId" = $1 WHERE "roleId" = $2`,
-          [savedNewRole.id, originalRole.id]
-        );
       }
     });
   }
