@@ -136,7 +136,7 @@ export class FacilityService {
       throw new NotFoundException('Warehouse location application not found');
     }
 
-    if (![WarehouseLocationStatus.DRAFT, WarehouseLocationStatus.REJECTED].includes(warehouseLocation.status)) {
+    if (![WarehouseLocationStatus.DRAFT, WarehouseLocationStatus.REJECTED, WarehouseLocationStatus.RESUBMITTED].includes(warehouseLocation.status)) {
       throw new BadRequestException('Facility can only be updated while application is in draft status');
     }
 
