@@ -74,7 +74,7 @@ import { ClamAVService } from '../clamav/clamav.service';
 import { OperatorUnlockRequestDto } from './dto/operator-unlock-request.dto';
 import { UnlockRequest, UnlockRequestStatus } from './entities/unlock-request.entity';
 import { WarehouseOperatorLocation } from '../warehouse-operator-location/entities/warehouse-operator-location.entity';
-import { AuthorizedSignatoryUnlockUpdate } from './entities/authorized-signatory-unlock.entity';
+import { AuthorizedSignatoryUnlockUpdate, UnlockUpdateStatus } from './entities/authorized-signatory-unlock.entity';
 
 
 export class WarehouseService {
@@ -566,7 +566,7 @@ export class WarehouseService {
     let isUnlockRequest: boolean = false;
     let unlockRequest: UnlockRequest | null = null;
 
-    if(application.status == WarehouseOperatorApplicationStatus.APPROVED) {
+    if (application.status == WarehouseOperatorApplicationStatus.APPROVED) {
       const operator = await this.dataSource.getRepository(WarehouseOperator).findOne({
         where: {
           applicationId: application.id,
@@ -576,7 +576,7 @@ export class WarehouseService {
         }
       });
 
-      if(!operator) {
+      if (!operator) {
         throw new NotFoundException('Operator not found');
       }
 
@@ -588,7 +588,7 @@ export class WarehouseService {
         }
       });
 
-      if(!unlockRequest) {
+      if (!unlockRequest) {
         throw new NotFoundException('Unlock request not found');
       }
       isUnlockRequest = true;
@@ -5389,8 +5389,8 @@ export class WarehouseService {
       throw new NotFoundException('Application not found');
     }
     let isUnlockRequest: UnlockRequest | null = null;
-    
-    if(!isLocationApplication && application.status == WarehouseOperatorApplicationStatus.APPROVED) {
+
+    if (!isLocationApplication && application.status == WarehouseOperatorApplicationStatus.APPROVED) {
       const operator = await this.dataSource.getRepository(WarehouseOperator).findOne({
         where: {
           applicationId: applicationId,
@@ -5399,7 +5399,7 @@ export class WarehouseService {
           id: true,
         }
       });
-      if(!operator) {
+      if (!operator) {
         throw new NotFoundException('Operator not found');
       }
 
@@ -5439,7 +5439,7 @@ export class WarehouseService {
         assignedTo: userId,
       }
     });
-    
+
     let unlockedSections: string[] = [];
     if (assignments && assignments.length > 0) {
       // check in assignmentSection table against assignment
@@ -6472,7 +6472,7 @@ export class WarehouseService {
     updateDto: CreateAuthorizedSignatoryDto,
     unlockRequestId: string,
     userId: string
-  ): Promise<void> {
+  ) {
     const existingUpdate = await this.dataSource.getRepository(AuthorizedSignatoryUnlockUpdate).findOne({
       where: {
         authorizedSignatoryId,
@@ -6480,5 +6480,50 @@ export class WarehouseService {
         status: UnlockUpdateStatus.PENDING
       }
     });
+
+    const updateData = {
+      unlockRequestId,
+      authorizedSignatoryId,
+      name: updateDto.name,
+      authorizedSignatoryName: updateDto.authorizedSignatoryName,
+      cnic: updateDto.cnic.toString(),
+      passport: updateDto.passport ?? '',
+      issuanceDateOfCnic: updateDto.issuanceDateOfCnic,
+      expiryDateOfCnic: updateDto.expiryDateOfCnic,
+      mailingAddress: updateDto.mailingAddress,
+      city: updateDto.city,
+      country: updateDto.country,
+      postalCode: updateDto.postalCode,
+      designation: updateDto.designation,
+      mobileNumber: updateDto.mobileNumber,
+      email: updateDto.email,
+      landlineNumber: updateDto.landlineNumber ?? '',
+      status: UnlockUpdateStatus.PENDING,
+    };
+
+    if (existingUpdate) {
+      Object.assign(existingUpdate, updateData);
+      await this.dataSource.getRepository(AuthorizedSignatoryUnlockUpdate).save(existingUpdate);
+      return {
+        message: 'Unlock request update saved successfully. Waiting for admin review.',
+        updateId: existingUpdate.id,
+        status: 'PENDING',
+      };
+    } else {
+      const newUpdate = this.dataSource.getRepository(AuthorizedSignatoryUnlockUpdate).create(updateData);
+      const saved = await this.dataSource.getRepository(AuthorizedSignatoryUnlockUpdate).save(newUpdate);
+      // Track resubmission for unlock request
+      await this.trackUnlockResubmission(
+        unlockRequestId,
+        '1-authorize-signatory-information',
+        authorizedSignatoryId,
+        saved.id
+      );
+      return {
+        message: 'Unlock request update saved successfully. Waiting for admin review.',
+        updateId: saved.id,
+        status: 'PENDING',
+      };
+    }
   }
 }
