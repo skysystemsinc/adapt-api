@@ -79,6 +79,7 @@ import { FinancialSoundnessChecklistHistoryEntity } from './entities/checklist/f
 import { RegistrationFeeChecklistHistoryEntity } from './entities/checklist/registration-fee-history.entity';
 import { DeclarationChecklistHistoryEntity } from './entities/checklist/declaration-history.entity';
 
+
 export class WarehouseService {
   private readonly logger = new Logger(WarehouseService.name);
   private readonly uploadDir = 'uploads';
@@ -5477,7 +5478,7 @@ export class WarehouseService {
         assignedTo: userId,
       }
     });
-
+    
     let unlockedSections: string[] = [];
     if (assignments && assignments.length > 0) {
       // check in assignmentSection table against assignment
