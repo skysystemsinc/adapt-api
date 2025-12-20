@@ -13,6 +13,9 @@ import { Assignment } from '../warehouse/operator/assignment/entities/assignment
 import { WarehouseDocument } from '../warehouse/entities/warehouse-document.entity';
 import { RegistrationApplication } from '../registration-application/entities/registration-application.entity';
 import { WarehouseOperator } from '../warehouse/entities/warehouse-operator.entity';
+import { UnlockRequest, UnlockRequestStatus } from '../warehouse/entities/unlock-request.entity';
+import { fileTypeFromBuffer } from 'file-type';
+import { UnlockRequestApprovalDto } from './dto/unlock-request-approval.dto';
 
 @Injectable()
 export class WarehouseAdminService {
@@ -29,6 +32,8 @@ export class WarehouseAdminService {
     private dataSource: DataSource,
     @InjectRepository(WarehouseOperator)
     private warehouseOperatorRepository: Repository<WarehouseOperator>,
+    @InjectRepository(UnlockRequest)
+    private unlockRequestRepository: Repository<UnlockRequest>,
   ) { }
 
   async findAllWareHouseOperatorsPaginated(query: QueryOperatorApplicationDto, userId: string) {
@@ -1149,6 +1154,386 @@ export class WarehouseAdminService {
 
     return {
       message: 'Certificate deleted successfully',
+    };
+  }
+
+  async listOperatorRequestApprovals(query: QueryOperatorApplicationDto, userId: string) {
+    const { page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'ASC', search, status } = query;
+    const whereCondition: any = {};
+
+    const user = await this.usersRepository.findOne({
+      where: { id: userId },
+      relations: ['userRoles', 'userRoles.role', 'userRoles.role.rolePermissions', 'userRoles.role.rolePermissions.permission'],
+    });
+
+    if(!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if(hasPermission(user, Permissions.MANAGE_RBAC)) {
+      whereCondition.status = UnlockRequestStatus.PENDING;
+    } else {
+      whereCondition.status = Not(UnlockRequestStatus.PENDING);
+    }
+    
+    if (search) {
+      whereCondition.user = {
+        firstName: ILike(`%${search}%`),
+        lastName: ILike(`%${search}%`),
+        email: ILike(`%${search}%`),
+      };
+    }
+    
+    if (status) {
+      whereCondition.status = status;
+    }
+    
+    const [unlockRequests, total] = await this.unlockRequestRepository.findAndCount({
+      where: whereCondition,
+      skip: (page - 1) * limit,
+      take: limit,
+      order: {
+        [sortBy]: sortOrder,
+      },
+      relations: {
+        user: true,
+        operator: {
+          user: true,
+        },
+        reviewedByUser: true,
+      },
+    });
+    return {
+      data: unlockRequests,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  async downloadUnlockRequestBankslip(requestId: string) {
+    // Find the unlock request
+    const unlockRequest = await this.unlockRequestRepository.findOne({
+      where: { id: requestId },
+    });
+
+    if (!unlockRequest) {
+      throw new NotFoundException('Unlock request not found');
+    }
+
+    if (!unlockRequest.bankPaymentSlip) {
+      throw new NotFoundException('Bank payment slip not found for this request');
+    }
+
+    // Get file path
+    const fs = require('fs');
+    const path = require('path');
+    const filename = path.basename(unlockRequest.bankPaymentSlip);
+    const uploadDir = path.join(process.cwd(), 'uploads');
+    const filePath = path.join(uploadDir, filename);
+
+    // Check if file exists
+    if (!fs.existsSync(filePath)) {
+      throw new NotFoundException('Bank payment slip file not found on disk');
+    }
+
+    // Read encrypted file
+    const encryptedBuffer = await fs.promises.readFile(filePath);
+
+    // Get encryption metadata - try from unlockRequest first, then from WarehouseDocument
+    let iv: string | null = unlockRequest.iv || null;
+    let authTag: string | null = unlockRequest.authTag || null;
+    
+    // If not stored in unlockRequest, try to get from WarehouseDocument
+    if (!iv || !authTag) {
+      const document = await this.warehouseDocumentRepository.findOne({
+        where: [
+          { id: unlockRequest.bankPaymentSlip },
+          { filePath: unlockRequest.bankPaymentSlip },
+        ],
+      });
+      
+      if (document) {
+        iv = iv || document.iv || null;
+        authTag = authTag || document.authTag || null;
+      }
+    }
+
+    // Decrypt if iv and authTag are present
+    let decryptedBuffer: Buffer;
+    if (iv && authTag) {
+      try {
+        decryptedBuffer = decryptBuffer(encryptedBuffer, iv, authTag);
+      } catch (error: any) {
+        throw new BadRequestException(`Failed to decrypt bank payment slip: ${error.message}`);
+      }
+    } else {
+      // If no encryption metadata, assume file is not encrypted (backward compatibility)
+      decryptedBuffer = encryptedBuffer;
+    }
+
+    // Use stored mimeType if available, otherwise detect from buffer
+    let mimeType = unlockRequest.mimeType?.trim() || 'application/octet-stream';
+    let fileExtension = '.pdf'; // Default extension
+    
+    // Map MIME type to file extension
+    const mimeToExtMap: Record<string, string> = {
+      'application/pdf': '.pdf',
+      'image/jpeg': '.jpg',
+      'image/jpg': '.jpg',
+      'image/png': '.png',
+      'image/gif': '.gif',
+      'image/webp': '.webp',
+      'application/msword': '.doc',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+      'application/vnd.ms-excel': '.xls',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
+    };
+    
+    // Normalize mimeType to lowercase for consistent matching
+    const normalizedMimeType = mimeType.toLowerCase();
+    
+    if (normalizedMimeType && mimeToExtMap[normalizedMimeType]) {
+      fileExtension = mimeToExtMap[normalizedMimeType];
+      mimeType = normalizedMimeType; // Use normalized version
+    } else {
+      // Fallback: try to detect from buffer if mimeType not stored or not recognized
+      try {
+        const fileType = await fileTypeFromBuffer(decryptedBuffer);
+        if (fileType?.mime) {
+          mimeType = fileType.mime;
+          const normalizedDetectedMime = fileType.mime.toLowerCase();
+          fileExtension = mimeToExtMap[normalizedDetectedMime] || fileExtension;
+        }
+      } catch (error) {
+        // If detection fails, try extension from stored filename
+        const storedExtension = path.extname(filename).toLowerCase();
+        if (storedExtension) {
+          fileExtension = storedExtension;
+        }
+      }
+    }
+
+    // Determine filename: prefer originalFileName, but ensure extension matches mimeType
+    let displayFilename: string;
+    if (unlockRequest.originalFileName) {
+      const originalExt = path.extname(unlockRequest.originalFileName).toLowerCase();
+      // If original filename extension doesn't match the mimeType extension, use the mimeType extension
+      if (originalExt !== fileExtension) {
+        const baseName = path.basename(unlockRequest.originalFileName, originalExt);
+        displayFilename = `${baseName}${fileExtension}`;
+      } else {
+        displayFilename = unlockRequest.originalFileName;
+      }
+    } else {
+      displayFilename = `bankslip${fileExtension}`;
+    }
+
+    return {
+      buffer: decryptedBuffer,
+      mimeType,
+      filename: displayFilename,
+    };
+  }
+
+  async reviewUnlockRequest(id: string, reviewUnlockRequestDto: UnlockRequestApprovalDto, userId: string) {
+    const { status, remarks } = reviewUnlockRequestDto;
+    const unlockRequest = await this.unlockRequestRepository.findOne({ where: { id } });
+    if (!unlockRequest) {
+      throw new NotFoundException('Unlock request not found');
+    }
+    if (unlockRequest.status !== UnlockRequestStatus.PENDING) {
+      throw new BadRequestException('Unlock request is not pending');
+    }
+    unlockRequest.status = status;
+    unlockRequest.reviewedBy = userId;
+    unlockRequest.reviewedAt = new Date();
+    unlockRequest.remarks = remarks || '';
+    await this.unlockRequestRepository.save(unlockRequest);
+    return {
+      message: 'Unlock request reviewed successfully',
+    };
+  }
+
+  async findOneUnlockRequest(id: string, userId: string) {
+    let user: User | null = null;
+
+    if (userId) {
+      user = await this.usersRepository.findOne({
+        where: { id: userId },
+        relations: ['userRoles', 'userRoles.role', 'userRoles.role.rolePermissions', 'userRoles.role.rolePermissions.permission'],
+      });
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+    }
+
+    const unlockRequest = await this.unlockRequestRepository.findOne({
+      where: { id },
+      select: {
+        id: true,
+        operatorId: true,
+        locationId: true,
+        operator: {
+          applicationId: true,
+        },
+        location: {
+          warehouseOperatorId: true,
+        },
+      }
+    });
+
+    if(!unlockRequest) {
+      throw new NotFoundException('Warehouse operator unlock request not found');
+    }
+
+    const warehouseOperatorApplicationId = unlockRequest.operator?.applicationId || unlockRequest.location?.warehouseOperatorId;
+
+    const warehouseOperatorApplication = await this.warehouseOperatorApplicationRequestRepository.findOne({
+      where: { id: warehouseOperatorApplicationId },
+      select: {
+        id: true,
+        status: true,
+        applicationId: true,
+        metadata: true,
+        user: true,
+        companyInformation: true,
+        financialInformation: true,
+        bankDetails: true,
+        authorizedSignatories: true,
+        hrs: true,
+        applicantChecklist: true,
+      },
+      relations: {
+        user: true,
+        authorizedSignatories: true,
+        companyInformation: {
+          ntcCertificate: true,
+        },
+        bankDetails: true,
+        hrs: {
+          personalDetails: {
+            photographDocument: true,
+            designation: true,
+          },
+          academicQualifications: {
+            academicCertificateDocument: true,
+          },
+          professionalQualifications: {
+            professionalCertificateDocument: true,
+          },
+          trainings: {
+            trainingCertificateDocument: true,
+          },
+          experiences: {
+            experienceLetterDocument: true,
+          },
+          declaration: true,
+        },
+        financialInformation: {
+          auditReport: true,
+          taxReturns: true,
+          bankStatements: {
+            document: true,
+          },
+          others: {
+            document: true,
+          },
+        },
+        applicantChecklist: {
+          humanResources: {
+            qcPersonnelDocument: true,
+            warehouseSupervisorDocument: true,
+            dataEntryOperatorDocument: true,
+          },
+          financialSoundness: {
+            auditedFinancialStatementsDocument: true,
+            positiveNetWorthDocument: true,
+            noLoanDefaultsDocument: true,
+            cleanCreditHistoryDocument: true,
+            adequateWorkingCapitalDocument: true,
+            validInsuranceCoverageDocument: true,
+            noFinancialFraudDocument: true,
+          },
+          registrationFee: {
+            bankPaymentSlipDocument: true,
+          },
+          declaration: true,
+        },
+      }
+    });
+
+    if (!warehouseOperatorApplication) {
+      throw new NotFoundException('Warehouse operator application not found');
+    }
+
+    if (user && 
+      (!hasPermission(user, Permissions.IS_OFFICER) && 
+      !hasPermission(user, Permissions.REVIEW_ASSESSMENT) && 
+      !hasPermission(user, Permissions.REVIEW_FINAL_APPLICATION))) {
+      // Fetch assignment for this user and application
+      const assignment = await this.dataSource.getRepository(Assignment).findOne({
+        where: {
+          applicationId: warehouseOperatorApplicationId,
+          assignedTo: userId,
+        },
+        relations: ['sections', 'sections.fields'],
+      });
+
+      if (assignment && assignment.sections 
+        && !hasPermission(user, Permissions.REVIEW_ASSESSMENT) 
+        && !hasPermission(user, Permissions.REVIEW_FINAL_APPLICATION)) {
+        this.filterApplicationByAssignment(warehouseOperatorApplication, assignment);
+      } else {
+        // If no assignment found, return empty data for HOD
+        const resubmittedSections = warehouseOperatorApplication.metadata?.resubmittedSections || [];
+        const resubmittedResourcesBySection = warehouseOperatorApplication.metadata?.resubmittedResourcesBySection || {};
+
+        return {
+          ...warehouseOperatorApplication,
+          authorizedSignatories: [],
+          companyInformation: null,
+          bankDetails: null,
+          hrs: [],
+          financialInformation: null,
+          applicantChecklist: null,
+          totalCount: 0,
+          resubmittedSections,
+          resubmittedResourcesBySection,
+        };
+      }
+    }
+
+    // Enrich financial information with polymorphic documents
+    if (warehouseOperatorApplication.financialInformation) {
+      await this.enrichFinancialInformationWithDocuments(warehouseOperatorApplication.financialInformation);
+    }
+
+    const totalCount =
+      (warehouseOperatorApplication.authorizedSignatories?.length || 0) +
+      (warehouseOperatorApplication.hrs?.length || 0) +
+      (warehouseOperatorApplication.financialInformation?.auditReport ? 1 : 0) +
+      (warehouseOperatorApplication.financialInformation?.taxReturns?.length || 0) +
+      (warehouseOperatorApplication.financialInformation?.bankStatements?.length || 0) +
+      (warehouseOperatorApplication.financialInformation?.others?.length || 0) +
+      (warehouseOperatorApplication.companyInformation ? 1 : 0) +
+      (warehouseOperatorApplication.bankDetails ? 1 : 0) +
+      (warehouseOperatorApplication.applicantChecklist?.humanResources ? 1 : 0) +
+      (warehouseOperatorApplication.applicantChecklist?.financialSoundness ? 1 : 0) +
+      (warehouseOperatorApplication.applicantChecklist?.registrationFee ? 1 : 0) +
+      (warehouseOperatorApplication.applicantChecklist?.declaration ? 1 : 0);
+
+    // Extract resubmitted sections and resourceIds from metadata
+    const resubmittedSections = warehouseOperatorApplication.metadata?.resubmittedSections || [];
+    const resubmittedResourcesBySection = warehouseOperatorApplication.metadata?.resubmittedResourcesBySection || {};
+
+    return {
+      ...warehouseOperatorApplication,
+      totalCount,
+      resubmittedSections,
+      resubmittedResourcesBySection,
     };
   }
 }

@@ -10,6 +10,6 @@ export default registerAs('database', (): TypeOrmModuleOptions => ({
   database: process.env.DB_NAME || 'ncmcl_db',
   entities: [__dirname + '/../**/*.entity{.ts,.js}'],
   synchronize: false, // Only in development
-  logging: process.env.NODE_ENV === 'development',
+  logging: false,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 }));

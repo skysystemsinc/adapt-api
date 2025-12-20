@@ -1260,6 +1260,7 @@ export class WarehouseController {
 
     res.send(buffer);
   }
+
   @ApiOperation({ summary: 'Submit unlock request for a warehouse operator application' })
   @ApiBearerAuth('JWT-auth')
   @ApiParam({ name: 'applicationId', description: 'The ID of the warehouse operator application' })
@@ -1268,5 +1269,11 @@ export class WarehouseController {
   submitUnlockRequest(@Param('applicationId') applicationId: string, @Body() operatorUnlockRequestDto: OperatorUnlockRequestDto, @Request() request: any) {
     const user = request.user as User;
     return this.warehouseService.submitUnlockRequest(applicationId, operatorUnlockRequestDto, user.id);
+  }
+
+  @Get('/operator/application/unlock-requests')
+  getUnlockRequests(@Request() request: any) {
+    const user = request.user as User;
+    return this.warehouseService.getUnlockRequests(user.id);
   }
 }
