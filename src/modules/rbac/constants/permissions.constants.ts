@@ -77,6 +77,7 @@ export enum Permissions {
   // Expert Assessment permissions
   VIEW_EXPERT_ASSESSMENT = 'view_expert_assessment',
   MANAGE_EXPERT_ASSESSMENT = 'manage_expert_assessment',
+  MANAGE_EXPERT_ASSESSMENT_REQUESTS = 'manage_expert_assessment_requests',
 
   // Settings Tab Permissions
   VIEW_SETTINGS = 'view_settings',
