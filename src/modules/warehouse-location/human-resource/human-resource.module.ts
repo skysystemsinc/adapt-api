@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -18,6 +18,11 @@ import { ProfessionalQualification } from './professional-qualification/entities
 import { Training } from './training/entities/training.entity';
 import { ProfessionalExperience } from './professional-experience/entities/professional-experience.entity';
 import { ClamAVModule } from '../../clamav/clamav.module';
+import { HumanResourceGeneralInfoHistory } from './entities/HumanResourceGeneralInfoHistory.entity';
+import { Assignment } from 'src/modules/warehouse/operator/assignment/entities/assignment.entity';
+import { AssignmentSection } from 'src/modules/warehouse/operator/assignment/entities/assignment-section.entity';
+import { WarehouseLocationModule } from '../warehouse-location.module';
+import { DeclarationHistory } from './declaration/entities/declaration-history.entity';
 
 @Module({
   controllers: [HumanResourceController],
@@ -32,6 +37,10 @@ import { ClamAVModule } from '../../clamav/clamav.module';
       ProfessionalQualification,
       Training,
       ProfessionalExperience,
+      HumanResourceGeneralInfoHistory,    
+      Assignment,                        
+      AssignmentSection, 
+      DeclarationHistory,
     ]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -47,6 +56,7 @@ import { ClamAVModule } from '../../clamav/clamav.module';
     ProfessionalExperienceModule,
     DeclarationModule,
     ClamAVModule,
+    forwardRef(() => WarehouseLocationModule),
   ],
   exports: [HumanResourceService],
 })
