@@ -9,7 +9,7 @@ import { DataSource } from 'typeorm';
 import { JurisdictionHistory } from './entities/jurisdiction-history.entity';
 import { Assignment, AssignmentLevel, AssignmentStatus } from 'src/modules/warehouse/operator/assignment/entities/assignment.entity';
 import { AssignmentSection } from 'src/modules/warehouse/operator/assignment/entities/assignment-section.entity';
-import { WarehouseService } from 'src/modules/warehouse/warehouse.service';
+import { WarehouseLocationService } from '../warehouse-location.service';
 
 @Injectable()
 export class JurisdictionService {
@@ -26,8 +26,8 @@ export class JurisdictionService {
     @InjectRepository(AssignmentSection)
     private readonly assignmentSectionRepository: Repository<AssignmentSection>,
 
-    @Inject(forwardRef(() => WarehouseService))
-    private readonly warehouseService: WarehouseService,
+    @Inject(forwardRef(() => WarehouseLocationService))
+    private readonly warehouseLocationService: WarehouseLocationService,
   ) { }
 
   /**
@@ -186,7 +186,7 @@ export class JurisdictionService {
         }
       }
 
-      await this.warehouseService['trackResubmissionAndUpdateStatus'](
+      await this.warehouseLocationService.trackWarehouseLocationResubmissionAndUpdateStatus(
         warehouseLocationId,
         '3-jurisdiction',
         existingJurisdiction.id,

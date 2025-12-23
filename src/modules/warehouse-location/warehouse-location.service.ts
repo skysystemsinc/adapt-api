@@ -117,7 +117,7 @@ export class WarehouseLocationService {
    * @param assignmentSectionId - Optional assignment section ID
    * @param manager - Optional entity manager for transaction support
    */
-  async trackFacilityResubmissionAndUpdateStatus(
+  async trackWarehouseLocationResubmissionAndUpdateStatus(
     warehouseLocationId: string,
     sectionType: string,
     resourceId?: string | null,
