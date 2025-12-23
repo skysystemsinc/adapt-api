@@ -6,14 +6,14 @@ import { TechnicalQualitative } from './entities/technical-qualitative.entity';
 import { WarehouseLocation } from '../entities/warehouse-location.entity';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
-import { WarehouseModule } from '../../warehouse/warehouse.module';
+import { WarehouseLocationModule } from '../warehouse-location.module';
 import { Assignment } from '../../warehouse/operator/assignment/entities/assignment.entity';
 import { AssignmentSection } from '../../warehouse/operator/assignment/entities/assignment-section.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([TechnicalQualitative, WarehouseLocation, Assignment, AssignmentSection  ]),
-    forwardRef(() => WarehouseModule),
+    forwardRef(() => WarehouseLocationModule),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({

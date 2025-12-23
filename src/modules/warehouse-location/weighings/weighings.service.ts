@@ -12,7 +12,7 @@ import * as fsSync from 'fs';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { encryptBuffer, decryptBuffer } from 'src/common/utils/helper.utils';
-import { WarehouseService } from '../../warehouse/warehouse.service';
+import { WarehouseLocationService } from '../warehouse-location.service';
 import { AssignmentSection } from '../../warehouse/operator/assignment/entities/assignment-section.entity';
 import { Assignment, AssignmentLevel, AssignmentStatus } from '../../warehouse/operator/assignment/entities/assignment.entity';
 import { In } from 'typeorm';
@@ -41,8 +41,8 @@ export class WeighingsService {
     @InjectRepository(AssignmentSection)
     private readonly assignmentSectionRepository: Repository<AssignmentSection>,
 
-    @Inject(forwardRef(() => WarehouseService))
-    private readonly warehouseService: WarehouseService,
+    @Inject(forwardRef(() => WarehouseLocationService))
+    private readonly warehouseLocationService: WarehouseLocationService,
   ) {
     // Ensure upload directory exists
     this.ensureUploadDirectory();
@@ -475,7 +475,7 @@ export class WeighingsService {
       }
 
       // Call helper function to track resubmission and update status
-      await this.warehouseService['trackResubmissionAndUpdateStatus'](
+      await this.warehouseLocationService.trackWarehouseLocationResubmissionAndUpdateStatus(
         warehouseLocationId,
         '5-weighing',
         existingWeighing.id,

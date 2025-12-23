@@ -4,7 +4,7 @@ import { FacilityService } from './facility.service';
 import { FacilityController } from './facility.controller';
 import { Facility } from './entities/facility.entity';
 import { WarehouseLocation } from '../entities/warehouse-location.entity';
-import { WarehouseModule } from '../../warehouse/warehouse.module';
+import { WarehouseLocationModule } from '../warehouse-location.module';
 import { Assignment } from '../../warehouse/operator/assignment/entities/assignment.entity';
 import { AssignmentSection } from '../../warehouse/operator/assignment/entities/assignment-section.entity';
 
@@ -13,7 +13,7 @@ import { AssignmentSection } from '../../warehouse/operator/assignment/entities/
   providers: [FacilityService],
   imports: [
     TypeOrmModule.forFeature([Facility, WarehouseLocation, Assignment, AssignmentSection]),
-    forwardRef(() => WarehouseModule),
+    forwardRef(() => WarehouseLocationModule),
   ],
   exports: [FacilityService],
 })

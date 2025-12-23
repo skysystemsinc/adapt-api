@@ -6,7 +6,7 @@ import { FireSafetyService } from './fire-safety.service';
 import { FireSafetyController } from './fire-safety.controller';
 import { FireSafety } from './entities/fire-safety.entity';
 import { WarehouseLocation } from '../entities/warehouse-location.entity';
-import { WarehouseModule } from '../../warehouse/warehouse.module';
+import { WarehouseLocationModule } from '../warehouse-location.module';
 import { Assignment } from '../../warehouse/operator/assignment/entities/assignment.entity';
 import { AssignmentSection } from '../../warehouse/operator/assignment/entities/assignment-section.entity';
 
@@ -15,7 +15,7 @@ import { AssignmentSection } from '../../warehouse/operator/assignment/entities/
   providers: [FireSafetyService],
   imports: [
     TypeOrmModule.forFeature([FireSafety, WarehouseLocation, Assignment, AssignmentSection]),
-    forwardRef(() => WarehouseModule),
+    forwardRef(() => WarehouseLocationModule),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
