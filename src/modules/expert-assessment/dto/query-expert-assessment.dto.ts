@@ -30,5 +30,13 @@ export class QueryExpertAssessmentDto {
   @IsString()
   @IsOptional()
   search?: string;
+
+  @ApiPropertyOptional({ 
+    description: 'Filter by active status (true for active, false for inactive, undefined for all)',
+    type: Boolean
+  })
+  @Type(() => Boolean)
+  @IsOptional()
+  isActive?: boolean;
 }
 

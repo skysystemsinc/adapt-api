@@ -27,6 +27,8 @@ async function bootstrap() {
     transform: true,
   }));
 
+  app.setGlobalPrefix('api');
+
   const config = new DocumentBuilder()
     .setTitle('NCMCL API')
     .setDescription('The NCMCL API')

@@ -92,17 +92,21 @@ export class ExpertAssessmentService {
     data: ExpertAssessment[];
     meta: { total: number; page: number; limit: number; totalPages: number };
   }> {
-    const { page = 1, limit = 10, search } = query;
+    const { page = 1, limit = 10, search, isActive } = query;
     const skip = (page - 1) * limit;
 
     const queryBuilder = this.expertAssessmentRepository
       .createQueryBuilder('assessment')
       .leftJoinAndSelect('assessment.createdByUser', 'createdByUser')
       .where('assessment.category = :category', { category })
-      .andWhere('assessment.isActive = :isActive', { isActive: true })
       .skip(skip)
       .take(limit)
       .orderBy('assessment.createdAt', 'DESC');
+
+    // Only filter by isActive if explicitly provided
+    if (isActive !== undefined) {
+      queryBuilder.andWhere('assessment.isActive = :isActive', { isActive });
+    }
 
     if (search) {
       queryBuilder.andWhere('assessment.name ILIKE :search', { search: `%${search}%` });
