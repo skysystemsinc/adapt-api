@@ -1,6 +1,6 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, forwardRef, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { CreateProfessionalExperienceDto } from './dto/create-professional-experience.dto';
 import { ProfessionalExperience } from './entities/professional-experience.entity';
 import { HumanResource } from '../entities/human-resource.entity';
@@ -12,6 +12,12 @@ import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import dayjs from 'dayjs';
 import { encryptBuffer, decryptBuffer } from 'src/common/utils/helper.utils';
+import { WarehouseLocationService } from '../../warehouse-location.service';
+import { WarehouseLocation, WarehouseLocationStatus } from '../../entities/warehouse-location.entity';
+import { Assignment, AssignmentLevel } from '../../../warehouse/operator/assignment/entities/assignment.entity';
+import { AssignmentSection } from '../../../warehouse/operator/assignment/entities/assignment-section.entity';
+import { AssignmentStatus } from '../../../warehouse/operator/assignment/entities/assignment.entity';
+import { ProfessionalExperienceHistory } from './entities/professional-experience-history.entity';
 
 @Injectable()
 export class ProfessionalExperienceService {
@@ -26,6 +32,17 @@ export class ProfessionalExperienceService {
     @InjectRepository(WarehouseDocument)
     private readonly warehouseDocumentRepository: Repository<WarehouseDocument>,
     private readonly clamAVService: ClamAVService,
+    @InjectRepository(WarehouseLocation)
+    private readonly warehouseLocationRepository: Repository<WarehouseLocation>,
+    @InjectRepository(Assignment)
+    private readonly assignmentRepository: Repository<Assignment>,
+    @InjectRepository(AssignmentSection)
+    private readonly assignmentSectionRepository: Repository<AssignmentSection>,
+    private readonly dataSource: DataSource,
+    @Inject(forwardRef(() => WarehouseLocationService))
+    private readonly warehouseLocationService: WarehouseLocationService,
+    @InjectRepository(ProfessionalExperienceHistory)
+    private readonly professionalExperienceHistoryRepository: Repository<ProfessionalExperienceHistory>,
   ) {
     this.ensureUploadDirectory();
   }
@@ -273,15 +290,27 @@ export class ProfessionalExperienceService {
   ) {
     const experience = await this.professionalExperienceRepository.findOne({
       where: { id: expId, humanResourceId: hrId },
-      relations: ['experienceLetter'],
+      relations: ['experienceLetter', 'humanResource'],
     });
-
+  
     if (!experience) {
       throw new NotFoundException('Professional experience not found');
     }
-
+  
+    const warehouseLocation = await this.warehouseLocationRepository.findOne({
+      where: { id: experience.humanResource.warehouseLocationId },
+    });
+  
+    if (!warehouseLocation) {
+      throw new NotFoundException('Warehouse location not found');
+    }
+  
+    if (![WarehouseLocationStatus.DRAFT, WarehouseLocationStatus.REJECTED, WarehouseLocationStatus.RESUBMITTED].includes(warehouseLocation.status)) {
+      throw new BadRequestException('Professional experience can only be updated while application is in draft, rejected, or resubmitted status');
+    }
+  
     const { experienceLetter, duration, ...experienceData } = updateProfessionalExperienceDto;
-
+  
     // Validate that date of appointment is not after date of leaving
     const finalAppointmentDate = experienceData.dateOfAppointment ?? experience.dateOfAppointment;
     const finalLeavingDate = experienceData.dateOfLeaving ?? experience.dateOfLeaving;
@@ -292,46 +321,71 @@ export class ProfessionalExperienceService {
         throw new BadRequestException('Date of Appointment must be before or equal to Date of Leaving');
       }
     }
-
+  
     // Validate that experience letter is required when date of leaving is provided
     const finalLeavingDateForValidation = experienceData.dateOfLeaving ?? experience.dateOfLeaving;
     const hasExperienceLetter = experienceLetterFile || experienceLetter || experience.experienceLetter;
     if (finalLeavingDateForValidation && !hasExperienceLetter) {
       throw new BadRequestException('Experience Letter is required when Date of Leaving is provided');
     }
-
+  
     // Auto-calculate duration if not provided
     const calculatedDuration = duration || this.calculateDuration(
       finalAppointmentDate ?? null,
       finalLeavingDate ?? null
     );
-
-    Object.assign(experience, {
-      ...experienceData,
-      duration: calculatedDuration,
+  
+    const result = await this.dataSource.transaction(async (manager) => {
+      const expRepo = manager.getRepository(ProfessionalExperience);
+      const expHistoryRepo = manager.getRepository(ProfessionalExperienceHistory);
+  
+      if (warehouseLocation.status === WarehouseLocationStatus.REJECTED) {
+        const historyRecord = expHistoryRepo.create({
+          professionalExperienceId: experience.id,
+          humanResourceId: experience.humanResourceId,
+          positionHeld: experience.positionHeld,
+          organizationName: experience.organizationName,
+          organizationAddress: experience.organizationAddress,
+          natureOfOrganization: experience.natureOfOrganization,
+          dateOfAppointment: experience.dateOfAppointment ?? null,
+          dateOfLeaving: experience.dateOfLeaving ?? null,
+          duration: experience.duration,
+          responsibilities: experience.responsibilities ?? null,
+          experienceLetter: experience.experienceLetter ?? null,
+          isActive: false,
+        } as Partial<ProfessionalExperienceHistory>);
+        historyRecord.createdAt = experience.createdAt;
+        await expHistoryRepo.save(historyRecord);
+      }
+  
+      Object.assign(experience, {
+        ...experienceData,
+        duration: calculatedDuration,
+      });
+      return expRepo.save(experience);
     });
-    const savedExperience = await this.professionalExperienceRepository.save(experience);
-
+  
+    // Handle file upload/update (outside transaction)
     if (experienceLetterFile) {
       if (experience.experienceLetter) {
         await this.deleteWarehouseDocument(experience.experienceLetter.id);
       }
-
+  
       const documentResult = await this.uploadWarehouseDocument(
         experienceLetterFile,
         userId,
         'ProfessionalExperience',
-        savedExperience.id,
+        result.id,
         'experienceLetter'
       );
-
+  
       const letterDocument = await this.warehouseDocumentRepository.findOne({
         where: { id: documentResult.id }
       });
-
+  
       if (letterDocument) {
-        savedExperience.experienceLetter = letterDocument;
-        await this.professionalExperienceRepository.save(savedExperience);
+        result.experienceLetter = letterDocument;
+        await this.professionalExperienceRepository.save(result);
       }
     } else {
       if (experienceLetter && typeof experienceLetter === 'string') {
@@ -339,24 +393,61 @@ export class ProfessionalExperienceService {
           where: { 
             id: experienceLetter,
             documentableType: 'ProfessionalExperience',
-            documentableId: savedExperience.id,
+            documentableId: result.id,
             documentType: 'experienceLetter'
           }
         });
-
+  
         if (!existingDocument) {
           throw new BadRequestException('Invalid document ID provided or document does not belong to this experience');
         }
-
-        savedExperience.experienceLetter = existingDocument;
-        await this.professionalExperienceRepository.save(savedExperience);
+  
+        result.experienceLetter = existingDocument;
+        await this.professionalExperienceRepository.save(result);
       } else {
-        savedExperience.experienceLetter = experience.experienceLetter;
-        await this.professionalExperienceRepository.save(savedExperience);
+        result.experienceLetter = experience.experienceLetter;
+        await this.professionalExperienceRepository.save(result);
       }
     }
-
-    return savedExperience;
+  
+    // Track resubmission if application was REJECTED
+    const updatedApplication = await this.warehouseLocationRepository.findOne({
+      where: { id: warehouseLocation.id },
+    });
+  
+    if (updatedApplication?.status === WarehouseLocationStatus.REJECTED) {
+      const assignments = await this.assignmentRepository.find({
+        where: {
+          applicationLocationId: warehouseLocation.id,
+          level: AssignmentLevel.HOD_TO_APPLICANT,
+          status: AssignmentStatus.REJECTED,
+        },
+      });
+  
+      let assignmentSectionId: string | null = null;
+      if (assignments.length > 0) {
+        const assignmentSections = await this.assignmentSectionRepository.find({
+          where: {
+            assignmentId: In(assignments.map((a) => a.id)),
+            sectionType: '7-human-resources',
+            resourceId: experience.id,
+          },
+        });
+  
+        if (assignmentSections.length > 0) {
+          assignmentSectionId = assignmentSections[0].id;
+        }
+      }
+  
+      await this.warehouseLocationService.trackWarehouseLocationResubmissionAndUpdateStatus(
+        warehouseLocation.id,
+        '7-human-resources',
+        experience.id,
+        assignmentSectionId ?? undefined,
+      );
+    }
+  
+    return result;
   }
 
   async remove(expId: string, hrId: string) {

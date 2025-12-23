@@ -1,6 +1,6 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, forwardRef, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { CreateAcademicQualificationDto } from './dto/create-academic-qualification.dto';
 import { AcademicQualification } from './entities/academic-qualification.entity';
 import { HumanResource } from '../entities/human-resource.entity';
@@ -11,7 +11,12 @@ import * as fsSync from 'fs';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { encryptBuffer, decryptBuffer } from 'src/common/utils/helper.utils';
-
+import { WarehouseLocationService } from '../../warehouse-location.service';
+import { AssignmentSection } from '../../../warehouse/operator/assignment/entities/assignment-section.entity';
+import { Assignment, AssignmentLevel } from '../../../warehouse/operator/assignment/entities/assignment.entity';
+import { AssignmentStatus } from '../../../warehouse/operator/assignment/entities/assignment.entity';
+import { WarehouseLocation, WarehouseLocationStatus } from '../../entities/warehouse-location.entity';
+import { AcademicQualificationHistory } from './entities/academic-qualification-history.entity';
 @Injectable()
 export class AcademicQualificationService {
   private readonly logger = new Logger(AcademicQualificationService.name);
@@ -25,6 +30,17 @@ export class AcademicQualificationService {
     @InjectRepository(WarehouseDocument)
     private readonly warehouseDocumentRepository: Repository<WarehouseDocument>,
     private readonly clamAVService: ClamAVService,
+    @InjectRepository(WarehouseLocation)
+    private readonly warehouseLocationRepository: Repository<WarehouseLocation>,
+    @InjectRepository(Assignment)
+    private readonly assignmentRepository: Repository<Assignment>,
+    @InjectRepository(AssignmentSection)
+    private readonly assignmentSectionRepository: Repository<AssignmentSection>,
+    private readonly dataSource: DataSource,
+    @Inject(forwardRef(() => WarehouseLocationService))
+    private readonly warehouseLocationService: WarehouseLocationService,
+    @InjectRepository(AcademicQualificationHistory)
+    private readonly academicQualificationHistoryRepository: Repository<AcademicQualificationHistory>,
   ) {
     this.ensureUploadDirectory();
   }
@@ -214,67 +230,135 @@ export class AcademicQualificationService {
   ) {
     const qualification = await this.academicQualificationRepository.findOne({
       where: { id: qualId, humanResourceId: hrId },
-      relations: ['academicCertificate'],
+      relations: ['academicCertificate', 'humanResource'],
     });
-
+  
     if (!qualification) {
       throw new NotFoundException('Academic qualification not found');
     }
-
+  
+    const warehouseLocation = await this.warehouseLocationRepository.findOne({
+      where: { id: qualification.humanResource.warehouseLocationId },
+    });
+  
+    if (!warehouseLocation) {
+      throw new NotFoundException('Warehouse location not found');
+    }
+  
+    if (![WarehouseLocationStatus.DRAFT, WarehouseLocationStatus.REJECTED, WarehouseLocationStatus.RESUBMITTED].includes(warehouseLocation.status)) {
+      throw new BadRequestException('Academic qualification can only be updated while application is in draft, rejected, or resubmitted status');
+    }
+  
     const { academicCertificate, ...qualificationData } = updateAcademicQualificationDto;
-
-    Object.assign(qualification, qualificationData);
-    const savedQualification = await this.academicQualificationRepository.save(qualification);
-
-    // Handle file upload/update
+  
+    const result = await this.dataSource.transaction(async (manager) => {
+      const qualRepo = manager.getRepository(AcademicQualification);
+      const qualHistoryRepo = manager.getRepository(AcademicQualificationHistory);
+  
+      if (warehouseLocation.status === WarehouseLocationStatus.REJECTED) {
+        const historyRecord = qualHistoryRepo.create({
+          academicQualificationId: qualification.id,
+          humanResourceId: qualification.humanResourceId,
+          degree: qualification.degree,
+          major: qualification.major,
+          institute: qualification.institute,
+          country: qualification.country,
+          yearOfPassing: qualification.yearOfPassing,
+          grade: qualification.grade,
+          academicCertificate: qualification.academicCertificate ?? null,
+          isActive: false,
+        } as Partial<AcademicQualificationHistory>);
+        historyRecord.createdAt = qualification.createdAt;
+        await qualHistoryRepo.save(historyRecord);
+      }
+  
+      Object.assign(qualification, qualificationData);
+      return qualRepo.save(qualification);
+    });
+  
+    // Handle file upload/update (outside transaction)
     if (certificateFile) {
-      // New file provided - delete old file and upload new one
       if (qualification.academicCertificate) {
         await this.deleteWarehouseDocument(qualification.academicCertificate.id);
       }
-
+  
       const documentResult = await this.uploadWarehouseDocument(
         certificateFile,
         userId,
         'AcademicQualification',
-        savedQualification.id,
+        result.id,
         'academicCertificate'
       );
-
+  
       const certificateDocument = await this.warehouseDocumentRepository.findOne({
         where: { id: documentResult.id }
       });
-
+  
       if (certificateDocument) {
-        savedQualification.academicCertificate = certificateDocument;
-        await this.academicQualificationRepository.save(savedQualification);
+        result.academicCertificate = certificateDocument;
+        await this.academicQualificationRepository.save(result);
       }
     } else {
-      // No new file provided - handle string (document ID) in DTO or keep existing
       if (academicCertificate && typeof academicCertificate === 'string') {
         const existingDocument = await this.warehouseDocumentRepository.findOne({
           where: { 
             id: academicCertificate,
             documentableType: 'AcademicQualification',
-            documentableId: savedQualification.id,
+            documentableId: result.id,
             documentType: 'academicCertificate'
           }
         });
-
+  
         if (!existingDocument) {
           throw new BadRequestException('Invalid document ID provided or document does not belong to this qualification');
         }
-
-        savedQualification.academicCertificate = existingDocument;
-        await this.academicQualificationRepository.save(savedQualification);
+  
+        result.academicCertificate = existingDocument;
+        await this.academicQualificationRepository.save(result);
       } else {
-        // Keep existing certificate
-        savedQualification.academicCertificate = qualification.academicCertificate;
-        await this.academicQualificationRepository.save(savedQualification);
+        result.academicCertificate = qualification.academicCertificate;
+        await this.academicQualificationRepository.save(result);
       }
     }
-
-    return savedQualification;
+  
+    // Track resubmission if application was REJECTED
+    const updatedApplication = await this.warehouseLocationRepository.findOne({
+      where: { id: warehouseLocation.id },
+    });
+  
+    if (updatedApplication?.status === WarehouseLocationStatus.REJECTED) {
+      const assignments = await this.assignmentRepository.find({
+        where: {
+          applicationLocationId: warehouseLocation.id,
+          level: AssignmentLevel.HOD_TO_APPLICANT,
+          status: AssignmentStatus.REJECTED,
+        },
+      });
+  
+      let assignmentSectionId: string | null = null;
+      if (assignments.length > 0) {
+        const assignmentSections = await this.assignmentSectionRepository.find({
+          where: {
+            assignmentId: In(assignments.map((a) => a.id)),
+            sectionType: '7-human-resources',
+            resourceId: qualification.id,
+          },
+        });
+  
+        if (assignmentSections.length > 0) {
+          assignmentSectionId = assignmentSections[0].id;
+        }
+      }
+  
+      await this.warehouseLocationService.trackWarehouseLocationResubmissionAndUpdateStatus(
+        warehouseLocation.id,
+        '7-human-resources',
+        qualification.id,
+        assignmentSectionId ?? undefined,
+      );
+    }
+  
+    return result;
   }
 
   async remove(qualId: string, hrId: string) {

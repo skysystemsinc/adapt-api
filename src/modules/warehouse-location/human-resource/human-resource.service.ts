@@ -22,6 +22,7 @@ import { AssignmentSection } from '../../warehouse/operator/assignment/entities/
 import { Assignment, AssignmentStatus } from '../../warehouse/operator/assignment/entities/assignment.entity';
 import { HumanResourceGeneralInfoHistory } from './entities/HumanResourceGeneralInfoHistory.entity';
 import { AssignmentLevel } from '../../warehouse/operator/assignment/entities/assignment.entity';
+import { DeclarationHistory } from './declaration/entities/declaration-history.entity';
 
 @Injectable()
 export class HumanResourceService {
@@ -59,6 +60,9 @@ export class HumanResourceService {
     
     @Inject(forwardRef(() => WarehouseLocationService))
     private readonly warehouseLocationService: WarehouseLocationService,
+
+    @InjectRepository(DeclarationHistory)
+    private readonly declarationHistoryRepository: Repository<DeclarationHistory>,
   ) {
     // Ensure upload directory exists
     this.ensureUploadDirectory();
@@ -433,34 +437,49 @@ export class HumanResourceService {
       where: { id: hrId },
       relations: ['declaration'],
     });
-
+  
     if (!humanResource) {
       throw new NotFoundException('HR entry not found');
     }
-
-    // Check warehouse location status
+  
     const warehouseLocation = await this.warehouseLocationRepository.findOne({
       where: { id: humanResource.warehouseLocationId, userId },
     });
-
+  
     if (!warehouseLocation) {
       throw new NotFoundException('Warehouse location application not found');
     }
-
-    if (warehouseLocation.status !== WarehouseLocationStatus.DRAFT) {
-      throw new BadRequestException('Declaration can only be updated while application is in draft status');
+  
+    if (![WarehouseLocationStatus.DRAFT, WarehouseLocationStatus.REJECTED, WarehouseLocationStatus.RESUBMITTED].includes(warehouseLocation.status)) {
+      throw new BadRequestException('Declaration can only be updated while application is in draft, rejected, or resubmitted status');
     }
-
+  
     const savedResult = await this.dataSource.transaction(async (manager) => {
       const hrRepo = manager.getRepository(HumanResource);
       const declarationRepo = manager.getRepository(Declaration);
-
+      const declarationHistoryRepo = manager.getRepository<DeclarationHistory>(DeclarationHistory);
+  
       const currentHR = await hrRepo.findOne({
         where: { id: hrId },
         relations: ['declaration'],
       });
-
+  
       if (currentHR?.declaration) {
+        // Save history if REJECTED (before updating)
+        if (warehouseLocation.status === WarehouseLocationStatus.REJECTED) {
+          const historyRecord = declarationHistoryRepo.create({
+            declarationId: currentHR.declaration.id,
+            humanResourceId: currentHR.declaration.humanResourceId,
+            writeOffAvailed: currentHR.declaration.writeOffAvailed,
+            defaultOfFinance: currentHR.declaration.defaultOfFinance,
+            placementOnECL: currentHR.declaration.placementOnECL,
+            convictionOrPleaBargain: currentHR.declaration.convictionOrPleaBargain,
+            isActive: false,
+          } as Partial<DeclarationHistory>);
+          historyRecord.createdAt = currentHR.declaration.createdAt;
+          await declarationHistoryRepo.save(historyRecord);
+        }
+  
         // Update existing declaration
         Object.assign(currentHR.declaration, createDeclarationDto);
         await declarationRepo.save(currentHR.declaration);
@@ -472,14 +491,53 @@ export class HumanResourceService {
           ...createDeclarationDto,
         });
         await declarationRepo.save(declaration);
-
+  
         currentHR!.declaration = declaration;
         await hrRepo.save(currentHR!);
-
+  
         return declaration;
       }
     });
-
+  
+    // Track resubmission if application was REJECTED (only for updates)
+    if (humanResource.declaration) {
+      const updatedApplication = await this.warehouseLocationRepository.findOne({
+        where: { id: warehouseLocation.id },
+      });
+  
+      if (updatedApplication?.status === WarehouseLocationStatus.REJECTED) {
+        const assignments = await this.assignmentRepository.find({
+          where: {
+            applicationLocationId: warehouseLocation.id,
+            level: AssignmentLevel.HOD_TO_APPLICANT,
+            status: AssignmentStatus.REJECTED,
+          },
+        });
+  
+        let assignmentSectionId: string | null = null;
+        if (assignments.length > 0) {
+          const assignmentSections = await this.assignmentSectionRepository.find({
+            where: {
+              assignmentId: In(assignments.map((a) => a.id)),
+              sectionType: '7-human-resources',
+              resourceId: humanResource.declaration.id,
+            },
+          });
+  
+          if (assignmentSections.length > 0) {
+            assignmentSectionId = assignmentSections[0].id;
+          }
+        }
+  
+        await this.warehouseLocationService.trackWarehouseLocationResubmissionAndUpdateStatus(
+          warehouseLocation.id,
+          '7-human-resources',
+          humanResource.declaration.id,
+          assignmentSectionId ?? undefined,
+        );
+      }
+    }
+  
     return savedResult;
   }
 
