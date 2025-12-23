@@ -8,7 +8,7 @@ import { Weighing } from './entities/weighing.entity';
 import { WarehouseLocation } from '../entities/warehouse-location.entity';
 import { WarehouseDocument } from '../../warehouse/entities/warehouse-document.entity';
 import { ClamAVModule } from '../../clamav/clamav.module';
-import { WarehouseModule } from 'src/modules/warehouse/warehouse.module';
+import { WarehouseLocationModule } from '../warehouse-location.module';
 import { AssignmentSection } from '../../warehouse/operator/assignment/entities/assignment-section.entity';
 import { Assignment } from '../../warehouse/operator/assignment/entities/assignment.entity';
 
@@ -17,7 +17,7 @@ import { Assignment } from '../../warehouse/operator/assignment/entities/assignm
   providers: [WeighingsService],
   imports: [
     TypeOrmModule.forFeature([Weighing, WarehouseLocation, WarehouseDocument, Assignment, AssignmentSection]),
-    forwardRef(() => WarehouseModule),
+    forwardRef(() => WarehouseLocationModule),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({

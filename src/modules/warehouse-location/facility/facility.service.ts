@@ -10,7 +10,7 @@ import { Assignment, AssignmentLevel } from '../../warehouse/operator/assignment
 import { AssignmentStatus } from '../../warehouse/operator/assignment/entities/assignment.entity';
 import { AssignmentSection } from '../../warehouse/operator/assignment/entities/assignment-section.entity';
 import { In } from 'typeorm';
-import { WarehouseService } from '../../warehouse/warehouse.service';
+import { WarehouseLocationService } from '../warehouse-location.service';
 
 @Injectable()
 export class FacilityService {
@@ -24,8 +24,8 @@ export class FacilityService {
     private readonly assignmentRepository: Repository<Assignment>,
     @InjectRepository(AssignmentSection)
     private readonly assignmentSectionRepository: Repository<AssignmentSection>,
-    @Inject(forwardRef(() => WarehouseService))
-    private readonly warehouseService: WarehouseService,
+    @Inject(forwardRef(() => WarehouseLocationService))
+    private readonly warehouseLocationService: WarehouseLocationService,
   ) { }
 
   async create(warehouseLocationId: string, createFacilityDto: CreateFacilityDto, userId: string) {
@@ -238,9 +238,9 @@ export class FacilityService {
       }
 
       // Call helper function to track resubmission and update status
-      await this.warehouseService['trackResubmissionAndUpdateStatus'](
+      await this.warehouseLocationService.trackWarehouseLocationResubmissionAndUpdateStatus(
         warehouseLocationId,
-        '1-facility-information',
+        '1-facility',
         existingFacility.id,
         assignmentSectionId ?? undefined,
       );

@@ -5,7 +5,7 @@ import { CreateTechnicalQualitativeDto } from './dto/create-technical-qualitativ
 import { UpdateTechnicalQualitativeDto } from './dto/update-technical-qualitative.dto';
 import { TechnicalQualitative } from './entities/technical-qualitative.entity';
 import { WarehouseLocation, WarehouseLocationStatus } from '../entities/warehouse-location.entity';
-import { WarehouseService } from '../../warehouse/warehouse.service';
+import { WarehouseLocationService } from '../warehouse-location.service';
 import { AssignmentSection } from '../../warehouse/operator/assignment/entities/assignment-section.entity';
 import { Assignment, AssignmentLevel, AssignmentStatus } from '../../warehouse/operator/assignment/entities/assignment.entity';
 import { In } from 'typeorm';
@@ -23,8 +23,8 @@ export class TechnicalQualitativeService {
     private readonly assignmentRepository: Repository<Assignment>,
     @InjectRepository(AssignmentSection)
     private readonly assignmentSectionRepository: Repository<AssignmentSection>,
-    @Inject(forwardRef(() => WarehouseService))
-    private readonly warehouseService: WarehouseService,
+    @Inject(forwardRef(() => WarehouseLocationService))
+    private readonly warehouseLocationService: WarehouseLocationService,
   ) { }
 
   /**
@@ -191,7 +191,7 @@ export class TechnicalQualitativeService {
       }
 
       // Call helper function to track resubmission and update status
-      await this.warehouseService['trackResubmissionAndUpdateStatus'](
+      await this.warehouseLocationService.trackWarehouseLocationResubmissionAndUpdateStatus(
         warehouseLocationId,
         '6-technical-qualitative',
         existingTechnicalQualitative.id,
