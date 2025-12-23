@@ -1,6 +1,6 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, forwardRef, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { CreateTrainingDto } from './dto/create-training.dto';
 import { Training } from './entities/training.entity';
 import { HumanResource } from '../entities/human-resource.entity';
@@ -11,6 +11,13 @@ import * as fsSync from 'fs';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { encryptBuffer, decryptBuffer } from 'src/common/utils/helper.utils';
+import { AssignmentSection } from '../../../warehouse/operator/assignment/entities/assignment-section.entity';
+import { WarehouseLocationService } from '../../warehouse-location.service';
+import { WarehouseLocation, WarehouseLocationStatus } from '../../entities/warehouse-location.entity';
+import { Assignment } from '../../../warehouse/operator/assignment/entities/assignment.entity';
+import { AssignmentLevel } from '../../../warehouse/operator/assignment/entities/assignment.entity';
+import { AssignmentStatus } from '../../../warehouse/operator/assignment/entities/assignment.entity';
+import { TrainingHistory } from './entities/training-history.entity';
 
 @Injectable()
 export class TrainingService {
@@ -20,11 +27,22 @@ export class TrainingService {
   constructor(
     @InjectRepository(Training)
     private readonly trainingRepository: Repository<Training>,
+    @InjectRepository(TrainingHistory)
+    private readonly trainingHistoryRepository: Repository<TrainingHistory>,
     @InjectRepository(HumanResource)
     private readonly humanResourceRepository: Repository<HumanResource>,
     @InjectRepository(WarehouseDocument)
     private readonly warehouseDocumentRepository: Repository<WarehouseDocument>,
+    @InjectRepository(WarehouseLocation)
+    private readonly warehouseLocationRepository: Repository<WarehouseLocation>,
+    @InjectRepository(Assignment)
+    private readonly assignmentRepository: Repository<Assignment>,
+    @InjectRepository(AssignmentSection)
+    private readonly assignmentSectionRepository: Repository<AssignmentSection>,
+    private readonly dataSource: DataSource,
     private readonly clamAVService: ClamAVService,
+    @Inject(forwardRef(() => WarehouseLocationService))
+    private readonly warehouseLocationService: WarehouseLocationService,
   ) {
     this.ensureUploadDirectory();
   }
@@ -216,38 +234,72 @@ export class TrainingService {
   ) {
     const training = await this.trainingRepository.findOne({
       where: { id: trainingId, humanResourceId: hrId },
-      relations: ['trainingCertificate'],
+      relations: ['trainingCertificate', 'humanResource'],
     });
-
+  
     if (!training) {
       throw new NotFoundException('Training not found');
     }
-
+  
+    const warehouseLocation = await this.warehouseLocationRepository.findOne({
+      where: { id: training.humanResource.warehouseLocationId },
+    });
+  
+    if (!warehouseLocation) {
+      throw new NotFoundException('Warehouse location not found');
+    }
+  
+    if (![WarehouseLocationStatus.DRAFT, WarehouseLocationStatus.REJECTED, WarehouseLocationStatus.RESUBMITTED].includes(warehouseLocation.status)) {
+      throw new BadRequestException('Training can only be updated while application is in draft, rejected, or resubmitted status');
+    }
+  
     const { trainingCertificate, ...trainingData } = updateTrainingDto;
-
-    Object.assign(training, trainingData);
-    const savedTraining = await this.trainingRepository.save(training);
-
+  
+    const result = await this.dataSource.transaction(async (manager) => {
+      const trainingRepo = manager.getRepository(Training);
+      const trainingHistoryRepo = manager.getRepository(TrainingHistory);
+  
+      if (warehouseLocation.status === WarehouseLocationStatus.REJECTED) {
+        const historyRecord = trainingHistoryRepo.create({
+          trainingId: training.id,
+          humanResourceId: training.humanResourceId,
+          trainingTitle: training.trainingTitle,
+          conductedBy: training.conductedBy,
+          trainingType: training.trainingType,
+          duration: training.duration,
+          dateOfCompletion: training.dateOfCompletion ?? null,
+          trainingCertificate: training.trainingCertificate ?? null,
+          isActive: false,
+        } as Partial<TrainingHistory>);
+        historyRecord.createdAt = training.createdAt;
+        await trainingHistoryRepo.save(historyRecord);
+      }
+  
+      Object.assign(training, trainingData);
+      return trainingRepo.save(training);
+    });
+  
+    // Handle file upload/update (outside transaction)
     if (certificateFile) {
       if (training.trainingCertificate) {
         await this.deleteWarehouseDocument(training.trainingCertificate.id);
       }
-
+  
       const documentResult = await this.uploadWarehouseDocument(
         certificateFile,
         userId,
         'Training',
-        savedTraining.id,
+        result.id,
         'trainingCertificate'
       );
-
+  
       const certificateDocument = await this.warehouseDocumentRepository.findOne({
         where: { id: documentResult.id }
       });
-
+  
       if (certificateDocument) {
-        savedTraining.trainingCertificate = certificateDocument;
-        await this.trainingRepository.save(savedTraining);
+        result.trainingCertificate = certificateDocument;
+        await this.trainingRepository.save(result);
       }
     } else {
       if (trainingCertificate && typeof trainingCertificate === 'string') {
@@ -255,24 +307,61 @@ export class TrainingService {
           where: { 
             id: trainingCertificate,
             documentableType: 'Training',
-            documentableId: savedTraining.id,
+            documentableId: result.id,
             documentType: 'trainingCertificate'
           }
         });
-
+  
         if (!existingDocument) {
           throw new BadRequestException('Invalid document ID provided or document does not belong to this training');
         }
-
-        savedTraining.trainingCertificate = existingDocument;
-        await this.trainingRepository.save(savedTraining);
+  
+        result.trainingCertificate = existingDocument;
+        await this.trainingRepository.save(result);
       } else {
-        savedTraining.trainingCertificate = training.trainingCertificate;
-        await this.trainingRepository.save(savedTraining);
+        result.trainingCertificate = training.trainingCertificate;
+        await this.trainingRepository.save(result);
       }
     }
-
-    return savedTraining;
+  
+    // Track resubmission if application was REJECTED
+    const updatedApplication = await this.warehouseLocationRepository.findOne({
+      where: { id: warehouseLocation.id },
+    });
+  
+    if (updatedApplication?.status === WarehouseLocationStatus.REJECTED) {
+      const assignments = await this.assignmentRepository.find({
+        where: {
+          applicationLocationId: warehouseLocation.id,
+          level: AssignmentLevel.HOD_TO_APPLICANT,
+          status: AssignmentStatus.REJECTED,
+        },
+      });
+  
+      let assignmentSectionId: string | null = null;
+      if (assignments.length > 0) {
+        const assignmentSections = await this.assignmentSectionRepository.find({
+          where: {
+            assignmentId: In(assignments.map((a) => a.id)),
+            sectionType: '7-human-resources',  // Use appropriate section type
+            resourceId: training.id,
+          },
+        });
+  
+        if (assignmentSections.length > 0) {
+          assignmentSectionId = assignmentSections[0].id;
+        }
+      }
+  
+      await this.warehouseLocationService.trackWarehouseLocationResubmissionAndUpdateStatus(
+        warehouseLocation.id,
+        '7-human-resources',  // Use appropriate section type
+        training.id,
+        assignmentSectionId ?? undefined,
+      );
+    }
+  
+    return result;
   }
 
   async remove(trainingId: string, hrId: string) {
