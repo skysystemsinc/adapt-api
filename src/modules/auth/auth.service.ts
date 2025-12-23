@@ -157,7 +157,8 @@ export class AuthService {
     console.log(`OTP for ${user.email}: ${otp}`);
     
     return { 
-      message: 'OTP has been sent to your email',
+      message: 'OTP has been sent to your email and mobile number',
+      otp: otp,
     };
   }
 
