@@ -22,6 +22,7 @@ import { HumanResourceGeneralInfoHistory } from './entities/HumanResourceGeneral
 import { Assignment } from 'src/modules/warehouse/operator/assignment/entities/assignment.entity';
 import { AssignmentSection } from 'src/modules/warehouse/operator/assignment/entities/assignment-section.entity';
 import { WarehouseLocationModule } from '../warehouse-location.module';
+import { DeclarationHistory } from './declaration/entities/declaration-history.entity';
 
 @Module({
   controllers: [HumanResourceController],
@@ -39,6 +40,7 @@ import { WarehouseLocationModule } from '../warehouse-location.module';
       HumanResourceGeneralInfoHistory,    
       Assignment,                        
       AssignmentSection, 
+      DeclarationHistory,
     ]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
