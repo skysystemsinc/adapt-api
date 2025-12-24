@@ -581,4 +581,11 @@ export class WarehouseLocationService {
     // Delete all rejections from active table
     await rejectionRepo.remove(rejections);
   }
+
+  async getWarehouseLocationApplicationStatus(id: string): Promise<WarehouseLocationStatus> {
+    const application = await this.warehouseLocationRepository.findOne({
+      where: { id },
+    });
+    return application?.status || WarehouseLocationStatus.DRAFT;
+  }
 }
