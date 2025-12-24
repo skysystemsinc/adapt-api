@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, OneToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { WarehouseLocation } from "../../entities/warehouse-location.entity";
 import { WarehouseDocument } from "../../../warehouse/entities/warehouse-document.entity";
 import { Weighing } from "./weighing.entity";
@@ -48,10 +48,6 @@ export class WeighingHistory {
     @Column({ type: 'varchar', length: 50, nullable: true })
     weighbridgeDistanceFromFacility?: string;
 
-    // File path will be stored as string
-    // @Column({ type: 'varchar', length: 500, nullable: true })
-    // weighbridgeCalibrationCertificate?: string;
-
     @ManyToOne(() => WarehouseDocument, { onDelete: 'SET NULL', nullable: true })
     @JoinColumn({ name: 'weighbridgeCalibrationCertificate' })
     weighbridgeCalibrationCertificate?: WarehouseDocument;
@@ -65,7 +61,7 @@ export class WeighingHistory {
     @UpdateDateColumn()
     updatedAt: Date;
 
-    @OneToOne(() => WarehouseLocation, (warehouse) => warehouse.weighing)
+    @ManyToOne(() => WarehouseLocation, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'warehouseLocationId' })
     warehouseLocation: WarehouseLocation;
 }
