@@ -44,7 +44,6 @@ import { WarehouseOperator } from './entities/warehouse-operator.entity';
 import { ResubmitOperatorApplicationDto } from './dto/resubmit-warehouse.dto';
 import { Assignment, AssignmentLevel, AssignmentStatus } from './operator/assignment/entities/assignment.entity';
 import { AssignmentSection } from './operator/assignment/entities/assignment-section.entity';
-import { AssignmentSectionField } from './operator/assignment/entities/assignment-section-field.entity';
 import { AssignmentHistory } from './operator/assignment/entities/assignment-history.entity';
 import { AssignmentSectionHistory } from './operator/assignment/entities/assignment-section-history.entity';
 import { AssignmentSectionFieldHistory } from './operator/assignment/entities/assignment-section-field-history.entity';
@@ -57,7 +56,6 @@ import { DeclarationHistoryEntity } from './entities/hr/declaration.entity/decla
 import { ProfessionalQualificationsHistoryEntity } from './entities/hr/professional-qualifications.entity/professional-qualifications-history.entity';
 import { TrainingsHistoryEntity } from './entities/hr/trainings.entity/trainings-history.entity';
 import { ExperienceHistoryEntity } from './entities/hr/experience.entity/experience-history.entity';
-import { FinancialInformationHistoryEntity } from './entities/financial-information-history.entity';
 import { AuditReportHistoryEntity } from './entities/financial/audit-report-history.entity';
 import { TaxReturnHistoryEntity } from './entities/financial/tax-return-history.entity';
 import { BankStatementHistoryEntity } from './entities/financial/bank-statement-history.entity';
@@ -74,7 +72,10 @@ import { ClamAVService } from '../clamav/clamav.service';
 import { OperatorUnlockRequestDto } from './dto/operator-unlock-request.dto';
 import { UnlockRequest, UnlockRequestStatus } from './entities/unlock-request.entity';
 import { WarehouseOperatorLocation } from '../warehouse-operator-location/entities/warehouse-operator-location.entity';
-
+import { HumanResourcesChecklistHistoryEntity } from './entities/checklist/human-resources-history.entity';
+import { FinancialSoundnessChecklistHistoryEntity } from './entities/checklist/financial-soundness-history.entity';
+import { RegistrationFeeChecklistHistoryEntity } from './entities/checklist/registration-fee-history.entity';
+import { DeclarationChecklistHistoryEntity } from './entities/checklist/declaration-history.entity';
 
 export class WarehouseService {
   private readonly logger = new Logger(WarehouseService.name);
@@ -3882,161 +3883,197 @@ export class WarehouseService {
     }
   }
 
+  private async getRejectedApplicantChecklistSectionIdsForApplication(applicationId: string): Promise<string[]> {
+    const assignments = await this.assignmentRepository.find({
+      where: {
+        applicationId,
+        level: AssignmentLevel.HOD_TO_APPLICANT,
+        status: AssignmentStatus.REJECTED,
+      },
+      relations: ['sections'],
+    });
+  
+    const rejectedSectionIds: string[] = [];
+    for (const assignment of assignments) {
+      if (assignment.sections) {
+        for (const section of assignment.sections) {
+          if (section.resourceId && section.sectionType === '6-application-checklist-questionnaire') {
+            rejectedSectionIds.push(section.resourceId);
+          }
+        }
+      }
+    }
+    return rejectedSectionIds;
+  }
+
   async createApplicantChecklist(
     applicationId: string,
     dto: CreateApplicantChecklistDto,
     userId: string,
-    files?: {
-      qcPersonnelFile?: any[];
-      warehouseSupervisorFile?: any[];
-      dataEntryOperatorFile?: any[];
-      auditedFinancialStatementsFile?: any[];
-      positiveNetWorthFile?: any[];
-      noLoanDefaultsFile?: any[];
-      cleanCreditHistoryFile?: any[];
-      adequateWorkingCapitalFile?: any[];
-      validInsuranceCoverageFile?: any[];
-      noFinancialFraudFile?: any[];
-      bankPaymentSlip?: any[];
-    },
+    files?: any,
     submit: boolean = false,
   ) {
     const application = await this.warehouseOperatorRepository.findOne({
       where: { id: applicationId, userId },
     });
-
+  
     if (!application) {
-      throw new NotFoundException('Warehouse operator application not found. Please create an application first.');
+      throw new NotFoundException('Warehouse operator application not found.');
     }
-
-    // only allow when status is DRAFT
-    if (application.status !== WarehouseOperatorApplicationStatus.DRAFT && application.status !== WarehouseOperatorApplicationStatus.RESUBMITTED && application.status !== WarehouseOperatorApplicationStatus.REJECTED) {
-      throw new BadRequestException('Applicant checklist can only be added while application is in draft status.');
+  
+    if (
+      ![
+        WarehouseOperatorApplicationStatus.DRAFT,
+        WarehouseOperatorApplicationStatus.REJECTED,
+        WarehouseOperatorApplicationStatus.RESUBMITTED,
+      ].includes(application.status)
+    ) {
+      throw new BadRequestException('Applicant checklist cannot be updated.');
     }
-
-    // Check if applicant checklist already exists for this application (only when creating new, not updating)
-    if (!dto.id) {
-      const existingApplicantChecklist = await this.applicantChecklistRepository.findOne({
-        where: { applicationId: application.id }
-      });
-
-      if (existingApplicantChecklist) {
-        throw new BadRequestException('Applicant checklist already exists for this application. Please update instead of creating a new one.');
-      }
-    }
-
-    // Upload files and map to DTO
-    const uploadedDocumentIds = files ? await this.uploadApplicantChecklistFiles(files, userId, applicationId) : {};
-    this.mapUploadedDocumentsToDto(dto, uploadedDocumentIds);
-
-    // Validate required files
-    this.validateApplicantChecklistFiles(dto);
-
-    const savedApplicantChecklist = await this.dataSource.transaction(async (manager) => {
+  
+    let rejectedSectionIds: string[] = [];
+  
+    const savedChecklist = await this.dataSource.transaction(async (manager) => {
       const repos = {
         applicantChecklist: manager.getRepository(ApplicantChecklistEntity),
-        applicantChecklistHistory: manager.getRepository(ApplicantChecklistHistoryEntity),
         humanResources: manager.getRepository(HumanResourcesChecklistEntity),
+        humanResourcesHistory: manager.getRepository(HumanResourcesChecklistHistoryEntity),
         financialSoundness: manager.getRepository(FinancialSoundnessChecklistEntity),
+        financialSoundnessHistory: manager.getRepository(FinancialSoundnessChecklistHistoryEntity),
         registrationFee: manager.getRepository(RegistrationFeeChecklistEntity),
+        registrationFeeHistory: manager.getRepository(RegistrationFeeChecklistHistoryEntity),
         declaration: manager.getRepository(DeclarationChecklistEntity),
+        declarationHistory: manager.getRepository(DeclarationChecklistHistoryEntity),
         document: manager.getRepository(WarehouseDocument),
         application: manager.getRepository(WarehouseOperatorApplicationRequest),
       };
-
-      // Reload within transaction to ensure we have the latest data
-      const application = await repos.application.findOne({
-        where: { id: applicationId, userId },
-      });
-
-      if (!application) {
-        throw new NotFoundException('Warehouse operator application not found. Please create an application first.');
+  
+      if (
+        [WarehouseOperatorApplicationStatus.REJECTED, WarehouseOperatorApplicationStatus.RESUBMITTED].includes(
+          application.status,
+        ) &&
+        dto.id
+      ) {
+        rejectedSectionIds =
+          await this.getRejectedApplicantChecklistSectionIdsForApplication(applicationId);
       }
-
-      // Re-validate application status inside transaction to prevent race conditions
-      if (![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(application.status)) {
-        throw new BadRequestException('Cannot update applicant checklist after application is approved or submitted');
+  
+      if (dto.id && rejectedSectionIds.length > 0) {
+        const existingChecklist = await repos.applicantChecklist.findOne({
+          where: { id: dto.id },
+          relations: ['humanResources', 'financialSoundness', 'registrationFee', 'declaration'],
+        });
+  
+        if (!existingChecklist) {
+          throw new NotFoundException('Applicant checklist not found');
+        }
+  
+        // 🔹 HUMAN RESOURCES
+        if (existingChecklist.humanResourcesId && rejectedSectionIds.includes(existingChecklist.humanResourcesId)) {
+          await repos.humanResourcesHistory.save({
+            ...existingChecklist.humanResources,
+            humanResourcesChecklistId: existingChecklist.humanResourcesId,
+            applicantChecklist: existingChecklist,
+          });
+        }
+  
+        // 🔹 FINANCIAL SOUNDNESS
+        if (
+          existingChecklist.financialSoundnessId &&
+          rejectedSectionIds.includes(existingChecklist.financialSoundnessId)
+        ) {
+          await repos.financialSoundnessHistory.save({
+            ...existingChecklist.financialSoundness,
+            financialSoundnessChecklistId: existingChecklist.financialSoundnessId,
+            applicantChecklist: existingChecklist,
+          });
+        }
+  
+        // 🔹 REGISTRATION FEE
+        if (
+          existingChecklist.registrationFeeId &&
+          rejectedSectionIds.includes(existingChecklist.registrationFeeId)
+        ) {
+          await repos.registrationFeeHistory.save({
+            ...existingChecklist.registrationFee,
+            registrationFeeChecklistId: existingChecklist.registrationFeeId,
+            applicantChecklist: existingChecklist,
+          });
+        }
+  
+        // 🔹 DECLARATION
+        if (existingChecklist.declarationId && rejectedSectionIds.includes(existingChecklist.declarationId)) {
+          await repos.declarationHistory.save({
+            ...existingChecklist.declaration,
+            declarationChecklistId: existingChecklist.declarationId,
+            applicantChecklist: existingChecklist,
+          });
+        }
       }
-
+  
       const assignDocument = this.createAssignDocumentFunction(repos.document, userId);
       const assignDocuments = this.createBatchAssignDocumentsFunction(assignDocument);
-
-      let result;
-      if (dto.id) {
-        result = await this.updateApplicantChecklist(
-          dto,
-          application,
-          repos,
-          assignDocuments,
-        );
-      } else {
-        result = await this.createNewApplicantChecklist(
-          dto,
-          application,
-          repos,
-          assignDocuments,
-        );
-      }
-
+  
+      const result = dto.id
+        ? await this.updateApplicantChecklist(dto, application, repos, assignDocuments)
+        : await this.createNewApplicantChecklist(dto, application, repos, assignDocuments);
+  
       if (submit) {
         application.status = WarehouseOperatorApplicationStatus.PENDING;
         await repos.application.save(application);
       }
-
+  
       return result;
     });
-
-    const hydratedApplicantChecklist = await this.applicantChecklistRepository.findOne({
-      where: { id: savedApplicantChecklist.id },
-      relations: ['humanResources', 'financialSoundness', 'registrationFee', 'declaration'],
-    });
-
-    // Reload application to get latest status after transaction
-    const updatedApplication = await this.warehouseOperatorRepository.findOne({
-      where: { id: applicationId },
-    });
-
-    // if application is rejected, track resubmission and update status if all sections are complete
-    if (updatedApplication?.status === WarehouseOperatorApplicationStatus.REJECTED) {
-      // Track resubmission and update status if all sections are complete
-      // Find the assignment section for applicant checklist if it exists
+  
+    // 🔁 RESUBMISSION TRACKING (AFTER TRANSACTION)
+    if (
+      application.status === WarehouseOperatorApplicationStatus.REJECTED &&
+      rejectedSectionIds.length > 0
+    ) {
       const assignments = await this.assignmentRepository.find({
         where: {
-          applicationId: applicationId,
+          applicationId,
           level: AssignmentLevel.HOD_TO_APPLICANT,
           status: AssignmentStatus.REJECTED,
         },
       });
-
-      let assignmentSectionId: string | null = null;
-      if (assignments.length > 0) {
-        const assignmentSections = await this.assignmentSectionRepository.find({
-          where: {
-            assignmentId: In(assignments.map((a) => a.id)),
-            sectionType: '6-application-checklist-questionnaire',
-            resourceId: savedApplicantChecklist.id,
-          },
-        });
-
-        if (assignmentSections.length > 0) {
-          assignmentSectionId = assignmentSections[0].id;
+  
+      for (const sectionId of rejectedSectionIds) {
+        let assignmentSectionId: string | undefined;
+  
+        if (assignments.length > 0) {
+          const sections = await this.assignmentSectionRepository.find({
+            where: {
+              assignmentId: In(assignments.map((a) => a.id)),
+              sectionType: '6-application-checklist-questionnaire',
+              resourceId: sectionId,
+            },
+          });
+  
+          assignmentSectionId = sections[0]?.id;
         }
+  
+        await this.trackResubmissionAndUpdateStatus(
+          applicationId,
+          '6-application-checklist-questionnaire',
+          sectionId,
+          assignmentSectionId,
+        );
       }
-
-      // Call helper function to track resubmission and update status
-      await this.trackResubmissionAndUpdateStatus(
-        applicationId,
-        '6-application-checklist-questionnaire',
-        savedApplicantChecklist.id,
-        assignmentSectionId ?? undefined,
-      );
     }
-
+  
+    const hydrated = await this.applicantChecklistRepository.findOne({
+      where: { id: savedChecklist.id },
+      relations: ['humanResources', 'financialSoundness', 'registrationFee', 'declaration'],
+    });
+  
     return {
       message: 'Applicant checklist saved successfully',
-      data: this.mapApplicantChecklistEntityToResponse(hydratedApplicantChecklist!),
+      data: this.mapApplicantChecklistEntityToResponse(hydrated!),
     };
   }
+  
 
   /**
    * Create assign document function for transaction
@@ -4112,20 +4149,20 @@ export class WarehouseService {
     }
 
     // Save history of applicant checklist if application is rejected (before overwriting)
-    if (application.status === WarehouseOperatorApplicationStatus.REJECTED) {
-      const applicantChecklistHistory = repos.applicantChecklistHistory.create({
-        applicantChecklistId: existingApplicantChecklist.id,
-        applicationId: application.id,
-        humanResourcesId: existingApplicantChecklist.humanResourcesId,
-        financialSoundnessId: existingApplicantChecklist.financialSoundnessId,
-        registrationFeeId: existingApplicantChecklist.registrationFeeId,
-        declarationId: existingApplicantChecklist.declarationId,
-        isActive: false,
-      });
-      // Preserve the original createdAt timestamp from the applicant checklist record
-      applicantChecklistHistory.createdAt = existingApplicantChecklist.createdAt;
-      await repos.applicantChecklistHistory.save(applicantChecklistHistory);
-    }
+    // if (application.status === WarehouseOperatorApplicationStatus.REJECTED) {
+    //   const applicantChecklistHistory = repos.applicantChecklistHistory.create({
+    //     applicantChecklistId: existingApplicantChecklist.id,
+    //     applicationId: application.id,
+    //     humanResourcesId: existingApplicantChecklist.humanResourcesId,
+    //     financialSoundnessId: existingApplicantChecklist.financialSoundnessId,
+    //     registrationFeeId: existingApplicantChecklist.registrationFeeId,
+    //     declarationId: existingApplicantChecklist.declarationId,
+    //     isActive: false,
+    //   });
+    //   // Preserve the original createdAt timestamp from the applicant checklist record
+    //   applicantChecklistHistory.createdAt = existingApplicantChecklist.createdAt;
+    //   await repos.applicantChecklistHistory.save(applicantChecklistHistory);
+    // }
 
     // Update or create Human Resources
     let hrEntity: HumanResourcesChecklistEntity;
