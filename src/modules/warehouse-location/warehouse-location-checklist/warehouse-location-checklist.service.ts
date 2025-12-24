@@ -831,16 +831,14 @@ export class WarehouseLocationChecklistService {
         if (rejectedSectionIds.includes(existingChecklist.registrationFeeId ?? '')) {
           await repos.registrationFeeHistory.save({
             ...existingChecklist.registrationFee,
-            registrationFeeId: existingChecklist.registrationFeeId ?? '',
-            warehouseLocationChecklist: existingChecklist,
+            registrationFeeChecklistId: existingChecklist.registrationFeeId ?? '',
           });
         }
-
+        
         if (rejectedSectionIds.includes(existingChecklist.declarationId ?? '')) {
           await repos.declarationHistory.save({
             ...existingChecklist.declaration,
-            declarationId: existingChecklist.declarationId ?? '',
-            warehouseLocationChecklist: existingChecklist,
+            declarationChecklistId: existingChecklist.declarationId ?? '',
           });
         }
       }
