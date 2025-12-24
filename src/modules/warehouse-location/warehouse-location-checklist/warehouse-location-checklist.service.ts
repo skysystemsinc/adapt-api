@@ -1,6 +1,6 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, forwardRef, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { CreateWarehouseLocationChecklistDto } from '../dto/create-warehouse-location-checklist.dto';
 import { WarehouseLocationChecklistEntity } from '../entities/warehouse-location-checklist.entity';
 import { WarehouseLocation, WarehouseLocationStatus } from '../entities/warehouse-location.entity';
@@ -19,6 +19,17 @@ import * as fsSync from 'fs';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { encryptBuffer, decryptBuffer } from 'src/common/utils/helper.utils';
+import { Assignment, AssignmentLevel, AssignmentStatus } from '../../warehouse/operator/assignment/entities/assignment.entity';
+import { AssignmentSection } from '../../warehouse/operator/assignment/entities/assignment-section.entity';
+import { OwnershipLegalDocumentsHistoryEntity } from '../entities/checklist/ownership-legal-documents-history.entity';
+import { HumanResourcesKeyHistoryEntity } from '../entities/checklist/human-resources-key-history.entity';
+import { LocationRiskHistoryEntity } from '../entities/checklist/location-risk-history.entity';
+import { SecurityPerimeterHistoryEntity } from '../entities/checklist/security-perimeter-history.entity';
+import { InfrastructureUtilitiesHistoryEntity } from '../entities/checklist/infrastructure-utilities-history.entity';
+import { StorageFacilitiesHistoryEntity } from '../entities/checklist/storage-facilities-history.entity';
+import { WarehouseLocationService } from '../warehouse-location.service';
+import { RegistrationFeeChecklistHistoryEntity } from 'src/modules/warehouse/entities/checklist/registration-fee-history.entity';
+import { DeclarationChecklistHistoryEntity } from 'src/modules/warehouse/entities/checklist/declaration-history.entity';
 
 @Injectable()
 export class WarehouseLocationChecklistService {
@@ -32,16 +43,28 @@ export class WarehouseLocationChecklistService {
     private readonly warehouseLocationRepository: Repository<WarehouseLocation>,
     @InjectRepository(OwnershipLegalDocumentsEntity)
     private readonly ownershipLegalDocumentsRepository: Repository<OwnershipLegalDocumentsEntity>,
+    @InjectRepository(OwnershipLegalDocumentsHistoryEntity)
+    private readonly ownershipLegalDocumentsHistoryRepository: Repository<OwnershipLegalDocumentsHistoryEntity>,
     @InjectRepository(HumanResourcesKeyEntity)
     private readonly humanResourcesKeyRepository: Repository<HumanResourcesKeyEntity>,
+    @InjectRepository(HumanResourcesKeyHistoryEntity)
+    private readonly humanResourcesKeyHistoryRepository: Repository<HumanResourcesKeyHistoryEntity>,
     @InjectRepository(LocationRiskEntity)
     private readonly locationRiskRepository: Repository<LocationRiskEntity>,
+    @InjectRepository(LocationRiskHistoryEntity)
+    private readonly locationRiskHistoryRepository: Repository<LocationRiskHistoryEntity>,
     @InjectRepository(SecurityPerimeterEntity)
     private readonly securityPerimeterRepository: Repository<SecurityPerimeterEntity>,
+    @InjectRepository(SecurityPerimeterHistoryEntity)
+    private readonly securityPerimeterHistoryRepository: Repository<SecurityPerimeterHistoryEntity>,
     @InjectRepository(InfrastructureUtilitiesEntity)
     private readonly infrastructureUtilitiesRepository: Repository<InfrastructureUtilitiesEntity>,
+    @InjectRepository(InfrastructureUtilitiesHistoryEntity)
+    private readonly infrastructureUtilitiesHistoryRepository: Repository<InfrastructureUtilitiesHistoryEntity>,
     @InjectRepository(StorageFacilitiesEntity)
     private readonly storageFacilitiesRepository: Repository<StorageFacilitiesEntity>,
+    @InjectRepository(StorageFacilitiesHistoryEntity)
+    private readonly storageFacilitiesHistoryRepository: Repository<StorageFacilitiesHistoryEntity>,
     @InjectRepository(RegistrationFeeChecklistEntity)
     private readonly registrationFeeRepository: Repository<RegistrationFeeChecklistEntity>,
     @InjectRepository(DeclarationChecklistEntity)
@@ -50,6 +73,12 @@ export class WarehouseLocationChecklistService {
     private readonly warehouseDocumentRepository: Repository<WarehouseDocument>,
     private readonly dataSource: DataSource,
     private readonly clamAVService: ClamAVService,
+    @InjectRepository(Assignment)
+    private readonly assignmentRepository: Repository<Assignment>,
+    @InjectRepository(AssignmentSection)
+    private readonly assignmentSectionRepository: Repository<AssignmentSection>,
+    @Inject(forwardRef(() => WarehouseLocationService))
+    private readonly warehouseLocationService: WarehouseLocationService,
   ) {
     this.ensureUploadDirectory();
   }
@@ -650,6 +679,41 @@ export class WarehouseLocationChecklistService {
     };
   }
 
+  private async getRejectedChecklistSectionIdsForLocation(
+    warehouseLocationId: string,
+  ): Promise<string[]> {
+  
+    const assignments = await this.assignmentRepository.find({
+      where: {
+        applicationLocationId: warehouseLocationId,
+        level: AssignmentLevel.HOD_TO_APPLICANT,
+        status: AssignmentStatus.REJECTED,
+      },
+    });
+  
+    if (!assignments.length) return [];
+  
+    const assignmentSections = await this.assignmentSectionRepository.find({
+      where: {
+        assignmentId: In(assignments.map(a => a.id)),
+      },
+      select: {
+        resourceId: true,
+        sectionType: true,
+      },
+    });
+  
+    // ONLY checklist section
+    const checklistSections = assignmentSections.filter(
+      s => s.sectionType === '8-key-submission-checklist',
+    );
+  
+    return checklistSections
+      .map(s => s.resourceId as string)
+      .filter(Boolean);
+  }
+  
+
   async updateWarehouseLocationChecklist(
     warehouseLocationId: string,
     dto: CreateWarehouseLocationChecklistDto,
@@ -660,60 +724,194 @@ export class WarehouseLocationChecklistService {
     const warehouseLocation = await this.warehouseLocationRepository.findOne({
       where: { id: warehouseLocationId, userId },
     });
-
+  
     if (!warehouseLocation) {
       throw new NotFoundException('Warehouse location not found. Please create a warehouse location first.');
     }
-
-    if (warehouseLocation.status !== WarehouseLocationStatus.DRAFT) {
-      throw new BadRequestException('Checklist can only be updated while warehouse location is in draft status.');
+  
+    if (![WarehouseLocationStatus.DRAFT, WarehouseLocationStatus.REJECTED, WarehouseLocationStatus.RESUBMITTED].includes(warehouseLocation.status)) {
+      throw new BadRequestException('Checklist can only be updated while warehouse location is in draft, rejected, or resubmitted status.');
     }
-
-    // Find existing checklist by warehouseLocationId (not by dto.id)
+  
     const existingChecklist = await this.warehouseLocationChecklistRepository.findOne({
       where: { warehouseLocationId: warehouseLocation.id },
     });
-
+  
     if (!existingChecklist) {
       throw new NotFoundException('Checklist not found for this warehouse location. Please create it first.');
     }
-
-    // Set dto.id to the existing checklist's id so updateChecklist can use it
+  
     dto.id = existingChecklist.id;
-
+  
+    console.log(existingChecklist, "existingChecklist")
+  
     const uploadedDocumentIds = files ? await this.uploadChecklistFiles(files, userId, warehouseLocationId) : {};
     this.mapUploadedDocumentsToDto(dto, uploadedDocumentIds);
     this.validateChecklistFiles(dto);
-
+  
+    let rejectedSectionIds: string[] = [];
+  
     const savedChecklist = await this.dataSource.transaction(async (manager) => {
       const repos = {
         checklist: manager.getRepository(WarehouseLocationChecklistEntity),
         ownershipLegal: manager.getRepository(OwnershipLegalDocumentsEntity),
+        ownershipLegalHistory: manager.getRepository(OwnershipLegalDocumentsHistoryEntity),
         humanResourcesKey: manager.getRepository(HumanResourcesKeyEntity),
+        humanResourcesKeyHistory: manager.getRepository(HumanResourcesKeyHistoryEntity),
         locationRisk: manager.getRepository(LocationRiskEntity),
+        locationRiskHistory: manager.getRepository(LocationRiskHistoryEntity),    
         securityPerimeter: manager.getRepository(SecurityPerimeterEntity),
+        securityPerimeterHistory: manager.getRepository(SecurityPerimeterHistoryEntity),
         infrastructureUtilities: manager.getRepository(InfrastructureUtilitiesEntity),
+        infrastructureUtilitiesHistory: manager.getRepository(InfrastructureUtilitiesHistoryEntity),
         storageFacilities: manager.getRepository(StorageFacilitiesEntity),
+        storageFacilitiesHistory: manager.getRepository(StorageFacilitiesHistoryEntity),
         registrationFee: manager.getRepository(RegistrationFeeChecklistEntity),
+        registrationFeeHistory: manager.getRepository(RegistrationFeeChecklistHistoryEntity),
         declaration: manager.getRepository(DeclarationChecklistEntity),
+        declarationHistory: manager.getRepository(DeclarationChecklistHistoryEntity),
         document: manager.getRepository(WarehouseDocument),
         warehouseLocation: manager.getRepository(WarehouseLocation),
       };
+  
+      if([WarehouseLocationStatus.REJECTED, WarehouseLocationStatus.RESUBMITTED].includes(warehouseLocation.status)) {
+        rejectedSectionIds = await this.getRejectedChecklistSectionIdsForLocation(warehouseLocationId);
+      }
+  
+      if(rejectedSectionIds.length > 0) {
+        if (rejectedSectionIds.includes(existingChecklist.humanResourcesKeyId ?? '')) {
+          await repos.humanResourcesKeyHistory.save({
+            ...existingChecklist.humanResourcesKey,
+            humanResourcesKeyId: existingChecklist.humanResourcesKeyId ?? '',
+            warehouseLocationChecklist: existingChecklist,
+          });
+        }
+    
+        if (rejectedSectionIds.includes(existingChecklist.ownershipLegalDocumentsId ?? '')) {
+          await repos.ownershipLegalHistory.save({
+            ...existingChecklist.ownershipLegalDocuments,
+            ownershipLegalDocumentsId: existingChecklist.ownershipLegalDocumentsId ?? '',
+            warehouseLocationChecklist: existingChecklist,
+          });
+        }
+    
+        if (rejectedSectionIds.includes(existingChecklist.locationRiskId ?? '')) {
+          await repos.locationRiskHistory.save({
+            ...existingChecklist.locationRisk,
+            locationRiskId: existingChecklist.locationRiskId ?? '',
+            warehouseLocationChecklist: existingChecklist,
+          });
+        }
+    
+        if (rejectedSectionIds.includes(existingChecklist.securityPerimeterId ?? '')) {
+          await repos.securityPerimeterHistory.save({
+            ...existingChecklist.securityPerimeter,
+            securityPerimeterId: existingChecklist.securityPerimeterId ?? '',
+            warehouseLocationChecklist: existingChecklist,
+          });
+        }
+    
+        if (rejectedSectionIds.includes(existingChecklist.infrastructureUtilitiesId ?? '')) {
+          await repos.infrastructureUtilitiesHistory.save({
+            ...existingChecklist.infrastructureUtilities,
+            infrastructureUtilitiesId:
+              existingChecklist.infrastructureUtilitiesId ?? '',
+            warehouseLocationChecklist: existingChecklist,
+          });
+        }
+    
+        if (rejectedSectionIds.includes(existingChecklist.storageFacilitiesId ?? '')) {
+          await repos.storageFacilitiesHistory.save({
+            ...existingChecklist.storageFacilities,
+            storageFacilitiesId: existingChecklist.storageFacilitiesId ?? '',
+            warehouseLocationChecklist: existingChecklist,
+          });
+        }
 
+        if (rejectedSectionIds.includes(existingChecklist.registrationFeeId ?? '')) {
+          await repos.registrationFeeHistory.save({
+            ...existingChecklist.registrationFee,
+            registrationFeeId: existingChecklist.registrationFeeId ?? '',
+            warehouseLocationChecklist: existingChecklist,
+          });
+        }
+
+        if (rejectedSectionIds.includes(existingChecklist.declarationId ?? '')) {
+          await repos.declarationHistory.save({
+            ...existingChecklist.declaration,
+            declarationId: existingChecklist.declarationId ?? '',
+            warehouseLocationChecklist: existingChecklist,
+          });
+        }
+      }
+  
       const assignDocument = this.createAssignDocumentFunction(repos.document, userId);
       const assignDocuments = this.createBatchAssignDocumentsFunction(assignDocument);
-
-      // Always call updateChecklist since checklist exists
+  
       const result = await this.updateChecklist(dto, warehouseLocation, repos, assignDocuments);
-
+  
       if (submit) {
         warehouseLocation.status = WarehouseLocationStatus.PENDING;
         await repos.warehouseLocation.save(warehouseLocation);
       }
-
+  
       return result;
     });
-
+  
+    // Track resubmission for each rejected section (after transaction)
+    const updatedApplication = await this.warehouseLocationRepository.findOne({
+      where: { id: warehouseLocationId },
+    });
+  
+    if (updatedApplication?.status === WarehouseLocationStatus.REJECTED && rejectedSectionIds.length > 0) {
+      const assignments = await this.assignmentRepository.find({
+        where: {
+          applicationLocationId: warehouseLocationId,
+          level: AssignmentLevel.HOD_TO_APPLICANT,
+          status: AssignmentStatus.REJECTED,
+        },
+      });
+  
+      // Map section IDs to their section types
+      const sectionIdToType: { id: string | null; type: string }[] = [
+        { id: existingChecklist.humanResourcesKeyId ?? '', type: '8-key-submission-checklist' },
+        { id: existingChecklist.ownershipLegalDocumentsId ?? '', type: '8-key-submission-checklist' },
+        { id: existingChecklist.locationRiskId ?? '', type: '8-key-submission-checklist' },
+        { id: existingChecklist.securityPerimeterId ?? '', type: '8-key-submission-checklist' },
+        { id: existingChecklist.infrastructureUtilitiesId ?? '', type: '8-key-submission-checklist' },
+        { id: existingChecklist.storageFacilitiesId ?? '', type: '8-key-submission-checklist' },
+        { id: existingChecklist.registrationFeeId ?? '', type: '8-key-submission-checklist' },
+        { id: existingChecklist.declarationId ?? '', type: '8-key-submission-checklist' },
+      ];
+  
+      for (const section of sectionIdToType) {
+        if (section.id && rejectedSectionIds.includes(section.id)) {
+          let assignmentSectionId: string | null = null;
+  
+          if (assignments.length > 0) {
+            const assignmentSections = await this.assignmentSectionRepository.find({
+              where: {
+                assignmentId: In(assignments.map((a) => a.id)),
+                sectionType: section.type,
+                resourceId: section.id,
+              },
+            });
+  
+            if (assignmentSections.length > 0) {
+              assignmentSectionId = assignmentSections[0].id;
+            }
+          }
+  
+          await this.warehouseLocationService.trackWarehouseLocationResubmissionAndUpdateStatus(
+            warehouseLocationId,
+            section.type,
+            section.id,
+            assignmentSectionId ?? undefined,
+          );
+        }
+      }
+    }
+  
     const hydratedChecklist = await this.warehouseLocationChecklistRepository.findOne({
       where: { id: savedChecklist.id },
       relations: [
@@ -727,7 +925,7 @@ export class WarehouseLocationChecklistService {
         'declaration',
       ],
     });
-
+  
     return {
       message: 'Warehouse location checklist updated successfully',
       data: await this.mapChecklistEntityToResponse(hydratedChecklist!, warehouseLocation.applicationId),
