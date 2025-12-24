@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, OneToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { HumanResource } from "../../entities/human-resource.entity";
 import { Declaration } from "./declaration.entity";
 
@@ -14,7 +14,7 @@ export class DeclarationHistory {
     @JoinColumn({ name: 'declarationId' })
     declaration: Declaration;
 
-    @Column({ type: 'uuid', unique: true })
+    @Column({ type: 'uuid' })
     humanResourceId: string;
 
     @Column({ type: 'boolean', default: false })
@@ -38,7 +38,7 @@ export class DeclarationHistory {
     @UpdateDateColumn()
     updatedAt: Date;
 
-    @OneToOne(() => HumanResource, (hr) => hr.declaration)
+    @ManyToOne(() => HumanResource, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'humanResourceId' })
     humanResource: HumanResource;
 }
