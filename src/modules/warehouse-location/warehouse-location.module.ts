@@ -26,6 +26,15 @@ import { RegistrationFeeChecklistEntity } from '../warehouse/entities/checklist/
 import { DeclarationChecklistEntity } from '../warehouse/entities/checklist/declaration.entity';
 import { WarehouseDocument } from '../warehouse/entities/warehouse-document.entity';
 import { ClamAVModule } from '../clamav/clamav.module';
+import { OwnershipLegalDocumentsHistoryEntity } from './entities/checklist/ownership-legal-documents-history.entity';
+import { HumanResourcesKeyHistoryEntity } from './entities/checklist/human-resources-key-history.entity';
+import { LocationRiskHistoryEntity } from './entities/checklist/location-risk-history.entity';
+import { SecurityPerimeterHistoryEntity } from './entities/checklist/security-perimeter-history.entity';
+import { InfrastructureUtilitiesHistoryEntity } from './entities/checklist/infrastructure-utilities-history.entity';
+import { StorageFacilitiesHistoryEntity } from './entities/checklist/storage-facilities-history.entity';
+import { Assignment } from '../warehouse/operator/assignment/entities/assignment.entity';
+import { AssignmentSection } from '../warehouse/operator/assignment/entities/assignment-section.entity';
+import { User } from '../users/entities/user.entity';
 
 @Module({
   controllers: [WarehouseLocationController, WarehouseLocationChecklistController],
@@ -42,7 +51,16 @@ import { ClamAVModule } from '../clamav/clamav.module';
       StorageFacilitiesEntity,
       RegistrationFeeChecklistEntity,
       DeclarationChecklistEntity,
+      OwnershipLegalDocumentsHistoryEntity,
+      HumanResourcesKeyHistoryEntity,
+      LocationRiskHistoryEntity,
+      SecurityPerimeterHistoryEntity,
+      InfrastructureUtilitiesHistoryEntity,
+      StorageFacilitiesHistoryEntity, 
+      Assignment,
+      AssignmentSection,
       WarehouseDocument,
+      User
     ]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
