@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, OneToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { WarehouseLocation } from "../../entities/warehouse-location.entity";
 import { Facility } from "./facility.entity";
 
@@ -74,7 +74,7 @@ export class FacilityHistory {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  @OneToOne(() => WarehouseLocation, (warehouse) => warehouse.facility, { onDelete: 'CASCADE' })
+  @ManyToOne(() => WarehouseLocation, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'warehouseLocationId' })
   warehouseLocation: WarehouseLocation;
 }

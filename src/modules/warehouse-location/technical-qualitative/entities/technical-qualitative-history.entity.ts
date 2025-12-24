@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, OneToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { WarehouseLocation } from "../../entities/warehouse-location.entity";
 import { TechnicalQualitative } from "./technical-qualitative.entity";
 
@@ -56,7 +56,7 @@ export class TechnicalQualitativeHistory {
     @UpdateDateColumn()
     updatedAt: Date;
 
-    @OneToOne(() => WarehouseLocation, (warehouse) => warehouse.technicalQualitative, { onDelete: 'CASCADE' })
+    @ManyToOne(() => WarehouseLocation, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'warehouseLocationId' })
     warehouseLocation: WarehouseLocation;
 }
