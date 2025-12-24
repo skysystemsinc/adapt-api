@@ -107,4 +107,14 @@ export class WarehouseLocationController {
 
     res.send(buffer);
   }
+
+  //get warehouse location application status by warehoue-location id
+  @Get('/application/:id/status')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Get warehouse location application status' })
+  @ApiResponse({ status: 200, description: 'Warehouse location application status retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Warehouse location application not found' })
+  async getWarehouseLocationApplicationStatus(@Param('id') id: string, @Request() req: any) {
+    return this.warehouseLocationService.getWarehouseLocationApplicationStatus(id);
+  }
 }
