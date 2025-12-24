@@ -5472,7 +5472,7 @@ export class WarehouseService {
             case 'human-resources':
               return section.sectionType === '7-human-resources';
             case 'checklist':
-              return section.sectionType === '8-checklist';
+              return section.sectionType === '8-key-submission-checklist';
           }
         } else {
           switch (resourceType) {
