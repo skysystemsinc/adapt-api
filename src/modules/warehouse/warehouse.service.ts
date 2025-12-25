@@ -5456,7 +5456,6 @@ export class WarehouseService {
         }
       });
 
-      console.log(filteredSections, 'filteredSections------');
       unlockedSections = filteredSections.map((section) => section.resourceId as string).filter((id): id is string => id !== null && id !== undefined);
     }
 
