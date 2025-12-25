@@ -369,8 +369,8 @@ export class WarehouseLocationService {
 
     // Map normalized section types to display names used in unlockedSections (for facility/location)
     const sectionTypeMap: Record<string, string[]> = {
-      '1-facility': ['1-facility'],
-      '2-contact': ['2-contact'],
+      '1-facility-information': ['1-facility-information'],
+      '2-contact-information': ['2-contact-information'],
       '3-jurisdiction': ['3-jurisdiction'],
       '4-security-fire-safety': ['4-security-fire-safety'],
       '5-weighing': ['5-weighing'],
@@ -381,8 +381,8 @@ export class WarehouseLocationService {
 
     // Section type to human-readable display name mapping
     const sectionDisplayNames: Record<string, string> = {
-      '1-facility': 'Facility Information',
-      '2-contact': 'Contact Information',
+      '1-facility-information': 'Facility Information',
+      '2-contact-information': 'Contact Information',
       '3-jurisdiction': 'Jurisdiction Information',
       '4-security-fire-safety': 'Security and Fire Safety',
       '5-weighing': 'Weighing Facilities',
