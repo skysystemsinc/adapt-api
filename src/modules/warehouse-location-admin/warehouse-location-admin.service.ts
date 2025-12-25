@@ -85,6 +85,7 @@ export class WarehouseLocationAdminService {
         'location.id',
         'location.applicationId',
         'location.status',
+        'location.metadata',
         'location.createdAt',
         'location.updatedAt',
         'user.id',
@@ -147,6 +148,7 @@ export class WarehouseLocationAdminService {
         assignmentLevel: rawData?.assignmentLevel || null,
         assignmentStatus: rawData?.assignmentStatus || null,
         assignmentAssessmentId: rawData?.assignmentAssessmentId || null,
+        isResubmitted: entity.metadata?.isResubmitted || false,
       };
     });
 
