@@ -655,4 +655,30 @@ export class AssignmentService {
       throw new ConflictException('Failed to approve unlock request', error);
     }
   }
+
+  /*
+  * Get latest assignment for a specific user type
+  * Returns the latest assignment for a specific user type
+  * @param applicationId - The ID of the application
+  * @param userId - The ID of the user
+  * @returns The latest assignment for a specific user type
+  */
+  async getLatestAssignmentByUserType(applicationId: string, userId?: string) {
+    // In TypeORM, passing an array to where creates OR conditions
+    // Each element in the array is an AND condition
+    const whereClause = userId
+      ? [
+          { applicationId: applicationId, assignedBy: userId },
+          { applicationId: applicationId, assignedTo: userId }
+        ]
+      : { applicationId: applicationId };
+
+    const assignment = await this.dataSource.getRepository(Assignment).findOne({
+      where: whereClause,
+      relations: ['assignedToUser', 'sections', 'sections.fields'],
+      order: { createdAt: 'DESC' },
+    });
+    
+    return assignment;
+  }
 }

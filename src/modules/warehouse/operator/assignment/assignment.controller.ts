@@ -124,4 +124,15 @@ export class AssignmentController {
     }
     return await this.assignmentService.approveUnlockApplicationRequest(applicationId, approveUnlockRequestDto, userId as string);
   }
+
+  @ApiOperation({ summary: 'Get latest assignment for a warehouse operator application' })
+  @Get('/application/:applicationId/assignments/latest')
+  async getLatestAssignmentByUserType(
+    @Req() req: any,
+    @Param('applicationId') applicationId: string,
+    @Query('all') all?: string,
+  ) {
+    const userId = req.user?.sub || req.user?.id;
+    return await this.assignmentService.getLatestAssignmentByUserType(applicationId, userId as string);
+  }
 }
