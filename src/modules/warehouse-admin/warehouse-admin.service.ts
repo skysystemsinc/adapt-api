@@ -751,7 +751,6 @@ export class WarehouseAdminService {
       },
     });
 
-
     if (!user) {
       throw new NotFoundException('User not found');
     }
@@ -789,7 +788,8 @@ export class WarehouseAdminService {
   `);
 
     if (isKycVerification || hasPermission(user, Permissions.REVIEW_ASSESSMENT) || hasPermission(user, Permissions.REVIEW_FINAL_APPLICATION)) {
-      usersQuery.where(`role.name != :applicantRole`, { applicantRole: 'Applicant' })
+      // exlucde applicant role & include HOD role only
+      usersQuery.where(`role.name != :applicantRole AND permission.name = :hodRole`, { applicantRole: 'Applicant', hodRole: Permissions.IS_HOD })
     } else if (hasPermission(user, Permissions.IS_HOD)) {
       // get current user's permissions
       const currentUserPermissions = user.userRoles
@@ -843,14 +843,14 @@ export class WarehouseAdminService {
 
     // If applicationId is provided, exclude users already assigned to this application
     if (applicationId && !isKycVerification) {
-      usersQuery.andWhere(
-        `user.id NOT IN (
-          SELECT DISTINCT a."assignedTo" 
-          FROM assignment a 
-          WHERE a."applicationId" = :applicationId
-        )`,
-        { applicationId }
-      );
+      // usersQuery.andWhere(
+      //   `user.id NOT IN (
+      //     SELECT DISTINCT a."assignedTo" 
+      //     FROM assignment a 
+      //     WHERE a."applicationId" = :applicationId
+      //   )`,
+      //   { applicationId }
+      // );
     }
 
     usersQuery.groupBy('role.id');
