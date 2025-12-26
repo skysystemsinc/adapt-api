@@ -1376,12 +1376,14 @@ export class WarehouseAdminService {
         id: true,
         operatorId: true,
         locationId: true,
-        operator: {
-          applicationId: true,
-        },
+        operator:  true,
         location: {
           warehouseOperatorId: true,
         },
+      },
+      relations: {
+        operator: true,
+        location: true,
       }
     });
 
@@ -1390,6 +1392,7 @@ export class WarehouseAdminService {
     }
 
     const warehouseOperatorApplicationId = unlockRequest.operator?.applicationId || unlockRequest.location?.warehouseOperatorId;
+    console.log('warehouseOperatorApplicationId', warehouseOperatorApplicationId)
 
     const warehouseOperatorApplication = await this.warehouseOperatorApplicationRequestRepository.findOne({
       where: { id: warehouseOperatorApplicationId },
