@@ -3947,7 +3947,229 @@ export class WarehouseService {
         document: manager.getRepository(WarehouseDocument),
         application: manager.getRepository(WarehouseOperatorApplicationRequest),
       };
-  
+
+      // 🔧 FIX: Create transaction-aware file upload function
+      const uploadFileInTransaction = async (
+        file: any,
+        documentableType: string,
+        documentableId: string,
+        documentType: string,
+      ): Promise<string> => {
+        if (!file || !file.buffer) {
+          throw new BadRequestException(`No file provided for ${documentType}`);
+        }
+
+        // Validate file type
+        const allowedExtensions = ['.pdf', '.png', '.jpg', '.jpeg', '.doc', '.docx'];
+        const fileExtension = path.extname(file.originalname).toLowerCase();
+
+        if (!allowedExtensions.includes(fileExtension)) {
+          throw new BadRequestException(
+            `File type '${fileExtension}' is not allowed. Allowed types: ${allowedExtensions.join(', ')}`,
+          );
+        }
+
+        // Validate file size (max 10MB)
+        const maxSizeBytes = 10 * 1024 * 1024;
+        if (file.size > maxSizeBytes) {
+          throw new BadRequestException(
+            `File size ${(file.size / 1024 / 1024).toFixed(2)}MB exceeds maximum allowed size of 10MB`,
+          );
+        }
+
+        // Scan file with ClamAV if mandatory
+        const isMandatory = this.clamAVService.getScanMandatory();
+        if (isMandatory) {
+          try {
+            this.logger.log(`🔍 Scanning file with ClamAV: ${file.originalname}`);
+            const scanResult = await this.clamAVService.scanBuffer(
+              file.buffer,
+              file.originalname,
+            );
+
+            if (scanResult.isInfected) {
+              this.logger.warn(
+                `🚨 Infected file detected: ${file.originalname}, Viruses: ${scanResult.viruses.join(', ')}`,
+              );
+              throw new BadRequestException(
+                `File is infected with malware: ${scanResult.viruses.join(', ')}. Upload rejected.`,
+              );
+            }
+
+            this.logger.log(`✅ File passed ClamAV scan: ${file.originalname}`);
+          } catch (error) {
+            if (error instanceof BadRequestException) {
+              throw error;
+            }
+
+            if (isMandatory) {
+              this.logger.error(
+                `ClamAV scan failed for ${file.originalname}: ${error.message}`,
+                error.stack,
+              );
+              throw new BadRequestException(
+                `Virus scanning unavailable: ${error.message}. Upload blocked due to mandatory scanning.`,
+              );
+            } else {
+              this.logger.warn(
+                `ClamAV scan failed for ${file.originalname}: ${error.message}. Bypassing scan and allowing upload.`,
+                error.stack,
+              );
+            }
+          }
+        }
+
+        // Generate unique filename
+        const sanitizedFilename = `${uuidv4()}${fileExtension}`;
+        const filePath = path.join(this.uploadDir, sanitizedFilename);
+        const documentPath = `/uploads/${sanitizedFilename}`;
+
+        // Encrypt file before saving
+        const { encrypted, iv, authTag } = encryptBuffer(file.buffer);
+
+        // Save encrypted file to disk
+        await fs.writeFile(filePath, encrypted);
+
+        // Detect MIME type
+        const mimeType = file.mimetype || 'application/octet-stream';
+
+        // Create document record using transaction repository
+        const document = repos.document.create({
+          userId,
+          documentableType,
+          documentableId,
+          documentType,
+          originalFileName: file.originalname,
+          filePath: documentPath,
+          mimeType,
+          iv,
+          authTag,
+          isActive: true,
+        });
+
+        const savedDocument = await repos.document.save(document);
+        return savedDocument.id;
+      };
+
+      // 🔧 FIX: Upload files and update DTO with document IDs
+      if (files) {
+        // Upload HR files
+        if (files.qcPersonnelFile?.[0] && !dto.humanResources.qcPersonnelFile) {
+          const tempId = uuidv4();
+          const documentId = await uploadFileInTransaction(
+            files.qcPersonnelFile[0],
+            'HumanResourcesChecklist',
+            tempId,
+            'qcPersonnelFile',
+          );
+          dto.humanResources.qcPersonnelFile = documentId;
+        }
+        if (files.warehouseSupervisorFile?.[0] && !dto.humanResources.warehouseSupervisorFile) {
+          const tempId = uuidv4();
+          const documentId = await uploadFileInTransaction(
+            files.warehouseSupervisorFile[0],
+            'HumanResourcesChecklist',
+            tempId,
+            'warehouseSupervisorFile',
+          );
+          dto.humanResources.warehouseSupervisorFile = documentId;
+        }
+        if (files.dataEntryOperatorFile?.[0] && !dto.humanResources.dataEntryOperatorFile) {
+          const tempId = uuidv4();
+          const documentId = await uploadFileInTransaction(
+            files.dataEntryOperatorFile[0],
+            'HumanResourcesChecklist',
+            tempId,
+            'dataEntryOperatorFile',
+          );
+          dto.humanResources.dataEntryOperatorFile = documentId;
+        }
+
+        // Upload Financial Soundness files
+        if (files.auditedFinancialStatementsFile?.[0] && !dto.financialSoundness.auditedFinancialStatementsFile) {
+          const tempId = uuidv4();
+          const documentId = await uploadFileInTransaction(
+            files.auditedFinancialStatementsFile[0],
+            'FinancialSoundnessChecklist',
+            tempId,
+            'auditedFinancialStatementsFile',
+          );
+          dto.financialSoundness.auditedFinancialStatementsFile = documentId;
+        }
+        if (files.positiveNetWorthFile?.[0] && !dto.financialSoundness.positiveNetWorthFile) {
+          const tempId = uuidv4();
+          const documentId = await uploadFileInTransaction(
+            files.positiveNetWorthFile[0],
+            'FinancialSoundnessChecklist',
+            tempId,
+            'positiveNetWorthFile',
+          );
+          dto.financialSoundness.positiveNetWorthFile = documentId;
+        }
+        if (files.noLoanDefaultsFile?.[0] && !dto.financialSoundness.noLoanDefaultsFile) {
+          const tempId = uuidv4();
+          const documentId = await uploadFileInTransaction(
+            files.noLoanDefaultsFile[0],
+            'FinancialSoundnessChecklist',
+            tempId,
+            'noLoanDefaultsFile',
+          );
+          dto.financialSoundness.noLoanDefaultsFile = documentId;
+        }
+        if (files.cleanCreditHistoryFile?.[0] && !dto.financialSoundness.cleanCreditHistoryFile) {
+          const tempId = uuidv4();
+          const documentId = await uploadFileInTransaction(
+            files.cleanCreditHistoryFile[0],
+            'FinancialSoundnessChecklist',
+            tempId,
+            'cleanCreditHistoryFile',
+          );
+          dto.financialSoundness.cleanCreditHistoryFile = documentId;
+        }
+        if (files.adequateWorkingCapitalFile?.[0] && !dto.financialSoundness.adequateWorkingCapitalFile) {
+          const tempId = uuidv4();
+          const documentId = await uploadFileInTransaction(
+            files.adequateWorkingCapitalFile[0],
+            'FinancialSoundnessChecklist',
+            tempId,
+            'adequateWorkingCapitalFile',
+          );
+          dto.financialSoundness.adequateWorkingCapitalFile = documentId;
+        }
+        if (files.validInsuranceCoverageFile?.[0] && !dto.financialSoundness.validInsuranceCoverageFile) {
+          const tempId = uuidv4();
+          const documentId = await uploadFileInTransaction(
+            files.validInsuranceCoverageFile[0],
+            'FinancialSoundnessChecklist',
+            tempId,
+            'validInsuranceCoverageFile',
+          );
+          dto.financialSoundness.validInsuranceCoverageFile = documentId;
+        }
+        if (files.noFinancialFraudFile?.[0] && !dto.financialSoundness.noFinancialFraudFile) {
+          const tempId = uuidv4();
+          const documentId = await uploadFileInTransaction(
+            files.noFinancialFraudFile[0],
+            'FinancialSoundnessChecklist',
+            tempId,
+            'noFinancialFraudFile',
+          );
+          dto.financialSoundness.noFinancialFraudFile = documentId;
+        }
+
+        // Upload Registration Fee bank slip
+        if (files.bankPaymentSlip?.[0] && !dto.registrationFee.bankPaymentSlip) {
+          const tempId = uuidv4();
+          const documentId = await uploadFileInTransaction(
+            files.bankPaymentSlip[0],
+            'RegistrationFeeChecklist',
+            tempId,
+            'bankPaymentSlip',
+          );
+          dto.registrationFee.bankPaymentSlip = documentId;
+        }
+      }
+
       if (
         [WarehouseOperatorApplicationStatus.REJECTED, WarehouseOperatorApplicationStatus.RESUBMITTED].includes(
           application.status,
@@ -4017,12 +4239,119 @@ export class WarehouseService {
       const result = dto.id
         ? await this.updateApplicantChecklist(dto, application, repos, assignDocuments)
         : await this.createNewApplicantChecklist(dto, application, repos, assignDocuments);
-  
+
+      // 🔧 FIX: Update document IDs with actual entity IDs after creation
+      if (result) {
+        // Update HR documents
+        if (result.humanResources) {
+          const hrUpdates = [];
+          if (dto.humanResources.qcPersonnelFile) {
+            hrUpdates.push(
+              repos.document.update(
+                { id: dto.humanResources.qcPersonnelFile },
+                { documentableId: result.humanResources.id }
+              )
+            );
+          }
+          if (dto.humanResources.warehouseSupervisorFile) {
+            hrUpdates.push(
+              repos.document.update(
+                { id: dto.humanResources.warehouseSupervisorFile },
+                { documentableId: result.humanResources.id }
+              )
+            );
+          }
+          if (dto.humanResources.dataEntryOperatorFile) {
+            hrUpdates.push(
+              repos.document.update(
+                { id: dto.humanResources.dataEntryOperatorFile },
+                { documentableId: result.humanResources.id }
+              )
+            );
+          }
+          if (hrUpdates.length > 0) {
+            await Promise.all(hrUpdates);
+          }
+        }
+
+        // Update Financial Soundness documents
+        if (result.financialSoundness) {
+          const fsUpdates = [];
+          if (dto.financialSoundness.auditedFinancialStatementsFile) {
+            fsUpdates.push(
+              repos.document.update(
+                { id: dto.financialSoundness.auditedFinancialStatementsFile },
+                { documentableId: result.financialSoundness.id }
+              )
+            );
+          }
+          if (dto.financialSoundness.positiveNetWorthFile) {
+            fsUpdates.push(
+              repos.document.update(
+                { id: dto.financialSoundness.positiveNetWorthFile },
+                { documentableId: result.financialSoundness.id }
+              )
+            );
+          }
+          if (dto.financialSoundness.noLoanDefaultsFile) {
+            fsUpdates.push(
+              repos.document.update(
+                { id: dto.financialSoundness.noLoanDefaultsFile },
+                { documentableId: result.financialSoundness.id }
+              )
+            );
+          }
+          if (dto.financialSoundness.cleanCreditHistoryFile) {
+            fsUpdates.push(
+              repos.document.update(
+                { id: dto.financialSoundness.cleanCreditHistoryFile },
+                { documentableId: result.financialSoundness.id }
+              )
+            );
+          }
+          if (dto.financialSoundness.adequateWorkingCapitalFile) {
+            fsUpdates.push(
+              repos.document.update(
+                { id: dto.financialSoundness.adequateWorkingCapitalFile },
+                { documentableId: result.financialSoundness.id }
+              )
+            );
+          }
+          if (dto.financialSoundness.validInsuranceCoverageFile) {
+            fsUpdates.push(
+              repos.document.update(
+                { id: dto.financialSoundness.validInsuranceCoverageFile },
+                { documentableId: result.financialSoundness.id }
+              )
+            );
+          }
+          if (dto.financialSoundness.noFinancialFraudFile) {
+            fsUpdates.push(
+              repos.document.update(
+                { id: dto.financialSoundness.noFinancialFraudFile },
+                { documentableId: result.financialSoundness.id }
+              )
+            );
+          }
+          if (fsUpdates.length > 0) {
+            await Promise.all(fsUpdates);
+          }
+        }
+
+        // Update Registration Fee document
+        if (result.registrationFee && dto.registrationFee.bankPaymentSlip) {
+          await repos.document.update(
+            { id: dto.registrationFee.bankPaymentSlip },
+            { documentableId: result.registrationFee.id }
+          );
+        }
+      }
+
       if (submit) {
         application.status = WarehouseOperatorApplicationStatus.PENDING;
         await repos.application.save(application);
       }
-  
+
       return result;
     });
   
