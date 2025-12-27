@@ -11,6 +11,7 @@ import {
 import { User } from '../../users/entities/user.entity';
 import { WarehouseOperatorApplicationRequest } from './warehouse-operator-application-request.entity';
 import { WarehouseOperatorLocation } from '../../warehouse-operator-location/entities/warehouse-operator-location.entity';
+import { UnlockRequest } from './unlock-request.entity';
 
 export enum WarehouseOperatorStatus {
   ACTIVE = 'ACTIVE',
@@ -36,6 +37,9 @@ export class WarehouseOperator {
   @ManyToOne(() => WarehouseOperatorApplicationRequest, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'applicationId' })
   application: WarehouseOperatorApplicationRequest;
+
+  @OneToMany(() => UnlockRequest, (unlockRequest) => unlockRequest.operator)
+  unlockRequests: UnlockRequest[];
 
   @Column({
     type: 'enum',

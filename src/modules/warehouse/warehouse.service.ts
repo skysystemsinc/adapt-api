@@ -42,7 +42,7 @@ import { forwardRef, Inject } from '@nestjs/common';
 import { FinancialInformationService } from './financial-information.service';
 import { WarehouseOperator } from './entities/warehouse-operator.entity';
 import { ResubmitOperatorApplicationDto } from './dto/resubmit-warehouse.dto';
-import { Assignment, AssignmentLevel, AssignmentStatus } from './operator/assignment/entities/assignment.entity';
+import { Assignment, AssignmentLevel, AssignmentStatus, AssignmentProcessType } from './operator/assignment/entities/assignment.entity';
 import { AssignmentSection } from './operator/assignment/entities/assignment-section.entity';
 import { AssignmentHistory } from './operator/assignment/entities/assignment-history.entity';
 import { AssignmentSectionHistory } from './operator/assignment/entities/assignment-section-history.entity';
@@ -72,6 +72,8 @@ import { ClamAVService } from '../clamav/clamav.service';
 import { OperatorUnlockRequestDto } from './dto/operator-unlock-request.dto';
 import { UnlockRequest, UnlockRequestStatus } from './entities/unlock-request.entity';
 import { WarehouseOperatorLocation } from '../warehouse-operator-location/entities/warehouse-operator-location.entity';
+import { AuthorizedSignatoryUnlockUpdate, UnlockUpdateStatus } from './entities/authorized-signatory-unlock.entity';
+
 import { HumanResourcesChecklistHistoryEntity } from './entities/checklist/human-resources-history.entity';
 import { FinancialSoundnessChecklistHistoryEntity } from './entities/checklist/financial-soundness-history.entity';
 import { RegistrationFeeChecklistHistoryEntity } from './entities/checklist/registration-fee-history.entity';
@@ -172,6 +174,10 @@ export class WarehouseService {
       'warehouseOperator',
       'warehouseOperator.applicationId = warehouseOperatorApplication.id'
     );
+
+    // fetch unlock requests for the application
+    // application does not have relation with unlock requests
+    // unlock requests have relation with application through operatorId
 
     query.orderBy(`warehouseOperatorApplication.${sortBy}`, sortOrder);
     query.skip(((page ?? 1) - 1) * (limit ?? 10));
@@ -559,9 +565,44 @@ export class WarehouseService {
       throw new NotFoundException('Authorized signatory not found or access denied');
     }
 
+    let isUnlockRequest: boolean = false;
+    let unlockRequest: UnlockRequest | null = null;
+
+    if (application.status == WarehouseOperatorApplicationStatus.APPROVED) {
+      const operator = await this.dataSource.getRepository(WarehouseOperator).findOne({
+        where: {
+          applicationId: application.id,
+        },
+        select: {
+          id: true,
+        }
+      });
+
+      if (!operator) {
+        throw new NotFoundException('Operator not found');
+      }
+
+      unlockRequest = await this.unlockRequestRepository.findOne({
+        where: {
+          operatorId: operator.id,
+          userId,
+          status: UnlockRequestStatus.UNLOCKED
+        }
+      });
+
+      if (!unlockRequest) {
+        throw new NotFoundException('Unlock request not found');
+      }
+      isUnlockRequest = true;
+    }
+
     // Validate application status allows updates
-    if (![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(application.status)) {
+    if (!isUnlockRequest && ![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(application.status)) {
       throw new BadRequestException('Cannot update authorized signatory after application is approved or submitted');
+    }
+
+    if (isUnlockRequest && unlockRequest) {
+      return await this.createUnlockUpdate(authorizedSignatoryId, updateAuthorizedSignatoryDto, unlockRequest.id, userId);
     }
 
     // Use transaction to ensure atomicity: history save and update must both succeed or both fail
@@ -5696,7 +5737,11 @@ export class WarehouseService {
         id: applicationId, userId
       },
       select: {
-        id: true
+        id: true,
+        status: true,
+        operator: {
+          id: true
+        }
       }
     });
     if (!application) {
@@ -5709,6 +5754,29 @@ export class WarehouseService {
     // IF THE APPLICATION IS NOT FOUND, THROW AN ERROR
     if (!application) {
       throw new NotFoundException('Application not found');
+    }
+    let isUnlockRequest: UnlockRequest | null = null;
+
+    if (!isLocationApplication && application.status == WarehouseOperatorApplicationStatus.APPROVED) {
+      const operator = await this.dataSource.getRepository(WarehouseOperator).findOne({
+        where: {
+          applicationId: applicationId,
+        },
+        select: {
+          id: true,
+        }
+      });
+      if (!operator) {
+        throw new NotFoundException('Operator not found');
+      }
+
+      isUnlockRequest = await this.unlockRequestRepository.findOne({
+        where: {
+          operatorId: operator.id,
+          userId,
+          status: UnlockRequestStatus.UNLOCKED
+        }
+      });
     }
 
     let resourceArr: string[] = ['bank-statement', 'company-information', 'tax-return', 'other', 'hr', 'authorized-signatories', 'financial-information', 'applicant-checklist'];
@@ -5725,11 +5793,17 @@ export class WarehouseService {
     // check for assignments for the user and application
     const assignments = await this.assignmentRepository.find({
       where: {
-        ...(isLocationApplication ?
-          { applicationLocationId: applicationId } :
-          { applicationId: applicationId }),
+        ...(isUnlockRequest ? {
+          unlockRequestId: isUnlockRequest.id,
+          processType: AssignmentProcessType.UNLOCK,
+          level: AssignmentLevel.ADMIN_TO_APPLICANT
+        } : {
+          ...(isLocationApplication ?
+            { applicationLocationId: applicationId } :
+            { applicationId: applicationId }),
+          level: AssignmentLevel.HOD_TO_APPLICANT
+        }),
         assignedTo: userId,
-        level: AssignmentLevel.HOD_TO_APPLICANT
       }
     });
 
@@ -6680,6 +6754,42 @@ export class WarehouseService {
       throw new BadRequestException('Bank payment slip is required');
     }
 
+    // Try to get mimeType, originalFileName, iv, and authTag from WarehouseDocument
+    // bankPaymentSlip could be either a document ID (UUID) or a file path
+    let mimeType: string | null = null;
+    let originalFileName: string | null = null;
+    let iv: string | null = null;
+    let authTag: string | null = null;
+    const bankPaymentSlipValue = operatorUnlockRequestDto.bankPaymentSlip.trim();
+
+    // Try to find document by ID first (if it's a UUID)
+    if (uuidValidate(bankPaymentSlipValue)) {
+      const document = await this.warehouseDocumentRepository.findOne({
+        where: { id: bankPaymentSlipValue },
+      });
+
+      if (document) {
+        mimeType = document.mimeType || null;
+        originalFileName = document.originalFileName || null;
+        iv = document.iv || null;
+        authTag = document.authTag || null;
+      }
+    }
+
+    // If not found by ID, try to find by filePath
+    if (!mimeType && !originalFileName) {
+      const document = await this.warehouseDocumentRepository.findOne({
+        where: { filePath: bankPaymentSlipValue },
+      });
+
+      if (document) {
+        mimeType = document.mimeType || null;
+        originalFileName = document.originalFileName || null;
+        iv = document.iv || null;
+        authTag = document.authTag || null;
+      }
+    }
+
     // Use transaction for data consistency
     const unlockRequest = await this.dataSource.transaction(async (manager) => {
       const unlockRequestRepo = manager.getRepository(UnlockRequest);
@@ -6689,7 +6799,11 @@ export class WarehouseService {
         locationId: undefined,
         userId,
         remarks: operatorUnlockRequestDto.remarks.trim(),
-        bankPaymentSlip: operatorUnlockRequestDto.bankPaymentSlip.trim(),
+        bankPaymentSlip: bankPaymentSlipValue,
+        mimeType: mimeType || undefined,
+        originalFileName: originalFileName || undefined,
+        iv: iv || undefined,
+        authTag: authTag || undefined,
         status: UnlockRequestStatus.PENDING,
       };
 
@@ -6704,5 +6818,79 @@ export class WarehouseService {
       message: 'Unlock request submitted successfully',
       data: unlockRequest,
     };
+  }
+
+  async getUnlockRequests(userId: string): Promise<{ message: string, data: UnlockRequest[] }> {
+    const unlockRequests = await this.unlockRequestRepository.find({
+      where: {
+        userId,
+        status: UnlockRequestStatus.UNLOCKED
+      },
+    });
+
+    return {
+      message: 'Unlock requests retrieved successfully',
+      data: unlockRequests,
+    };
+  }
+
+  private async createUnlockUpdate(
+    authorizedSignatoryId: string,
+    updateDto: CreateAuthorizedSignatoryDto,
+    unlockRequestId: string,
+    userId: string
+  ) {
+    const existingUpdate = await this.dataSource.getRepository(AuthorizedSignatoryUnlockUpdate).findOne({
+      where: {
+        authorizedSignatoryId,
+        unlockRequestId,
+        status: UnlockUpdateStatus.PENDING
+      }
+    });
+
+    const updateData = {
+      unlockRequestId,
+      authorizedSignatoryId,
+      name: updateDto.name,
+      authorizedSignatoryName: updateDto.authorizedSignatoryName,
+      cnic: updateDto.cnic.toString(),
+      passport: updateDto.passport ?? '',
+      issuanceDateOfCnic: updateDto.issuanceDateOfCnic,
+      expiryDateOfCnic: updateDto.expiryDateOfCnic,
+      mailingAddress: updateDto.mailingAddress,
+      city: updateDto.city,
+      country: updateDto.country,
+      postalCode: updateDto.postalCode,
+      designation: updateDto.designation,
+      mobileNumber: updateDto.mobileNumber,
+      email: updateDto.email,
+      landlineNumber: updateDto.landlineNumber ?? '',
+      status: UnlockUpdateStatus.PENDING,
+    };
+
+    if (existingUpdate) {
+      Object.assign(existingUpdate, updateData);
+      await this.dataSource.getRepository(AuthorizedSignatoryUnlockUpdate).save(existingUpdate);
+      return {
+        message: 'Unlock request update saved successfully. Waiting for admin review.',
+        updateId: existingUpdate.id,
+        status: 'PENDING',
+      };
+    } else {
+      const newUpdate = this.dataSource.getRepository(AuthorizedSignatoryUnlockUpdate).create(updateData);
+      const saved = await this.dataSource.getRepository(AuthorizedSignatoryUnlockUpdate).save(newUpdate);
+      // Track resubmission for unlock request
+      // await this.trackUnlockResubmission(
+      //   unlockRequestId,
+      //   '1-authorize-signatory-information',
+      //   authorizedSignatoryId,
+      //   saved.id
+      // );
+      return {
+        message: 'Unlock request update saved successfully. Waiting for admin review.',
+        updateId: saved.id,
+        status: 'PENDING',
+      };
+    }
   }
 }

@@ -4,7 +4,7 @@ import { UpdateAssignmentDto } from './dto/update-assignment.dto';
 import { DataSource, Repository, UpdateResult } from 'typeorm';
 import { User } from 'src/modules/users/entities/user.entity';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Assignment, AssignmentLevel, AssignmentStatus } from './entities/assignment.entity';
+import { Assignment, AssignmentLevel, AssignmentProcessType, AssignmentStatus } from './entities/assignment.entity';
 import { AssignmentSection } from './entities/assignment-section.entity';
 import { AssignmentSectionField } from './entities/assignment-section-field.entity';
 import { Permissions } from 'src/modules/rbac/constants/permissions.constants';
@@ -13,6 +13,8 @@ import { RejectApplicationDto } from './dto/reject-application.dto';
 import { WarehouseOperatorApplicationRequest, WarehouseOperatorApplicationStatus } from '../../entities/warehouse-operator-application-request.entity';
 import { ApplicationRejectionEntity } from '../../entities/application-rejection.entity';
 import { WarehouseLocation, WarehouseLocationStatus } from 'src/modules/warehouse-location/entities/warehouse-location.entity';
+import { ApproveUnlockRequestDto } from './dto/approve-unlock-request.dto';
+import { UnlockRequest, UnlockRequestStatus } from '../../entities/unlock-request.entity';
 
 @Injectable()
 export class AssignmentService {
@@ -542,5 +544,141 @@ export class AssignmentService {
       relations: ['assignedToUser', 'sections', 'sections.fields'],
     });
     return assignments;
+  }
+
+  async approveUnlockApplicationRequest(applicationId: string, createAssignmentDto: ApproveUnlockRequestDto, assignedById: string) {
+    // GET USER WHO IS ASSIGNING THE TASK
+    const user = await this.userRepository.findOne({
+      where: { id: assignedById },
+      relations: [
+        'userRoles',
+        'userRoles.role',
+        'userRoles.role.rolePermissions',
+        'userRoles.role.rolePermissions.permission',
+      ],
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    if (!user.isActive) {
+      throw new ConflictException('User is not active. Please contact the administrator.');
+    }
+
+    const isAdmin = hasPermission(user, Permissions.MANAGE_RBAC);
+
+    // ONLY ADMIN CAN APPROVE UNLOCK APPLICATION REQUEST
+    if (!isAdmin) {
+      throw new ForbiddenException('You are not authorized to perform this action.');
+    }
+
+    const unlockRequest = await this.dataSource.getRepository(UnlockRequest).findOne({
+      where: { id: applicationId },
+    });
+
+    if (!unlockRequest) {
+      throw new NotFoundException('Unlock request not found');
+    }
+
+    if (unlockRequest.status !== UnlockRequestStatus.PENDING) {
+      throw new ConflictException('Unlock request is not pending');
+    }
+
+    // GET USER WHO IS BEING ASSIGNED THE TASK
+    const assignedTo = await this.userRepository.findOne({
+      where: { id: unlockRequest.userId },
+    });
+
+    if (!assignedTo) {
+      throw new NotFoundException('User not found');
+    }
+    if (!assignedTo.isActive) {
+      throw new ConflictException('User is not active. Please contact the administrator.');
+    }
+
+    const assignmentLevel = AssignmentLevel.ADMIN_TO_APPLICANT;
+
+    try {
+      // TRANSACTION START
+      const assignment = await this.dataSource.transaction(async (transactionalEntityManager) => {
+        // Create assignment entity
+        const assignmentEntity = transactionalEntityManager.create(Assignment, {
+          unlockRequestId: unlockRequest.id,
+          assignedBy: assignedById,
+          assignedTo: unlockRequest.userId,
+          level: assignmentLevel,
+          processType: AssignmentProcessType.UNLOCK,
+        });
+
+        // Save assignment first to get the ID
+        const savedAssignment = await transactionalEntityManager.save(Assignment, assignmentEntity);
+
+        // Create and save sections with their fields
+        for (const sectionDto of createAssignmentDto.sections) {
+          const sectionEntity = transactionalEntityManager.create(AssignmentSection, {
+            assignmentId: savedAssignment.id,
+            sectionType: sectionDto.sectionType,
+            resourceId: sectionDto.resourceId,
+            resourceType: sectionDto.resourceType,
+          });
+
+          const savedSection = await transactionalEntityManager.save(AssignmentSection, sectionEntity);
+
+          // Create and save fields for this section
+          for (const fieldDto of sectionDto.fields) {
+            const fieldEntity = transactionalEntityManager.create(AssignmentSectionField, {
+              assignmentSectionId: savedSection.id,
+              fieldName: fieldDto.fieldName,
+              remarks: fieldDto.remarks,
+            });
+
+            await transactionalEntityManager.save(AssignmentSectionField, fieldEntity);
+          }
+        }
+
+        const updateResult = await transactionalEntityManager.getRepository(UnlockRequest).update(unlockRequest.id, {
+          status: UnlockRequestStatus.UNLOCKED,
+        });
+
+        if (updateResult.affected === 0) {
+          throw new ConflictException('Failed to update unlock request status');
+        }
+
+        return savedAssignment;
+      });
+
+      return {
+        message: 'Unlock request approved successfully',
+        assignment: assignment.id,
+      };
+    } catch (error) {
+      console.error('Error approving unlock request:', error);
+      throw new ConflictException('Failed to approve unlock request', error);
+    }
+  }
+
+  /*
+  * Get latest assignment for a specific user type
+  * Returns the latest assignment for a specific user type
+  * @param applicationId - The ID of the application
+  * @param userId - The ID of the user
+  * @returns The latest assignment for a specific user type
+  */
+  async getLatestAssignmentByUserType(applicationId: string, userId?: string) {
+    // In TypeORM, passing an array to where creates OR conditions
+    // Each element in the array is an AND condition
+    const whereClause = userId
+      ? [
+          { applicationId: applicationId, assignedBy: userId },
+          { applicationId: applicationId, assignedTo: userId }
+        ]
+      : { applicationId: applicationId };
+
+    const assignment = await this.dataSource.getRepository(Assignment).findOne({
+      where: whereClause,
+      relations: ['assignedToUser', 'sections', 'sections.fields'],
+      order: { createdAt: 'DESC' },
+    });
+    
+    return assignment;
   }
 }

@@ -8,12 +8,19 @@ import {
     JoinColumn,
     OneToMany,
     OneToOne,
+    Index,
 } from 'typeorm';
 import { User } from '../../../../users/entities/user.entity';
 import { WarehouseOperatorApplicationRequest } from '../../../../warehouse/entities/warehouse-operator-application-request.entity';
 import { AssignmentSection } from './assignment-section.entity';
 import { WarehouseLocation } from '../../../../warehouse-location/entities/warehouse-location.entity';
 import { InspectionReport } from '../../../../inspection-reports/entities/inspection-report.entity';
+import { UnlockRequest } from '../../../../warehouse/entities/unlock-request.entity';
+
+export enum AssignmentProcessType {
+    ACCREDITATION = 'ACCREDITATION',
+    UNLOCK = 'UNLOCK',
+}
 
 export enum AssignmentStatus {
     ASSIGNED = 'ASSIGNED',
@@ -28,6 +35,7 @@ export enum AssignmentLevel {
     HOD_TO_EXPERT = 'HOD_TO_EXPERT',
     EXPERT_TO_HOD = 'EXPERT_TO_HOD',
     HOD_TO_APPLICANT = 'HOD_TO_APPLICANT',
+    ADMIN_TO_APPLICANT = 'ADMIN_TO_APPLICANT',
 }
 
 @Entity('assignment')
@@ -70,6 +78,14 @@ export class Assignment {
     @Column({ nullable: true })
     assignedTo: string;
 
+    @Column({ nullable: true })
+    unlockRequestId?: string;
+
+    @ManyToOne(() => UnlockRequest, { onDelete: 'SET NULL' })
+    @JoinColumn({ name: 'unlockRequestId' })
+    unlockRequest: UnlockRequest;
+
+
     @OneToMany(() => AssignmentSection, (s) => s.assignment, { cascade: true })
     sections: AssignmentSection[];
 
@@ -89,6 +105,14 @@ export class Assignment {
         default: AssignmentStatus.ASSIGNED,
     })
     status: AssignmentStatus;
+
+    @Index('processType_index')
+    @Column({
+        type: 'enum',
+        enum: AssignmentProcessType,
+        default: AssignmentProcessType.ACCREDITATION,
+    })
+    processType: AssignmentProcessType;
 
     @CreateDateColumn()
     createdAt: Date;
