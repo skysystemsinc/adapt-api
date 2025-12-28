@@ -42,7 +42,7 @@ import { forwardRef, Inject } from '@nestjs/common';
 import { FinancialInformationService } from './financial-information.service';
 import { WarehouseOperator } from './entities/warehouse-operator.entity';
 import { ResubmitOperatorApplicationDto } from './dto/resubmit-warehouse.dto';
-import { Assignment, AssignmentLevel, AssignmentStatus, AssignmentProcessType } from './operator/assignment/entities/assignment.entity';
+import { Assignment, AssignmentLevel, AssignmentProcessType } from './operator/assignment/entities/assignment.entity';
 import { AssignmentSection } from './operator/assignment/entities/assignment-section.entity';
 import { AssignmentHistory } from './operator/assignment/entities/assignment-history.entity';
 import { AssignmentSectionHistory } from './operator/assignment/entities/assignment-section-history.entity';
@@ -78,6 +78,7 @@ import { HumanResourcesChecklistHistoryEntity } from './entities/checklist/human
 import { FinancialSoundnessChecklistHistoryEntity } from './entities/checklist/financial-soundness-history.entity';
 import { RegistrationFeeChecklistHistoryEntity } from './entities/checklist/registration-fee-history.entity';
 import { DeclarationChecklistHistoryEntity } from './entities/checklist/declaration-history.entity';
+import { AssignmentStatus } from 'src/utilites/enum';
 
 export class WarehouseService {
   private readonly logger = new Logger(WarehouseService.name);
@@ -6489,45 +6490,7 @@ export class WarehouseService {
       .filter((name, index, self) => self.indexOf(name) === index); // unique
 
     for (const assignment of assignmentsToMove) {
-      // Move all sections for this assignment to history
-      if (assignment.sections && assignment.sections.length > 0) {
-        for (const section of assignment.sections) {
-          // Move assignment section fields to history
-          if (section.fields && section.fields.length > 0) {
-            for (const field of section.fields) {
-              const fieldHistory = assignmentSectionFieldHistoryRepo.create({
-                assignmentSectionFieldId: field.id,
-                assignmentSectionId: section.id,
-                fieldName: field.fieldName,
-                remarks: field.remarks,
-                status: field.status,
-                isActive: false,
-              });
-              // Preserve original createdAt
-              fieldHistory.createdAt = field.createdAt;
-              await assignmentSectionFieldHistoryRepo.save(fieldHistory);
-            }
-          }
-
-          // Move assignment section to history
-          const sectionHistory = assignmentSectionHistoryRepo.create({
-            assignmentSectionId: section.id,
-            assignmentId: assignment.id,
-            sectionType: section.sectionType,
-            resourceId: section.resourceId,
-            resourceType: section.resourceType,
-            isActive: false,
-          });
-          // Preserve original createdAt
-          sectionHistory.createdAt = section.createdAt;
-          await assignmentSectionHistoryRepo.save(sectionHistory);
-        }
-
-        // Delete all sections (cascade will delete fields)
-        await assignmentSectionRepo.remove(assignment.sections);
-      }
-
-      // Move assignment to history
+      // Move assignment to history first (needed for section history relationship)
       const assignmentHistory = assignmentHistoryRepo.create({
         assignmentId: assignment.id,
         parentAssignmentId: assignment.parentAssignment?.id || null,
@@ -6543,6 +6506,45 @@ export class WarehouseService {
       // Preserve original createdAt
       assignmentHistory.createdAt = assignment.createdAt;
       await assignmentHistoryRepo.save(assignmentHistory);
+
+      // Move all sections for this assignment to history
+      if (assignment.sections && assignment.sections.length > 0) {
+        for (const section of assignment.sections) {
+          // Move assignment section to history (needed for field history relationship)
+          const sectionHistory = assignmentSectionHistoryRepo.create({
+            assignmentSectionId: section.id,
+            assignmentHistoryId: assignmentHistory.id,
+            sectionType: section.sectionType,
+            resourceId: section.resourceId,
+            resourceType: section.resourceType,
+            isActive: false,
+          });
+          // Preserve original createdAt
+          sectionHistory.createdAt = section.createdAt;
+          await assignmentSectionHistoryRepo.save(sectionHistory);
+
+          // Move assignment section fields to history
+          if (section.fields && section.fields.length > 0) {
+            for (const field of section.fields) {
+              const fieldHistory = assignmentSectionFieldHistoryRepo.create({
+                assignmentSectionFieldId: field.id,
+                assignmentSectionId: section.id, // Keep for backward compatibility
+                assignmentSectionHistoryId: sectionHistory.id, // New relationship
+                fieldName: field.fieldName,
+                remarks: field.remarks,
+                status: field.status,
+                isActive: false,
+              });
+              // Preserve original createdAt
+              fieldHistory.createdAt = field.createdAt;
+              await assignmentSectionFieldHistoryRepo.save(fieldHistory);
+            }
+          }
+        }
+
+        // Delete all sections (cascade will delete fields)
+        await assignmentSectionRepo.remove(assignment.sections);
+      }
 
       // Delete the assignment
       await assignmentRepo.remove(assignment);

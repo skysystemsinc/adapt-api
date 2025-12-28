@@ -15,7 +15,7 @@ import * as fs from 'fs/promises';
 import * as fsSync from 'fs';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import { Assignment, AssignmentLevel, AssignmentStatus } from '../warehouse/operator/assignment/entities/assignment.entity';
+import { Assignment, AssignmentLevel } from '../warehouse/operator/assignment/entities/assignment.entity';
 import { ApproveOrRejectInspectionReportDto, ApproveOrRejectInspectionReportStatus } from './dto/approve-reject-inspection';
 import { InspectionReportHistory } from './entities/inspection-report-history.entity';
 import { AssessmentSubmissionHistory } from '../expert-assessment/assessment-submission/entities/assessment-submission-history.entity';
@@ -24,6 +24,7 @@ import { encryptBuffer, decryptBuffer } from 'src/common/utils/helper.utils';
 import { WarehouseOperatorApplicationRequest } from '../warehouse/entities/warehouse-operator-application-request.entity';
 import { WarehouseLocation } from '../warehouse-location/entities/warehouse-location.entity';
 import { ClamAVService } from '../clamav/clamav.service';
+import { AssignmentStatus } from '../../utilites/enum';
 
 @Injectable()
 export class InspectionReportsService {
