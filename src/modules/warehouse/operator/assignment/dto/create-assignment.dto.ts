@@ -12,6 +12,14 @@ export class CreateAssignmentDto {
     @IsUUID()
     assignedTo: string;
 
+    @ApiPropertyOptional({
+        description: 'The ID of the previous assignment',
+        example: '123e4567-e89b-12d3-a456-426614174000',
+    })
+    @IsOptional()
+    @IsUUID()
+    previousAssignmentId?: string;
+
     @ApiProperty({
         description: 'The level of the assignment',
         example: AssignmentLevel.OFFICER_TO_HOD,

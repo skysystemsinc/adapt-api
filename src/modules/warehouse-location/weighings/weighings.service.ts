@@ -14,9 +14,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { encryptBuffer, decryptBuffer } from 'src/common/utils/helper.utils';
 import { WarehouseLocationService } from '../warehouse-location.service';
 import { AssignmentSection } from '../../warehouse/operator/assignment/entities/assignment-section.entity';
-import { Assignment, AssignmentLevel, AssignmentStatus } from '../../warehouse/operator/assignment/entities/assignment.entity';
+import { Assignment, AssignmentLevel } from '../../warehouse/operator/assignment/entities/assignment.entity';
 import { In } from 'typeorm';
 import { WeighingHistory } from './entities/weighing-history.entity';
+import { AssignmentStatus } from '../../../utilites/enum';
 
 @Injectable()
 export class WeighingsService {

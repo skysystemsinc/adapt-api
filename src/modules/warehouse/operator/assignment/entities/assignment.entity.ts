@@ -16,18 +16,12 @@ import { AssignmentSection } from './assignment-section.entity';
 import { WarehouseLocation } from '../../../../warehouse-location/entities/warehouse-location.entity';
 import { InspectionReport } from '../../../../inspection-reports/entities/inspection-report.entity';
 import { UnlockRequest } from '../../../../warehouse/entities/unlock-request.entity';
+import { AssignmentStatus } from '../../../../../utilites/enum';
+export { AssignmentStatus };
 
 export enum AssignmentProcessType {
     ACCREDITATION = 'ACCREDITATION',
     UNLOCK = 'UNLOCK',
-}
-
-export enum AssignmentStatus {
-    ASSIGNED = 'ASSIGNED',
-    IN_PROGRESS = 'IN_PROGRESS',
-    SUBMITTED = 'SUBMITTED',
-    COMPLETED = 'COMPLETED',
-    REJECTED = 'REJECTED',
 }
 
 export enum AssignmentLevel {
@@ -102,6 +96,7 @@ export class Assignment {
     @Column({
         type: 'enum',
         enum: AssignmentStatus,
+        enumName: 'assignment_status_enum',
         default: AssignmentStatus.ASSIGNED,
     })
     status: AssignmentStatus;
@@ -110,6 +105,7 @@ export class Assignment {
     @Column({
         type: 'enum',
         enum: AssignmentProcessType,
+        enumName: 'assignment_processtype_enum',
         default: AssignmentProcessType.ACCREDITATION,
     })
     processType: AssignmentProcessType;

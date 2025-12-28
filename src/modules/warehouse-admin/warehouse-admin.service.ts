@@ -843,14 +843,14 @@ export class WarehouseAdminService {
 
     // If applicationId is provided, exclude users already assigned to this application
     if (applicationId && !isKycVerification) {
-      // usersQuery.andWhere(
-      //   `user.id NOT IN (
-      //     SELECT DISTINCT a."assignedTo" 
-      //     FROM assignment a 
-      //     WHERE a."applicationId" = :applicationId
-      //   )`,
-      //   { applicationId }
-      // );
+      usersQuery.andWhere(
+        `user.id NOT IN (
+          SELECT DISTINCT a."assignedTo" 
+          FROM assignment a 
+          WHERE a."applicationId" = :applicationId
+        )`,
+        { applicationId }
+      );
     }
 
     usersQuery.groupBy('role.id');
