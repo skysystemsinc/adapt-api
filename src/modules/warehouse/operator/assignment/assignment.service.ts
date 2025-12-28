@@ -136,7 +136,7 @@ export class AssignmentService {
 
         let totalAssignmentCount = assignmentHodToExpertCount + assignmentHodToApplicantCount;
 
-        if (totalAssignmentCount >= 1 && assignmentHodToApplicantCount > 0) {
+        if (totalAssignmentCount >= 6 && assignmentHodToApplicantCount > 0) {
           const updateResult = await transactionalEntityManager.getRepository(WarehouseOperatorApplicationRequest).update(applicationId, {
             status: WarehouseOperatorApplicationStatus.REJECTED,
           });
@@ -296,7 +296,7 @@ export class AssignmentService {
         let totalAssignmentCount = assignmentHodToExpertCount + assignmentHodToApplicantCount;
 
         let updateResult: UpdateResult | null = null;
-        if (totalAssignmentCount >= 1 && assignmentHodToApplicantCount > 0) {
+        if (totalAssignmentCount >= 6 && assignmentHodToApplicantCount > 0) {
           if (isLocationApplication) {
             updateResult = await transactionalEntityManager.getRepository(WarehouseLocation).update(applicationId, {
               status: WarehouseLocationStatus.REJECTED,
