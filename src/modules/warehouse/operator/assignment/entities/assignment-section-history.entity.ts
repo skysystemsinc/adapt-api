@@ -6,28 +6,33 @@ import {
     UpdateDateColumn,
     ManyToOne,
     JoinColumn,
+    OneToMany,
 } from 'typeorm';
-import { Assignment } from './assignment.entity';
 import { AssignmentSection } from './assignment-section.entity';
+import { AssignmentHistory } from './assignment-history.entity';
+import { AssignmentSectionFieldHistory } from './assignment-section-field-history.entity';
 
 @Entity('assignment_sections_history')
 export class AssignmentSectionHistory {
     @PrimaryGeneratedColumn('uuid')
     id: string;
 
-    @Column({ type: 'uuid', nullable: false })
-    assignmentSectionId: string;
+    @ManyToOne(() => AssignmentHistory, (a) => a.sections, { nullable: true, onDelete: 'SET NULL' })
+    @JoinColumn({ name: 'assignmentHistoryId' })
+    assignmentHistory: AssignmentHistory | null;
 
-    @ManyToOne(() => AssignmentSection, { onDelete: 'CASCADE' })
+    @Column({ nullable: true })
+    assignmentHistoryId: string | null;
+
+    @Column({ type: 'uuid', nullable: true })
+    assignmentSectionId?: string | null;
+
+    @ManyToOne(() => AssignmentSection, { nullable: true, onDelete: 'SET NULL' })
     @JoinColumn({ name: 'assignmentSectionId' })
-    assignmentSection: AssignmentSection;
+    assignmentSection: AssignmentSection | null;
 
-    @Column()
-    assignmentId: string;
-
-    @ManyToOne(() => Assignment, { onDelete: 'CASCADE' })
-    @JoinColumn({ name: 'assignmentId' })
-    assignment: Assignment;
+    @OneToMany(() => AssignmentSectionFieldHistory, (f) => f.assignmentSectionHistory, { nullable: true, cascade: true })
+    fieldsHistory: AssignmentSectionFieldHistory[];
 
     @Column({ type: 'varchar' })
     sectionType: string;

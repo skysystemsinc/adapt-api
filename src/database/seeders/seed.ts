@@ -10,6 +10,7 @@ import { OrganisationSeeder } from './organisation.seeder';
 import { ExpertAssessmentSeeder } from './expert-assessment.seeder';
 import { AdminSeeder } from './admin.seeder';
 import { DynamicCalculatorSeeder } from './dynamic-calculator.seeder';
+import { FormsSeeder } from './forms.seeder';
 // Load environment variables
 config();
 
@@ -62,6 +63,9 @@ async function runSeeders() {
 
     const dynamicCalculatorSeeder = new DynamicCalculatorSeeder();
     await dynamicCalculatorSeeder.run(AppDataSource);
+
+    const formsSeeder = new FormsSeeder();
+    await formsSeeder.run(AppDataSource);
 
     console.log('\n✅ Seeding completed successfully!');
     process.exit(0);

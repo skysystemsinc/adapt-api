@@ -1,10 +1,14 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, forwardRef, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { CreateContactDto } from './dto/create-contact.dto';
 import { UpdateContactDto } from './dto/update-contact.dto';
 import { Contact } from './entities/contact.entity';
 import { WarehouseLocation, WarehouseLocationStatus } from '../entities/warehouse-location.entity';
+import { ContactHistory } from './entities/contact-history.entity';
+import { Assignment, AssignmentLevel, AssignmentStatus } from '../../warehouse/operator/assignment/entities/assignment.entity';
+import { AssignmentSection } from '../../warehouse/operator/assignment/entities/assignment-section.entity';
+import { WarehouseLocationService } from '../warehouse-location.service';
 
 @Injectable()
 export class ContactsService {
@@ -13,7 +17,17 @@ export class ContactsService {
     private readonly contactRepository: Repository<Contact>,
     @InjectRepository(WarehouseLocation)
     private readonly warehouseLocationRepository: Repository<WarehouseLocation>,
-  ) {}
+    private readonly dataSource: DataSource,
+
+    @InjectRepository(Assignment)
+    private readonly assignmentRepository: Repository<Assignment>,
+
+    @InjectRepository(AssignmentSection)
+    private readonly assignmentSectionRepository: Repository<AssignmentSection>,
+
+    @Inject(forwardRef(() => WarehouseLocationService))
+    private readonly warehouseLocationService: WarehouseLocationService,
+  ) { }
 
   /**
    * Get contact by warehouse location ID
@@ -104,24 +118,92 @@ export class ContactsService {
       throw new NotFoundException('Warehouse location application not found');
     }
 
-    if (warehouseLocation.status !== WarehouseLocationStatus.DRAFT) {
+    if (![WarehouseLocationStatus.DRAFT, WarehouseLocationStatus.REJECTED].includes(warehouseLocation.status)) {
       throw new BadRequestException('Contact can only be updated while application is in draft status');
     }
 
-    const contact = await this.contactRepository.findOne({
+    const existingContact = await this.contactRepository.findOne({
       where: { warehouseLocationId },
     });
 
-    if (!contact) {
+    if (!existingContact) {
       throw new NotFoundException('Contact not found for this application');
     }
 
-    // Map DTO field to entity field
-    contact.name = updateContactDto.facilityContactPerson;
-    contact.email = updateContactDto.email;
-    contact.phoneNumber = updateContactDto.phoneNumber;
-    contact.mobileNumber = updateContactDto.mobileNumber;
-    return this.contactRepository.save(contact);
+    const result = await this.dataSource.transaction(async (manager) => {
+      const contactRepo = manager.getRepository(Contact);
+      const contactHistoryRepo = manager.getRepository(ContactHistory);
+
+      if (![WarehouseLocationStatus.DRAFT, WarehouseLocationStatus.REJECTED].includes(warehouseLocation.status)) {
+        throw new BadRequestException('Contact can only be updated while application is in draft status');
+      };
+
+      if (warehouseLocation.status === WarehouseLocationStatus.REJECTED) {
+        // Save history of contact if application is rejected (before overwriting)
+        const historyRecord = contactHistoryRepo.create({
+          contactId: existingContact.id,
+          warehouseLocationId,
+          name: existingContact.name,
+          email: existingContact.email,
+          phoneNumber: existingContact.phoneNumber,
+          mobileNumber: existingContact.mobileNumber,
+          isActive: false,
+        });
+        historyRecord.createdAt = existingContact.createdAt;
+        await contactHistoryRepo.save(historyRecord);
+      }
+
+      // Overwrite existing contact with new information
+      existingContact.name = updateContactDto.facilityContactPerson;
+      existingContact.email = updateContactDto.email;
+      existingContact.phoneNumber = updateContactDto.phoneNumber;
+      existingContact.mobileNumber = updateContactDto.mobileNumber;
+
+      return contactRepo.save(existingContact);
+    });
+
+    const updatedApplication = await this.warehouseLocationRepository.findOne({
+      where: { id: warehouseLocationId },
+    });
+
+    if (updatedApplication?.status === WarehouseLocationStatus.REJECTED) {
+      const assignments = await this.assignmentRepository.find({
+        where: {
+          applicationLocationId: warehouseLocationId,
+          level: AssignmentLevel.HOD_TO_APPLICANT,
+          status: AssignmentStatus.REJECTED,
+        },
+      });
+
+      let assignmentSectionId: string | null = null;
+      if (assignments.length > 0) {
+        const assignmentSections = await this.assignmentSectionRepository.find({
+          where: {
+            assignmentId: In(assignments.map((a) => a.id)),
+            sectionType: '2-contact-information',
+            resourceId: existingContact.id,
+          },
+        });
+
+        if (assignmentSections.length > 0) {
+          assignmentSectionId = assignmentSections[0].id;
+        }
+      }
+
+      await this.warehouseLocationService.trackWarehouseLocationResubmissionAndUpdateStatus(
+        warehouseLocationId,
+        '2-contact',
+        existingContact.id,
+        assignmentSectionId ?? undefined,
+      );
+    }
+
+    return {
+      message: 'Contact updated successfully',
+      contactId: existingContact.id,
+      applicationId: warehouseLocationId,
+    };
+
   }
 
   findAll() {

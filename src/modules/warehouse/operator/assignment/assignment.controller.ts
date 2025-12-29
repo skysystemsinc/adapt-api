@@ -6,6 +6,7 @@ import { User } from 'src/modules/users/entities/user.entity';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
 import { RejectApplicationDto } from './dto/reject-application.dto';
+import { ApproveUnlockRequestDto } from './dto/approve-unlock-request.dto';
 
 @Controller('warehouse/assignment')
 @ApiTags('Assignment')
@@ -108,5 +109,30 @@ export class AssignmentController {
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.assignmentService.remove(+id);
+  }
+
+  @ApiOperation({ summary: 'Assign an assignment to a user for warehouse operator application' })
+  @ApiBody({ type: CreateAssignmentDto })
+  @Post('/request-unlock-application/:applicationId')
+  async approveUnlockApplicationRequest(@Body() approveUnlockRequestDto: ApproveUnlockRequestDto,
+    @Req() req: any,
+    @Param('applicationId') applicationId: string) {
+    // JWT payload typically has 'sub' field containing the user ID
+    const userId = req.user?.sub || req.user?.id;
+    if (!userId) {
+      throw new Error('User ID not found in request. Authentication may have failed.');
+    }
+    return await this.assignmentService.approveUnlockApplicationRequest(applicationId, approveUnlockRequestDto, userId as string);
+  }
+
+  @ApiOperation({ summary: 'Get latest assignment for a warehouse operator application' })
+  @Get('/application/:applicationId/assignments/latest')
+  async getLatestAssignmentByUserType(
+    @Req() req: any,
+    @Param('applicationId') applicationId: string,
+    @Query('all') all?: string,
+  ) {
+    const userId = req.user?.sub || req.user?.id;
+    return await this.assignmentService.getLatestAssignmentByUserType(applicationId, userId as string);
   }
 }

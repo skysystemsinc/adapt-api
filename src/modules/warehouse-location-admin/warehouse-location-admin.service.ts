@@ -85,6 +85,7 @@ export class WarehouseLocationAdminService {
         'location.id',
         'location.applicationId',
         'location.status',
+        'location.metadata',
         'location.createdAt',
         'location.updatedAt',
         'user.id',
@@ -147,6 +148,7 @@ export class WarehouseLocationAdminService {
         assignmentLevel: rawData?.assignmentLevel || null,
         assignmentStatus: rawData?.assignmentStatus || null,
         assignmentAssessmentId: rawData?.assignmentAssessmentId || null,
+        isResubmitted: entity.metadata?.isResubmitted || false,
       };
     });
 
@@ -183,6 +185,7 @@ export class WarehouseLocationAdminService {
         status: true,
         createdAt: true,
         updatedAt: true,
+        metadata: true,
         user: this.userSelect,
         facility: {
           id: true,
@@ -543,8 +546,8 @@ export class WarehouseLocationAdminService {
       } else {
         // If no assignment found, return empty data for HOD/Expert
         // Note: WarehouseLocation doesn't have metadata field like WarehouseOperatorApplicationRequest
-        const resubmittedSections: string[] = [];
-        const resubmittedResourcesBySection: Record<string, any> = {};
+        const resubmittedSections = warehouseLocation?.metadata?.resubmittedSections || [];
+        const resubmittedResourcesBySection = warehouseLocation?.metadata?.resubmittedResourcesBySection || {};
 
         return {
           ...warehouseLocation,
@@ -575,9 +578,14 @@ export class WarehouseLocationAdminService {
       (warehouseLocation.technicalQualitative ? 1 : 0) +
       (warehouseLocation.humanResources?.length || 0);
 
+    const resubmittedSections = warehouseLocation?.metadata?.resubmittedSections || [];
+    const resubmittedResourcesBySection = warehouseLocation?.metadata?.resubmittedResourcesBySection || {};
+  
     return {
       ...warehouseLocation,
       totalCount,
+      resubmittedSections,
+      resubmittedResourcesBySection,
     };
   }
 

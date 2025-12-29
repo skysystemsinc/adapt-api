@@ -386,7 +386,24 @@ export class FormRequestsService {
 
         // Deactivate old form
         originalForm.isActive = false;
-        originalForm.slug = `registration-form-${currentVersion}`;
+        
+        // Generate unique slug for the old form
+        // Check if the base slug already exists
+        const baseSlug = `registration-form-${currentVersion}`;
+        let newSlug = baseSlug;
+        
+        // Check if slug already exists (excluding current form)
+        const existingForm = await manager.findOne(Form, {
+          where: { slug: baseSlug },
+        });
+        
+        if (existingForm && existingForm.id !== originalForm.id) {
+          // Slug already exists, add 1 to to the version number
+          const newVersion = `v${versionNumber + 1}`;
+          newSlug = `${baseSlug}-${newVersion}`;
+        }
+        
+        originalForm.slug = newSlug;
         await manager.save(originalForm);
 
         // Create new form version

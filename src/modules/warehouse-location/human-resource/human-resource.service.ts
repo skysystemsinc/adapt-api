@@ -1,6 +1,6 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, In } from 'typeorm';
 import { CreateHumanResourceDto } from './dto/create-human-resource.dto';
 import { CreateDeclarationDto } from './declaration/dto/create-declaration.dto';
 import { HumanResource } from './entities/human-resource.entity';
@@ -17,6 +17,12 @@ import * as fsSync from 'fs';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { encryptBuffer, decryptBuffer } from 'src/common/utils/helper.utils';
+import { WarehouseLocationService } from '../warehouse-location.service';
+import { AssignmentSection } from '../../warehouse/operator/assignment/entities/assignment-section.entity';
+import { Assignment, AssignmentStatus } from '../../warehouse/operator/assignment/entities/assignment.entity';
+import { HumanResourceGeneralInfoHistory } from './entities/HumanResourceGeneralInfoHistory.entity';
+import { AssignmentLevel } from '../../warehouse/operator/assignment/entities/assignment.entity';
+import { DeclarationHistory } from './declaration/entities/declaration-history.entity';
 
 @Injectable()
 export class HumanResourceService {
@@ -42,6 +48,21 @@ export class HumanResourceService {
     private readonly professionalExperienceRepository: Repository<ProfessionalExperience>,
     private readonly dataSource: DataSource,
     private readonly clamAVService: ClamAVService,
+
+    @InjectRepository(HumanResourceGeneralInfoHistory)
+    private readonly humanResourceGeneralInfoHistoryRepository: Repository<HumanResourceGeneralInfoHistory>,
+    
+    @InjectRepository(Assignment)
+    private readonly assignmentRepository: Repository<Assignment>,
+    
+    @InjectRepository(AssignmentSection)
+    private readonly assignmentSectionRepository: Repository<AssignmentSection>,
+    
+    @Inject(forwardRef(() => WarehouseLocationService))
+    private readonly warehouseLocationService: WarehouseLocationService,
+
+    @InjectRepository(DeclarationHistory)
+    private readonly declarationHistoryRepository: Repository<DeclarationHistory>,
   ) {
     // Ensure upload directory exists
     this.ensureUploadDirectory();
@@ -236,97 +257,152 @@ export class HumanResourceService {
     const warehouseLocation = await this.warehouseLocationRepository.findOne({
       where: { id: warehouseLocationId, userId },
     });
-
+  
     if (!warehouseLocation) {
       throw new NotFoundException('Warehouse location application not found');
     }
-
-    if (warehouseLocation.status !== WarehouseLocationStatus.DRAFT) {
-      throw new BadRequestException('HR information can only be added while application is in draft status');
+  
+    // Allow DRAFT, REJECTED, RESUBMITTED statuses
+    if (![WarehouseLocationStatus.DRAFT, WarehouseLocationStatus.REJECTED, WarehouseLocationStatus.RESUBMITTED].includes(warehouseLocation.status)) {
+      throw new BadRequestException('HR information can only be added/updated while application is in draft, rejected, or resubmitted status');
     }
-
-    // Remove file field from DTO before saving
+  
     const { photograph, ...personalDetailsData } = CreateHumanResourceDto;
-
+  
     if (hrId) {
-      // Update existing HR entry
       const existingHR = await this.humanResourceRepository.findOne({
         where: { id: hrId, warehouseLocationId },
         relations: ['photograph'],
       });
-
+  
       if (!existingHR) {
         throw new NotFoundException('HR entry not found');
       }
-
-      Object.assign(existingHR, personalDetailsData);
-      const savedHR = await this.humanResourceRepository.save(existingHR);
-
-      // Handle photograph file upload/update
+  
+      const result = await this.dataSource.transaction(async (manager) => {
+        const hrRepo = manager.getRepository(HumanResource);
+        const hrHistoryRepo = manager.getRepository(HumanResourceGeneralInfoHistory);
+  
+        if (warehouseLocation.status === WarehouseLocationStatus.REJECTED) {
+          const historyRecord = hrHistoryRepo.create({
+            humanResourceId: existingHR.id,
+            fullName: existingHR.fullName,
+            fathersHusbandsName: existingHR.fathersHusbandsName,
+            cnicPassport: existingHR.cnicPassport,
+            photograph: existingHR.photograph ?? null,
+            nationality: existingHR.nationality,
+            dateOfBirth: existingHR.dateOfBirth ?? null,
+            residentialAddress: existingHR.residentialAddress,
+            businessAddress: existingHR.businessAddress,
+            telephoneNumber: existingHR.telephoneNumber,
+            mobileNumber: existingHR.mobileNumber,
+            email: existingHR.email,
+            hrNationalTaxNumber: existingHR.hrNationalTaxNumber,
+            isActive: false,
+          } as Partial<HumanResourceGeneralInfoHistory>);
+          historyRecord.createdAt = existingHR.createdAt;
+          await hrHistoryRepo.save(historyRecord);
+        }
+  
+        Object.assign(existingHR, personalDetailsData);
+        return hrRepo.save(existingHR);
+      });
+  
+      // Handle photograph file upload/update (outside transaction)
       if (photographFile) {
-        // New file provided - delete old file and upload new one
         if (existingHR.photograph) {
           await this.deleteWarehouseDocument(existingHR.photograph.id);
         }
-
+  
         const documentResult = await this.uploadWarehouseDocument(
           photographFile,
           userId,
           'HumanResource',
-          savedHR.id,
+          result.id,
           'photograph'
         );
-
+  
         const photographDocument = await this.warehouseDocumentRepository.findOne({
           where: { id: documentResult.id }
         });
-
+  
         if (photographDocument) {
-          savedHR.photograph = photographDocument;
-          await this.humanResourceRepository.save(savedHR);
+          result.photograph = photographDocument;
+          await this.humanResourceRepository.save(result);
         }
       } else {
-        // No new file provided - handle string (document ID) in DTO or keep existing
         if (photograph && typeof photograph === 'string') {
-          // User sent document ID as string - validate it exists and belongs to this HR
           const existingDocument = await this.warehouseDocumentRepository.findOne({
             where: { 
               id: photograph,
               documentableType: 'HumanResource',
-              documentableId: savedHR.id,
+              documentableId: result.id,
               documentType: 'photograph'
             }
           });
-
+  
           if (!existingDocument) {
             throw new BadRequestException('Invalid document ID provided or document does not belong to this HR entry');
           }
-
-          // Keep the existing document
-          savedHR.photograph = existingDocument;
-          await this.humanResourceRepository.save(savedHR);
+  
+          result.photograph = existingDocument;
+          await this.humanResourceRepository.save(result);
         } else {
-          // Keep existing photograph if no new file and no document ID in DTO
-          savedHR.photograph = existingHR.photograph;
-          await this.humanResourceRepository.save(savedHR);
+          result.photograph = existingHR.photograph;
+          await this.humanResourceRepository.save(result);
         }
       }
-
-      return savedHR;
+  
+      // Track resubmission if application was REJECTED
+      const updatedApplication = await this.warehouseLocationRepository.findOne({
+        where: { id: warehouseLocationId },
+      });
+  
+      if (updatedApplication?.status === WarehouseLocationStatus.REJECTED) {
+        const assignments = await this.assignmentRepository.find({
+          where: {
+            applicationLocationId: warehouseLocationId,
+            level: AssignmentLevel.HOD_TO_APPLICANT,
+            status: AssignmentStatus.REJECTED,
+          },
+        });
+  
+        let assignmentSectionId: string | null = null;
+        if (assignments.length > 0) {
+          const assignmentSections = await this.assignmentSectionRepository.find({
+            where: {
+              assignmentId: In(assignments.map((a) => a.id)),
+              sectionType: '7-human-resources',
+              resourceId: existingHR.id,
+            },
+          });
+  
+          if (assignmentSections.length > 0) {
+            assignmentSectionId = assignmentSections[0].id;
+          }
+        }
+  
+        await this.warehouseLocationService.trackWarehouseLocationResubmissionAndUpdateStatus(
+          warehouseLocationId,
+          '7-human-resources',
+          existingHR.id,
+          assignmentSectionId ?? undefined,
+        );
+      }
+  
+      return result;
     }
-
-    // Create new HR entry
-    // Convert null to undefined for dateOfBirth to satisfy TypeORM's DeepPartial type
+  
+    // Create new HR entry (unchanged logic)
     const { dateOfBirth, ...restPersonalDetails } = personalDetailsData;
     const humanResource = this.humanResourceRepository.create({
       warehouseLocationId,
       ...restPersonalDetails,
       dateOfBirth: dateOfBirth ?? undefined,
     });
-
+  
     const savedHR = await this.humanResourceRepository.save(humanResource);
-
-    // Upload and link photograph file if provided
+  
     if (photographFile) {
       const documentResult = await this.uploadWarehouseDocument(
         photographFile,
@@ -335,17 +411,17 @@ export class HumanResourceService {
         savedHR.id,
         'photograph'
       );
-
+  
       const photographDocument = await this.warehouseDocumentRepository.findOne({
         where: { id: documentResult.id }
       });
-
+  
       if (photographDocument) {
         savedHR.photograph = photographDocument;
         await this.humanResourceRepository.save(savedHR);
       }
     }
-
+  
     return savedHR;
   }
 
@@ -361,34 +437,49 @@ export class HumanResourceService {
       where: { id: hrId },
       relations: ['declaration'],
     });
-
+  
     if (!humanResource) {
       throw new NotFoundException('HR entry not found');
     }
-
-    // Check warehouse location status
+  
     const warehouseLocation = await this.warehouseLocationRepository.findOne({
       where: { id: humanResource.warehouseLocationId, userId },
     });
-
+  
     if (!warehouseLocation) {
       throw new NotFoundException('Warehouse location application not found');
     }
-
-    if (warehouseLocation.status !== WarehouseLocationStatus.DRAFT) {
-      throw new BadRequestException('Declaration can only be updated while application is in draft status');
+  
+    if (![WarehouseLocationStatus.DRAFT, WarehouseLocationStatus.REJECTED, WarehouseLocationStatus.RESUBMITTED].includes(warehouseLocation.status)) {
+      throw new BadRequestException('Declaration can only be updated while application is in draft, rejected, or resubmitted status');
     }
-
+  
     const savedResult = await this.dataSource.transaction(async (manager) => {
       const hrRepo = manager.getRepository(HumanResource);
       const declarationRepo = manager.getRepository(Declaration);
-
+      const declarationHistoryRepo = manager.getRepository<DeclarationHistory>(DeclarationHistory);
+  
       const currentHR = await hrRepo.findOne({
         where: { id: hrId },
         relations: ['declaration'],
       });
-
+  
       if (currentHR?.declaration) {
+        // Save history if REJECTED (before updating)
+        if (warehouseLocation.status === WarehouseLocationStatus.REJECTED) {
+          const historyRecord = declarationHistoryRepo.create({
+            declarationId: currentHR.declaration.id,
+            humanResourceId: currentHR.declaration.humanResourceId,
+            writeOffAvailed: currentHR.declaration.writeOffAvailed,
+            defaultOfFinance: currentHR.declaration.defaultOfFinance,
+            placementOnECL: currentHR.declaration.placementOnECL,
+            convictionOrPleaBargain: currentHR.declaration.convictionOrPleaBargain,
+            isActive: false,
+          } as Partial<DeclarationHistory>);
+          historyRecord.createdAt = currentHR.declaration.createdAt;
+          await declarationHistoryRepo.save(historyRecord);
+        }
+  
         // Update existing declaration
         Object.assign(currentHR.declaration, createDeclarationDto);
         await declarationRepo.save(currentHR.declaration);
@@ -400,14 +491,53 @@ export class HumanResourceService {
           ...createDeclarationDto,
         });
         await declarationRepo.save(declaration);
-
+  
         currentHR!.declaration = declaration;
         await hrRepo.save(currentHR!);
-
+  
         return declaration;
       }
     });
-
+  
+    // Track resubmission if application was REJECTED (only for updates)
+    if (humanResource.declaration) {
+      const updatedApplication = await this.warehouseLocationRepository.findOne({
+        where: { id: warehouseLocation.id },
+      });
+  
+      if (updatedApplication?.status === WarehouseLocationStatus.REJECTED) {
+        const assignments = await this.assignmentRepository.find({
+          where: {
+            applicationLocationId: warehouseLocation.id,
+            level: AssignmentLevel.HOD_TO_APPLICANT,
+            status: AssignmentStatus.REJECTED,
+          },
+        });
+  
+        let assignmentSectionId: string | null = null;
+        if (assignments.length > 0) {
+          const assignmentSections = await this.assignmentSectionRepository.find({
+            where: {
+              assignmentId: In(assignments.map((a) => a.id)),
+              sectionType: '7-human-resources',
+              resourceId: humanResource.declaration.id,
+            },
+          });
+  
+          if (assignmentSections.length > 0) {
+            assignmentSectionId = assignmentSections[0].id;
+          }
+        }
+  
+        await this.warehouseLocationService.trackWarehouseLocationResubmissionAndUpdateStatus(
+          warehouseLocation.id,
+          '7-human-resources',
+          humanResource.declaration.id,
+          assignmentSectionId ?? undefined,
+        );
+      }
+    }
+  
     return savedResult;
   }
 

@@ -19,6 +19,7 @@ import { ApplicantChecklistEntity } from './applicant-checklist.entity';
 import { WarehouseApplicantVerification } from '../warehouse-applicant-verification/entities/warehouse-applicant-verification.entity';
 import { AssessmentSubmission } from '../../expert-assessment/assessment-submission/entities/assessment-submission.entity';
 import { ApplicationRejectionEntity } from './application-rejection.entity';
+import { WarehouseOperator } from './warehouse-operator.entity';
 
 export enum WarehouseOperatorApplicationStatus {
   PENDING = 'PENDING',
@@ -35,6 +36,9 @@ export enum WarehouseOperatorApplicationStatus {
 export class WarehouseOperatorApplicationRequest {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @OneToOne(() => WarehouseOperator, (operator) => operator.application)
+  operator: WarehouseOperator;
 
   @Column({ type: 'varchar', length: 20, unique: true, nullable: true })
   applicationId: string;

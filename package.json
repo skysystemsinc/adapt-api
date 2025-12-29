@@ -25,7 +25,9 @@
     "migration:run": "npm run typeorm -- migration:run -d ormconfig.ts",
     "migration:revert": "npm run typeorm -- migration:revert -d ormconfig.ts",
     "migration:show": "npm run typeorm -- migration:show -d ormconfig.ts",
-    "seed": "ts-node src/database/seeders/seed.ts"
+    "seed": "ts-node src/database/seeders/seed.ts",
+    "seed:forms": "ts-node src/database/seeders/seed-forms-only.ts",
+    "export:forms": "ts-node src/scripts/export-forms-seeder.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

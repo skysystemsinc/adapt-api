@@ -10,12 +10,14 @@ import { Assignment } from '../warehouse/operator/assignment/entities/assignment
 import { WarehouseDocument } from '../warehouse/entities/warehouse-document.entity';
 import { RegistrationApplication } from '../registration-application/entities/registration-application.entity';
 import { WarehouseOperator } from '../warehouse/entities/warehouse-operator.entity';
+import { UnlockRequest } from '../warehouse/entities/unlock-request.entity';
 
 @Module({
   controllers: [WarehouseAdminController],
   providers: [WarehouseAdminService],
   imports: [
-    TypeOrmModule.forFeature([WarehouseOperatorApplicationRequest, User, Assignment, WarehouseDocument, RegistrationApplication, WarehouseOperator]),
+    TypeOrmModule.forFeature([WarehouseOperatorApplicationRequest, User, Assignment, 
+      WarehouseDocument, RegistrationApplication, WarehouseOperator, UnlockRequest]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({

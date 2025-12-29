@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -8,12 +8,16 @@ import { Weighing } from './entities/weighing.entity';
 import { WarehouseLocation } from '../entities/warehouse-location.entity';
 import { WarehouseDocument } from '../../warehouse/entities/warehouse-document.entity';
 import { ClamAVModule } from '../../clamav/clamav.module';
+import { WarehouseLocationModule } from '../warehouse-location.module';
+import { AssignmentSection } from '../../warehouse/operator/assignment/entities/assignment-section.entity';
+import { Assignment } from '../../warehouse/operator/assignment/entities/assignment.entity';
 
 @Module({
   controllers: [WeighingsController],
   providers: [WeighingsService],
   imports: [
-    TypeOrmModule.forFeature([Weighing, WarehouseLocation, WarehouseDocument]),
+    TypeOrmModule.forFeature([Weighing, WarehouseLocation, WarehouseDocument, Assignment, AssignmentSection]),
+    forwardRef(() => WarehouseLocationModule),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({

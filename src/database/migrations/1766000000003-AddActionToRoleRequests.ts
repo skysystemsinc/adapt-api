@@ -5,7 +5,7 @@ export class AddActionToRoleRequests1766000000003 implements MigrationInterface 
 
     public async up(queryRunner: QueryRunner): Promise<void> {
         // Add action column to role_requests table with default 'update'
-        await queryRunner.query(`ALTER TABLE "role_requests" ADD COLUMN "action" character varying NOT NULL DEFAULT 'update'`);
+        await queryRunner.query(`ALTER TABLE "role_requests" ADD COLUMN IF NOT EXISTS "action" character varying NOT NULL DEFAULT 'update'`);
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {
