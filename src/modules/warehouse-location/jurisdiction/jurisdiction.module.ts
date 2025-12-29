@@ -8,14 +8,14 @@ import { Jurisdiction } from './entities/jurisdiction.entity';
 import { WarehouseLocation } from '../entities/warehouse-location.entity';
 import { AssignmentSection } from '../../warehouse/operator/assignment/entities/assignment-section.entity';
 import { Assignment } from '../../warehouse/operator/assignment/entities/assignment.entity';
-import { WarehouseModule } from '../../warehouse/warehouse.module';
+import { WarehouseLocationModule } from '../warehouse-location.module';
 
 @Module({
   controllers: [JurisdictionController],
   providers: [JurisdictionService],
   imports: [
     TypeOrmModule.forFeature([Jurisdiction, WarehouseLocation, Assignment, AssignmentSection]),
-    forwardRef(() => WarehouseModule),
+    forwardRef(() => WarehouseLocationModule),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({

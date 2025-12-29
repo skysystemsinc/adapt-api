@@ -8,7 +8,7 @@ import { WarehouseLocation, WarehouseLocationStatus } from '../entities/warehous
 import { ContactHistory } from './entities/contact-history.entity';
 import { Assignment, AssignmentLevel, AssignmentStatus } from '../../warehouse/operator/assignment/entities/assignment.entity';
 import { AssignmentSection } from '../../warehouse/operator/assignment/entities/assignment-section.entity';
-import { WarehouseService } from '../../warehouse/warehouse.service';
+import { WarehouseLocationService } from '../warehouse-location.service';
 
 @Injectable()
 export class ContactsService {
@@ -25,8 +25,8 @@ export class ContactsService {
     @InjectRepository(AssignmentSection)
     private readonly assignmentSectionRepository: Repository<AssignmentSection>,
 
-    @Inject(forwardRef(() => WarehouseService))
-    private readonly warehouseService: WarehouseService,
+    @Inject(forwardRef(() => WarehouseLocationService))
+    private readonly warehouseLocationService: WarehouseLocationService,
   ) { }
 
   /**
@@ -190,9 +190,9 @@ export class ContactsService {
         }
       }
 
-      await this.warehouseService['trackResubmissionAndUpdateStatus'](
+      await this.warehouseLocationService.trackWarehouseLocationResubmissionAndUpdateStatus(
         warehouseLocationId,
-        '2-contact-information',
+        '2-contact',
         existingContact.id,
         assignmentSectionId ?? undefined,
       );

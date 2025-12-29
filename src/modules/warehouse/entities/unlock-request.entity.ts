@@ -14,6 +14,7 @@ import { WarehouseOperatorLocation } from '../../warehouse-operator-location/ent
 
 export enum UnlockRequestStatus {
   PENDING = 'PENDING',
+  UNLOCKED = 'UNLOCKED',
   APPROVED = 'APPROVED',
   REJECTED = 'REJECTED',
 }
@@ -49,6 +50,18 @@ export class UnlockRequest {
 
   @Column({ type: 'varchar', length: 500, nullable: false })
   bankPaymentSlip: string;
+
+  /**
+   * MIME type of the bank payment slip file
+   */
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  mimeType: string;
+
+  /**
+   * Original filename of the bank payment slip
+   */
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  originalFileName: string;
 
   /**
    * Initialization vector for encrypted files (hex string)

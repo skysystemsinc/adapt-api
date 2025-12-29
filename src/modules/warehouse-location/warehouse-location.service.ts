@@ -5,13 +5,14 @@ import { CreateWarehouseLocationDto } from './dto/create-warehouse-location.dto'
 import { UpdateWarehouseLocationDto } from './dto/update-warehouse-location.dto';
 import { WarehouseLocation, WarehouseLocationStatus } from './entities/warehouse-location.entity';
 import { ResubmittedSectionEntity } from '../warehouse/entities/resubmitted-section.entity';
-import { Assignment, AssignmentLevel, AssignmentStatus } from '../warehouse/operator/assignment/entities/assignment.entity';
+import { Assignment, AssignmentLevel } from '../warehouse/operator/assignment/entities/assignment.entity';
 import { AssignmentSection } from '../warehouse/operator/assignment/entities/assignment-section.entity';
 import { AssignmentHistory } from '../warehouse/operator/assignment/entities/assignment-history.entity';
 import { AssignmentSectionHistory } from '../warehouse/operator/assignment/entities/assignment-section-history.entity';
 import { AssignmentSectionFieldHistory } from '../warehouse/operator/assignment/entities/assignment-section-field-history.entity';
 import { ApplicationRejectionEntity } from '../warehouse/entities/application-rejection.entity';
 import { ApplicationRejectionHistoryEntity } from '../warehouse/entities/application-rejection-history.entity';
+import { AssignmentStatus } from 'src/utilites/enum';
 
 @Injectable()
 export class WarehouseLocationService {
@@ -117,7 +118,7 @@ export class WarehouseLocationService {
    * @param assignmentSectionId - Optional assignment section ID
    * @param manager - Optional entity manager for transaction support
    */
-  async trackFacilityResubmissionAndUpdateStatus(
+  async trackWarehouseLocationResubmissionAndUpdateStatus(
     warehouseLocationId: string,
     sectionType: string,
     resourceId?: string | null,
@@ -369,8 +370,8 @@ export class WarehouseLocationService {
 
     // Map normalized section types to display names used in unlockedSections (for facility/location)
     const sectionTypeMap: Record<string, string[]> = {
-      '1-facility': ['1-facility'],
-      '2-contact': ['2-contact'],
+      '1-facility-information': ['1-facility-information'],
+      '2-contact-information': ['2-contact-information'],
       '3-jurisdiction': ['3-jurisdiction'],
       '4-security-fire-safety': ['4-security-fire-safety'],
       '5-weighing': ['5-weighing'],
@@ -381,8 +382,8 @@ export class WarehouseLocationService {
 
     // Section type to human-readable display name mapping
     const sectionDisplayNames: Record<string, string> = {
-      '1-facility': 'Facility Information',
-      '2-contact': 'Contact Information',
+      '1-facility-information': 'Facility Information',
+      '2-contact-information': 'Contact Information',
       '3-jurisdiction': 'Jurisdiction Information',
       '4-security-fire-safety': 'Security and Fire Safety',
       '5-weighing': 'Weighing Facilities',
@@ -474,45 +475,7 @@ export class WarehouseLocationService {
       .filter((name, index, self) => self.indexOf(name) === index); // unique
 
     for (const assignment of assignmentsToMove) {
-      // Move all sections for this assignment to history
-      if (assignment.sections && assignment.sections.length > 0) {
-        for (const section of assignment.sections) {
-          // Move assignment section fields to history
-          if (section.fields && section.fields.length > 0) {
-            for (const field of section.fields) {
-              const fieldHistory = assignmentSectionFieldHistoryRepo.create({
-                assignmentSectionFieldId: field.id,
-                assignmentSectionId: section.id,
-                fieldName: field.fieldName,
-                remarks: field.remarks,
-                status: field.status,
-                isActive: false,
-              });
-              // Preserve original createdAt
-              fieldHistory.createdAt = field.createdAt;
-              await assignmentSectionFieldHistoryRepo.save(fieldHistory);
-            }
-          }
-
-          // Move assignment section to history
-          const sectionHistory = assignmentSectionHistoryRepo.create({
-            assignmentSectionId: section.id,
-            assignmentId: assignment.id,
-            sectionType: section.sectionType,
-            resourceId: section.resourceId,
-            resourceType: section.resourceType,
-            isActive: false,
-          });
-          // Preserve original createdAt
-          sectionHistory.createdAt = section.createdAt;
-          await assignmentSectionHistoryRepo.save(sectionHistory);
-        }
-
-        // Delete all sections (cascade will delete fields)
-        await assignmentSectionRepo.remove(assignment.sections);
-      }
-
-      // Move assignment to history
+      // Move assignment to history first (needed for section history relationship)
       const assignmentHistory = assignmentHistoryRepo.create({
         assignmentId: assignment.id,
         parentAssignmentId: assignment.parentAssignment?.id || null,
@@ -528,6 +491,45 @@ export class WarehouseLocationService {
       // Preserve original createdAt
       assignmentHistory.createdAt = assignment.createdAt;
       await assignmentHistoryRepo.save(assignmentHistory);
+
+      // Move all sections for this assignment to history
+      if (assignment.sections && assignment.sections.length > 0) {
+        for (const section of assignment.sections) {
+          // Move assignment section to history (needed for field history relationship)
+          const sectionHistory = assignmentSectionHistoryRepo.create({
+            assignmentSectionId: section.id,
+            assignmentHistoryId: assignmentHistory.id,
+            sectionType: section.sectionType,
+            resourceId: section.resourceId,
+            resourceType: section.resourceType,
+            isActive: false,
+          });
+          // Preserve original createdAt
+          sectionHistory.createdAt = section.createdAt;
+          await assignmentSectionHistoryRepo.save(sectionHistory);
+
+          // Move assignment section fields to history
+          if (section.fields && section.fields.length > 0) {
+            for (const field of section.fields) {
+              const fieldHistory = assignmentSectionFieldHistoryRepo.create({
+                assignmentSectionFieldId: field.id,
+                assignmentSectionId: section.id, // Keep for backward compatibility
+                assignmentSectionHistoryId: sectionHistory.id, // New relationship
+                fieldName: field.fieldName,
+                remarks: field.remarks,
+                status: field.status,
+                isActive: false,
+              });
+              // Preserve original createdAt
+              fieldHistory.createdAt = field.createdAt;
+              await assignmentSectionFieldHistoryRepo.save(fieldHistory);
+            }
+          }
+        }
+
+        // Delete all sections (cascade will delete fields)
+        await assignmentSectionRepo.remove(assignment.sections);
+      }
 
       // Delete the assignment
       await assignmentRepo.remove(assignment);
@@ -580,5 +582,12 @@ export class WarehouseLocationService {
 
     // Delete all rejections from active table
     await rejectionRepo.remove(rejections);
+  }
+
+  async getWarehouseLocationApplicationStatus(id: string): Promise<WarehouseLocationStatus> {
+    const application = await this.warehouseLocationRepository.findOne({
+      where: { id },
+    });
+    return application?.status || WarehouseLocationStatus.DRAFT;
   }
 }

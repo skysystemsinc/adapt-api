@@ -42,9 +42,8 @@ import { forwardRef, Inject } from '@nestjs/common';
 import { FinancialInformationService } from './financial-information.service';
 import { WarehouseOperator } from './entities/warehouse-operator.entity';
 import { ResubmitOperatorApplicationDto } from './dto/resubmit-warehouse.dto';
-import { Assignment, AssignmentLevel, AssignmentStatus } from './operator/assignment/entities/assignment.entity';
+import { Assignment, AssignmentLevel, AssignmentProcessType } from './operator/assignment/entities/assignment.entity';
 import { AssignmentSection } from './operator/assignment/entities/assignment-section.entity';
-import { AssignmentSectionField } from './operator/assignment/entities/assignment-section-field.entity';
 import { AssignmentHistory } from './operator/assignment/entities/assignment-history.entity';
 import { AssignmentSectionHistory } from './operator/assignment/entities/assignment-section-history.entity';
 import { AssignmentSectionFieldHistory } from './operator/assignment/entities/assignment-section-field-history.entity';
@@ -57,7 +56,6 @@ import { DeclarationHistoryEntity } from './entities/hr/declaration.entity/decla
 import { ProfessionalQualificationsHistoryEntity } from './entities/hr/professional-qualifications.entity/professional-qualifications-history.entity';
 import { TrainingsHistoryEntity } from './entities/hr/trainings.entity/trainings-history.entity';
 import { ExperienceHistoryEntity } from './entities/hr/experience.entity/experience-history.entity';
-import { FinancialInformationHistoryEntity } from './entities/financial-information-history.entity';
 import { AuditReportHistoryEntity } from './entities/financial/audit-report-history.entity';
 import { TaxReturnHistoryEntity } from './entities/financial/tax-return-history.entity';
 import { BankStatementHistoryEntity } from './entities/financial/bank-statement-history.entity';
@@ -74,7 +72,13 @@ import { ClamAVService } from '../clamav/clamav.service';
 import { OperatorUnlockRequestDto } from './dto/operator-unlock-request.dto';
 import { UnlockRequest, UnlockRequestStatus } from './entities/unlock-request.entity';
 import { WarehouseOperatorLocation } from '../warehouse-operator-location/entities/warehouse-operator-location.entity';
+import { AuthorizedSignatoryUnlockUpdate, UnlockUpdateStatus } from './entities/authorized-signatory-unlock.entity';
 
+import { HumanResourcesChecklistHistoryEntity } from './entities/checklist/human-resources-history.entity';
+import { FinancialSoundnessChecklistHistoryEntity } from './entities/checklist/financial-soundness-history.entity';
+import { RegistrationFeeChecklistHistoryEntity } from './entities/checklist/registration-fee-history.entity';
+import { DeclarationChecklistHistoryEntity } from './entities/checklist/declaration-history.entity';
+import { AssignmentStatus } from 'src/utilites/enum';
 
 export class WarehouseService {
   private readonly logger = new Logger(WarehouseService.name);
@@ -171,6 +175,10 @@ export class WarehouseService {
       'warehouseOperator',
       'warehouseOperator.applicationId = warehouseOperatorApplication.id'
     );
+
+    // fetch unlock requests for the application
+    // application does not have relation with unlock requests
+    // unlock requests have relation with application through operatorId
 
     query.orderBy(`warehouseOperatorApplication.${sortBy}`, sortOrder);
     query.skip(((page ?? 1) - 1) * (limit ?? 10));
@@ -558,9 +566,44 @@ export class WarehouseService {
       throw new NotFoundException('Authorized signatory not found or access denied');
     }
 
+    let isUnlockRequest: boolean = false;
+    let unlockRequest: UnlockRequest | null = null;
+
+    if (application.status == WarehouseOperatorApplicationStatus.APPROVED) {
+      const operator = await this.dataSource.getRepository(WarehouseOperator).findOne({
+        where: {
+          applicationId: application.id,
+        },
+        select: {
+          id: true,
+        }
+      });
+
+      if (!operator) {
+        throw new NotFoundException('Operator not found');
+      }
+
+      unlockRequest = await this.unlockRequestRepository.findOne({
+        where: {
+          operatorId: operator.id,
+          userId,
+          status: UnlockRequestStatus.UNLOCKED
+        }
+      });
+
+      if (!unlockRequest) {
+        throw new NotFoundException('Unlock request not found');
+      }
+      isUnlockRequest = true;
+    }
+
     // Validate application status allows updates
-    if (![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(application.status)) {
+    if (!isUnlockRequest && ![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(application.status)) {
       throw new BadRequestException('Cannot update authorized signatory after application is approved or submitted');
+    }
+
+    if (isUnlockRequest && unlockRequest) {
+      return await this.createUnlockUpdate(authorizedSignatoryId, updateAuthorizedSignatoryDto, unlockRequest.id, userId);
     }
 
     // Use transaction to ensure atomicity: history save and update must both succeed or both fail
@@ -3882,100 +3925,468 @@ export class WarehouseService {
     }
   }
 
+  private async getRejectedApplicantChecklistSectionIdsForApplication(applicationId: string): Promise<string[]> {
+    const assignments = await this.assignmentRepository.find({
+      where: {
+        applicationId,
+        level: AssignmentLevel.HOD_TO_APPLICANT,
+        status: AssignmentStatus.REJECTED,
+      },
+      relations: ['sections'],
+    });
+  
+    const rejectedSectionIds: string[] = [];
+    for (const assignment of assignments) {
+      if (assignment.sections) {
+        for (const section of assignment.sections) {
+          if (section.resourceId && section.sectionType === '6-application-checklist-questionnaire') {
+            rejectedSectionIds.push(section.resourceId);
+          }
+        }
+      }
+    }
+    return rejectedSectionIds;
+  }
+
   async createApplicantChecklist(
     applicationId: string,
     dto: CreateApplicantChecklistDto,
     userId: string,
-    files?: {
-      qcPersonnelFile?: any[];
-      warehouseSupervisorFile?: any[];
-      dataEntryOperatorFile?: any[];
-      auditedFinancialStatementsFile?: any[];
-      positiveNetWorthFile?: any[];
-      noLoanDefaultsFile?: any[];
-      cleanCreditHistoryFile?: any[];
-      adequateWorkingCapitalFile?: any[];
-      validInsuranceCoverageFile?: any[];
-      noFinancialFraudFile?: any[];
-      bankPaymentSlip?: any[];
-    },
+    files?: any,
     submit: boolean = false,
   ) {
     const application = await this.warehouseOperatorRepository.findOne({
       where: { id: applicationId, userId },
     });
-
+  
     if (!application) {
-      throw new NotFoundException('Warehouse operator application not found. Please create an application first.');
+      throw new NotFoundException('Warehouse operator application not found.');
     }
-
-    // only allow when status is DRAFT
-    if (application.status !== WarehouseOperatorApplicationStatus.DRAFT && application.status !== WarehouseOperatorApplicationStatus.RESUBMITTED && application.status !== WarehouseOperatorApplicationStatus.REJECTED) {
-      throw new BadRequestException('Applicant checklist can only be added while application is in draft status.');
+  
+    if (
+      ![
+        WarehouseOperatorApplicationStatus.DRAFT,
+        WarehouseOperatorApplicationStatus.REJECTED,
+        WarehouseOperatorApplicationStatus.RESUBMITTED,
+      ].includes(application.status)
+    ) {
+      throw new BadRequestException('Applicant checklist cannot be updated.');
     }
-
-    // Check if applicant checklist already exists for this application (only when creating new, not updating)
-    if (!dto.id) {
-      const existingApplicantChecklist = await this.applicantChecklistRepository.findOne({
-        where: { applicationId: application.id }
-      });
-
-      if (existingApplicantChecklist) {
-        throw new BadRequestException('Applicant checklist already exists for this application. Please update instead of creating a new one.');
-      }
-    }
-
-    // Upload files and map to DTO
-    const uploadedDocumentIds = files ? await this.uploadApplicantChecklistFiles(files, userId, applicationId) : {};
-    this.mapUploadedDocumentsToDto(dto, uploadedDocumentIds);
-
-    // Validate required files
-    this.validateApplicantChecklistFiles(dto);
-
-    const savedApplicantChecklist = await this.dataSource.transaction(async (manager) => {
+  
+    let rejectedSectionIds: string[] = [];
+  
+    const savedChecklist = await this.dataSource.transaction(async (manager) => {
       const repos = {
         applicantChecklist: manager.getRepository(ApplicantChecklistEntity),
-        applicantChecklistHistory: manager.getRepository(ApplicantChecklistHistoryEntity),
         humanResources: manager.getRepository(HumanResourcesChecklistEntity),
+        humanResourcesHistory: manager.getRepository(HumanResourcesChecklistHistoryEntity),
         financialSoundness: manager.getRepository(FinancialSoundnessChecklistEntity),
+        financialSoundnessHistory: manager.getRepository(FinancialSoundnessChecklistHistoryEntity),
         registrationFee: manager.getRepository(RegistrationFeeChecklistEntity),
+        registrationFeeHistory: manager.getRepository(RegistrationFeeChecklistHistoryEntity),
         declaration: manager.getRepository(DeclarationChecklistEntity),
+        declarationHistory: manager.getRepository(DeclarationChecklistHistoryEntity),
         document: manager.getRepository(WarehouseDocument),
         application: manager.getRepository(WarehouseOperatorApplicationRequest),
       };
 
-      // Reload within transaction to ensure we have the latest data
-      const application = await repos.application.findOne({
-        where: { id: applicationId, userId },
-      });
+      // 🔧 FIX: Create transaction-aware file upload function
+      const uploadFileInTransaction = async (
+        file: any,
+        documentableType: string,
+        documentableId: string,
+        documentType: string,
+      ): Promise<string> => {
+        if (!file || !file.buffer) {
+          throw new BadRequestException(`No file provided for ${documentType}`);
+        }
 
-      if (!application) {
-        throw new NotFoundException('Warehouse operator application not found. Please create an application first.');
+        // Validate file type
+        const allowedExtensions = ['.pdf', '.png', '.jpg', '.jpeg', '.doc', '.docx'];
+        const fileExtension = path.extname(file.originalname).toLowerCase();
+
+        if (!allowedExtensions.includes(fileExtension)) {
+          throw new BadRequestException(
+            `File type '${fileExtension}' is not allowed. Allowed types: ${allowedExtensions.join(', ')}`,
+          );
+        }
+
+        // Validate file size (max 10MB)
+        const maxSizeBytes = 10 * 1024 * 1024;
+        if (file.size > maxSizeBytes) {
+          throw new BadRequestException(
+            `File size ${(file.size / 1024 / 1024).toFixed(2)}MB exceeds maximum allowed size of 10MB`,
+          );
+        }
+
+        // Scan file with ClamAV if mandatory
+        const isMandatory = this.clamAVService.getScanMandatory();
+        if (isMandatory) {
+          try {
+            this.logger.log(`🔍 Scanning file with ClamAV: ${file.originalname}`);
+            const scanResult = await this.clamAVService.scanBuffer(
+              file.buffer,
+              file.originalname,
+            );
+
+            if (scanResult.isInfected) {
+              this.logger.warn(
+                `🚨 Infected file detected: ${file.originalname}, Viruses: ${scanResult.viruses.join(', ')}`,
+              );
+              throw new BadRequestException(
+                `File is infected with malware: ${scanResult.viruses.join(', ')}. Upload rejected.`,
+              );
+            }
+
+            this.logger.log(`✅ File passed ClamAV scan: ${file.originalname}`);
+          } catch (error) {
+            if (error instanceof BadRequestException) {
+              throw error;
+            }
+
+            if (isMandatory) {
+              this.logger.error(
+                `ClamAV scan failed for ${file.originalname}: ${error.message}`,
+                error.stack,
+              );
+              throw new BadRequestException(
+                `Virus scanning unavailable: ${error.message}. Upload blocked due to mandatory scanning.`,
+              );
+            } else {
+              this.logger.warn(
+                `ClamAV scan failed for ${file.originalname}: ${error.message}. Bypassing scan and allowing upload.`,
+                error.stack,
+              );
+            }
+          }
+        }
+
+        // Generate unique filename
+        const sanitizedFilename = `${uuidv4()}${fileExtension}`;
+        const filePath = path.join(this.uploadDir, sanitizedFilename);
+        const documentPath = `/uploads/${sanitizedFilename}`;
+
+        // Encrypt file before saving
+        const { encrypted, iv, authTag } = encryptBuffer(file.buffer);
+
+        // Save encrypted file to disk
+        await fs.writeFile(filePath, encrypted);
+
+        // Detect MIME type
+        const mimeType = file.mimetype || 'application/octet-stream';
+
+        // Create document record using transaction repository
+        const document = repos.document.create({
+          userId,
+          documentableType,
+          documentableId,
+          documentType,
+          originalFileName: file.originalname,
+          filePath: documentPath,
+          mimeType,
+          iv,
+          authTag,
+          isActive: true,
+        });
+
+        const savedDocument = await repos.document.save(document);
+        return savedDocument.id;
+      };
+
+      // 🔧 FIX: Upload files and update DTO with document IDs
+      if (files) {
+        // Upload HR files
+        if (files.qcPersonnelFile?.[0] && !dto.humanResources.qcPersonnelFile) {
+          const tempId = uuidv4();
+          const documentId = await uploadFileInTransaction(
+            files.qcPersonnelFile[0],
+            'HumanResourcesChecklist',
+            tempId,
+            'qcPersonnelFile',
+          );
+          dto.humanResources.qcPersonnelFile = documentId;
+        }
+        if (files.warehouseSupervisorFile?.[0] && !dto.humanResources.warehouseSupervisorFile) {
+          const tempId = uuidv4();
+          const documentId = await uploadFileInTransaction(
+            files.warehouseSupervisorFile[0],
+            'HumanResourcesChecklist',
+            tempId,
+            'warehouseSupervisorFile',
+          );
+          dto.humanResources.warehouseSupervisorFile = documentId;
+        }
+        if (files.dataEntryOperatorFile?.[0] && !dto.humanResources.dataEntryOperatorFile) {
+          const tempId = uuidv4();
+          const documentId = await uploadFileInTransaction(
+            files.dataEntryOperatorFile[0],
+            'HumanResourcesChecklist',
+            tempId,
+            'dataEntryOperatorFile',
+          );
+          dto.humanResources.dataEntryOperatorFile = documentId;
+        }
+
+        // Upload Financial Soundness files
+        if (files.auditedFinancialStatementsFile?.[0] && !dto.financialSoundness.auditedFinancialStatementsFile) {
+          const tempId = uuidv4();
+          const documentId = await uploadFileInTransaction(
+            files.auditedFinancialStatementsFile[0],
+            'FinancialSoundnessChecklist',
+            tempId,
+            'auditedFinancialStatementsFile',
+          );
+          dto.financialSoundness.auditedFinancialStatementsFile = documentId;
+        }
+        if (files.positiveNetWorthFile?.[0] && !dto.financialSoundness.positiveNetWorthFile) {
+          const tempId = uuidv4();
+          const documentId = await uploadFileInTransaction(
+            files.positiveNetWorthFile[0],
+            'FinancialSoundnessChecklist',
+            tempId,
+            'positiveNetWorthFile',
+          );
+          dto.financialSoundness.positiveNetWorthFile = documentId;
+        }
+        if (files.noLoanDefaultsFile?.[0] && !dto.financialSoundness.noLoanDefaultsFile) {
+          const tempId = uuidv4();
+          const documentId = await uploadFileInTransaction(
+            files.noLoanDefaultsFile[0],
+            'FinancialSoundnessChecklist',
+            tempId,
+            'noLoanDefaultsFile',
+          );
+          dto.financialSoundness.noLoanDefaultsFile = documentId;
+        }
+        if (files.cleanCreditHistoryFile?.[0] && !dto.financialSoundness.cleanCreditHistoryFile) {
+          const tempId = uuidv4();
+          const documentId = await uploadFileInTransaction(
+            files.cleanCreditHistoryFile[0],
+            'FinancialSoundnessChecklist',
+            tempId,
+            'cleanCreditHistoryFile',
+          );
+          dto.financialSoundness.cleanCreditHistoryFile = documentId;
+        }
+        if (files.adequateWorkingCapitalFile?.[0] && !dto.financialSoundness.adequateWorkingCapitalFile) {
+          const tempId = uuidv4();
+          const documentId = await uploadFileInTransaction(
+            files.adequateWorkingCapitalFile[0],
+            'FinancialSoundnessChecklist',
+            tempId,
+            'adequateWorkingCapitalFile',
+          );
+          dto.financialSoundness.adequateWorkingCapitalFile = documentId;
+        }
+        if (files.validInsuranceCoverageFile?.[0] && !dto.financialSoundness.validInsuranceCoverageFile) {
+          const tempId = uuidv4();
+          const documentId = await uploadFileInTransaction(
+            files.validInsuranceCoverageFile[0],
+            'FinancialSoundnessChecklist',
+            tempId,
+            'validInsuranceCoverageFile',
+          );
+          dto.financialSoundness.validInsuranceCoverageFile = documentId;
+        }
+        if (files.noFinancialFraudFile?.[0] && !dto.financialSoundness.noFinancialFraudFile) {
+          const tempId = uuidv4();
+          const documentId = await uploadFileInTransaction(
+            files.noFinancialFraudFile[0],
+            'FinancialSoundnessChecklist',
+            tempId,
+            'noFinancialFraudFile',
+          );
+          dto.financialSoundness.noFinancialFraudFile = documentId;
+        }
+
+        // Upload Registration Fee bank slip
+        if (files.bankPaymentSlip?.[0] && !dto.registrationFee.bankPaymentSlip) {
+          const tempId = uuidv4();
+          const documentId = await uploadFileInTransaction(
+            files.bankPaymentSlip[0],
+            'RegistrationFeeChecklist',
+            tempId,
+            'bankPaymentSlip',
+          );
+          dto.registrationFee.bankPaymentSlip = documentId;
+        }
       }
 
-      // Re-validate application status inside transaction to prevent race conditions
-      if (![WarehouseOperatorApplicationStatus.DRAFT, WarehouseOperatorApplicationStatus.RESUBMITTED, WarehouseOperatorApplicationStatus.REJECTED].includes(application.status)) {
-        throw new BadRequestException('Cannot update applicant checklist after application is approved or submitted');
+      if (
+        [WarehouseOperatorApplicationStatus.REJECTED, WarehouseOperatorApplicationStatus.RESUBMITTED].includes(
+          application.status,
+        ) &&
+        dto.id
+      ) {
+        rejectedSectionIds =
+          await this.getRejectedApplicantChecklistSectionIdsForApplication(applicationId);
       }
-
+  
+      if (dto.id && rejectedSectionIds.length > 0) {
+        const existingChecklist = await repos.applicantChecklist.findOne({
+          where: { id: dto.id },
+          relations: ['humanResources', 'financialSoundness', 'registrationFee', 'declaration'],
+        });
+  
+        if (!existingChecklist) {
+          throw new NotFoundException('Applicant checklist not found');
+        }
+  
+        // 🔹 HUMAN RESOURCES
+        if (existingChecklist.humanResourcesId && rejectedSectionIds.includes(existingChecklist.humanResourcesId)) {
+          await repos.humanResourcesHistory.save({
+            ...existingChecklist.humanResources,
+            humanResourcesChecklistId: existingChecklist.humanResourcesId,
+            applicantChecklist: existingChecklist,
+          });
+        }
+  
+        // 🔹 FINANCIAL SOUNDNESS
+        if (
+          existingChecklist.financialSoundnessId &&
+          rejectedSectionIds.includes(existingChecklist.financialSoundnessId)
+        ) {
+          await repos.financialSoundnessHistory.save({
+            ...existingChecklist.financialSoundness,
+            financialSoundnessChecklistId: existingChecklist.financialSoundnessId,
+            applicantChecklist: existingChecklist,
+          });
+        }
+  
+        // 🔹 REGISTRATION FEE
+        if (
+          existingChecklist.registrationFeeId &&
+          rejectedSectionIds.includes(existingChecklist.registrationFeeId)
+        ) {
+          await repos.registrationFeeHistory.save({
+            ...existingChecklist.registrationFee,
+            registrationFeeChecklistId: existingChecklist.registrationFeeId,
+            applicantChecklist: existingChecklist,
+          });
+        }
+  
+        // 🔹 DECLARATION
+        if (existingChecklist.declarationId && rejectedSectionIds.includes(existingChecklist.declarationId)) {
+          await repos.declarationHistory.save({
+            ...existingChecklist.declaration,
+            declarationChecklistId: existingChecklist.declarationId,
+            applicantChecklist: existingChecklist,
+          });
+        }
+      }
+  
       const assignDocument = this.createAssignDocumentFunction(repos.document, userId);
       const assignDocuments = this.createBatchAssignDocumentsFunction(assignDocument);
+  
+      const result = dto.id
+        ? await this.updateApplicantChecklist(dto, application, repos, assignDocuments)
+        : await this.createNewApplicantChecklist(dto, application, repos, assignDocuments);
 
-      let result;
-      if (dto.id) {
-        result = await this.updateApplicantChecklist(
-          dto,
-          application,
-          repos,
-          assignDocuments,
-        );
-      } else {
-        result = await this.createNewApplicantChecklist(
-          dto,
-          application,
-          repos,
-          assignDocuments,
-        );
+      // 🔧 FIX: Update document IDs with actual entity IDs after creation
+      if (result) {
+        // Update HR documents
+        if (result.humanResources) {
+          const hrUpdates = [];
+          if (dto.humanResources.qcPersonnelFile) {
+            hrUpdates.push(
+              repos.document.update(
+                { id: dto.humanResources.qcPersonnelFile },
+                { documentableId: result.humanResources.id }
+              )
+            );
+          }
+          if (dto.humanResources.warehouseSupervisorFile) {
+            hrUpdates.push(
+              repos.document.update(
+                { id: dto.humanResources.warehouseSupervisorFile },
+                { documentableId: result.humanResources.id }
+              )
+            );
+          }
+          if (dto.humanResources.dataEntryOperatorFile) {
+            hrUpdates.push(
+              repos.document.update(
+                { id: dto.humanResources.dataEntryOperatorFile },
+                { documentableId: result.humanResources.id }
+              )
+            );
+          }
+          if (hrUpdates.length > 0) {
+            await Promise.all(hrUpdates);
+          }
+        }
+
+        // Update Financial Soundness documents
+        if (result.financialSoundness) {
+          const fsUpdates = [];
+          if (dto.financialSoundness.auditedFinancialStatementsFile) {
+            fsUpdates.push(
+              repos.document.update(
+                { id: dto.financialSoundness.auditedFinancialStatementsFile },
+                { documentableId: result.financialSoundness.id }
+              )
+            );
+          }
+          if (dto.financialSoundness.positiveNetWorthFile) {
+            fsUpdates.push(
+              repos.document.update(
+                { id: dto.financialSoundness.positiveNetWorthFile },
+                { documentableId: result.financialSoundness.id }
+              )
+            );
+          }
+          if (dto.financialSoundness.noLoanDefaultsFile) {
+            fsUpdates.push(
+              repos.document.update(
+                { id: dto.financialSoundness.noLoanDefaultsFile },
+                { documentableId: result.financialSoundness.id }
+              )
+            );
+          }
+          if (dto.financialSoundness.cleanCreditHistoryFile) {
+            fsUpdates.push(
+              repos.document.update(
+                { id: dto.financialSoundness.cleanCreditHistoryFile },
+                { documentableId: result.financialSoundness.id }
+              )
+            );
+          }
+          if (dto.financialSoundness.adequateWorkingCapitalFile) {
+            fsUpdates.push(
+              repos.document.update(
+                { id: dto.financialSoundness.adequateWorkingCapitalFile },
+                { documentableId: result.financialSoundness.id }
+              )
+            );
+          }
+          if (dto.financialSoundness.validInsuranceCoverageFile) {
+            fsUpdates.push(
+              repos.document.update(
+                { id: dto.financialSoundness.validInsuranceCoverageFile },
+                { documentableId: result.financialSoundness.id }
+              )
+            );
+          }
+          if (dto.financialSoundness.noFinancialFraudFile) {
+            fsUpdates.push(
+              repos.document.update(
+                { id: dto.financialSoundness.noFinancialFraudFile },
+                { documentableId: result.financialSoundness.id }
+              )
+            );
+          }
+          if (fsUpdates.length > 0) {
+            await Promise.all(fsUpdates);
+          }
+        }
+
+        // Update Registration Fee document
+        if (result.registrationFee && dto.registrationFee.bankPaymentSlip) {
+          await repos.document.update(
+            { id: dto.registrationFee.bankPaymentSlip },
+            { documentableId: result.registrationFee.id }
+          );
+        }
       }
 
       if (submit) {
@@ -3985,58 +4396,55 @@ export class WarehouseService {
 
       return result;
     });
-
-    const hydratedApplicantChecklist = await this.applicantChecklistRepository.findOne({
-      where: { id: savedApplicantChecklist.id },
-      relations: ['humanResources', 'financialSoundness', 'registrationFee', 'declaration'],
-    });
-
-    // Reload application to get latest status after transaction
-    const updatedApplication = await this.warehouseOperatorRepository.findOne({
-      where: { id: applicationId },
-    });
-
-    // if application is rejected, track resubmission and update status if all sections are complete
-    if (updatedApplication?.status === WarehouseOperatorApplicationStatus.REJECTED) {
-      // Track resubmission and update status if all sections are complete
-      // Find the assignment section for applicant checklist if it exists
+  
+    // 🔁 RESUBMISSION TRACKING (AFTER TRANSACTION)
+    if (
+      application.status === WarehouseOperatorApplicationStatus.REJECTED &&
+      rejectedSectionIds.length > 0
+    ) {
       const assignments = await this.assignmentRepository.find({
         where: {
-          applicationId: applicationId,
+          applicationId,
           level: AssignmentLevel.HOD_TO_APPLICANT,
           status: AssignmentStatus.REJECTED,
         },
       });
-
-      let assignmentSectionId: string | null = null;
-      if (assignments.length > 0) {
-        const assignmentSections = await this.assignmentSectionRepository.find({
-          where: {
-            assignmentId: In(assignments.map((a) => a.id)),
-            sectionType: '6-application-checklist-questionnaire',
-            resourceId: savedApplicantChecklist.id,
-          },
-        });
-
-        if (assignmentSections.length > 0) {
-          assignmentSectionId = assignmentSections[0].id;
+  
+      for (const sectionId of rejectedSectionIds) {
+        let assignmentSectionId: string | undefined;
+  
+        if (assignments.length > 0) {
+          const sections = await this.assignmentSectionRepository.find({
+            where: {
+              assignmentId: In(assignments.map((a) => a.id)),
+              sectionType: '6-application-checklist-questionnaire',
+              resourceId: sectionId,
+            },
+          });
+  
+          assignmentSectionId = sections[0]?.id;
         }
+  
+        await this.trackResubmissionAndUpdateStatus(
+          applicationId,
+          '6-application-checklist-questionnaire',
+          sectionId,
+          assignmentSectionId,
+        );
       }
-
-      // Call helper function to track resubmission and update status
-      await this.trackResubmissionAndUpdateStatus(
-        applicationId,
-        '6-application-checklist-questionnaire',
-        savedApplicantChecklist.id,
-        assignmentSectionId ?? undefined,
-      );
     }
-
+  
+    const hydrated = await this.applicantChecklistRepository.findOne({
+      where: { id: savedChecklist.id },
+      relations: ['humanResources', 'financialSoundness', 'registrationFee', 'declaration'],
+    });
+  
     return {
       message: 'Applicant checklist saved successfully',
-      data: this.mapApplicantChecklistEntityToResponse(hydratedApplicantChecklist!),
+      data: this.mapApplicantChecklistEntityToResponse(hydrated!),
     };
   }
+  
 
   /**
    * Create assign document function for transaction
@@ -4112,20 +4520,20 @@ export class WarehouseService {
     }
 
     // Save history of applicant checklist if application is rejected (before overwriting)
-    if (application.status === WarehouseOperatorApplicationStatus.REJECTED) {
-      const applicantChecklistHistory = repos.applicantChecklistHistory.create({
-        applicantChecklistId: existingApplicantChecklist.id,
-        applicationId: application.id,
-        humanResourcesId: existingApplicantChecklist.humanResourcesId,
-        financialSoundnessId: existingApplicantChecklist.financialSoundnessId,
-        registrationFeeId: existingApplicantChecklist.registrationFeeId,
-        declarationId: existingApplicantChecklist.declarationId,
-        isActive: false,
-      });
-      // Preserve the original createdAt timestamp from the applicant checklist record
-      applicantChecklistHistory.createdAt = existingApplicantChecklist.createdAt;
-      await repos.applicantChecklistHistory.save(applicantChecklistHistory);
-    }
+    // if (application.status === WarehouseOperatorApplicationStatus.REJECTED) {
+    //   const applicantChecklistHistory = repos.applicantChecklistHistory.create({
+    //     applicantChecklistId: existingApplicantChecklist.id,
+    //     applicationId: application.id,
+    //     humanResourcesId: existingApplicantChecklist.humanResourcesId,
+    //     financialSoundnessId: existingApplicantChecklist.financialSoundnessId,
+    //     registrationFeeId: existingApplicantChecklist.registrationFeeId,
+    //     declarationId: existingApplicantChecklist.declarationId,
+    //     isActive: false,
+    //   });
+    //   // Preserve the original createdAt timestamp from the applicant checklist record
+    //   applicantChecklistHistory.createdAt = existingApplicantChecklist.createdAt;
+    //   await repos.applicantChecklistHistory.save(applicantChecklistHistory);
+    // }
 
     // Update or create Human Resources
     let hrEntity: HumanResourcesChecklistEntity;
@@ -5330,7 +5738,11 @@ export class WarehouseService {
         id: applicationId, userId
       },
       select: {
-        id: true
+        id: true,
+        status: true,
+        operator: {
+          id: true
+        }
       }
     });
     if (!application) {
@@ -5343,6 +5755,29 @@ export class WarehouseService {
     // IF THE APPLICATION IS NOT FOUND, THROW AN ERROR
     if (!application) {
       throw new NotFoundException('Application not found');
+    }
+    let isUnlockRequest: UnlockRequest | null = null;
+
+    if (!isLocationApplication && application.status == WarehouseOperatorApplicationStatus.APPROVED) {
+      const operator = await this.dataSource.getRepository(WarehouseOperator).findOne({
+        where: {
+          applicationId: applicationId,
+        },
+        select: {
+          id: true,
+        }
+      });
+      if (!operator) {
+        throw new NotFoundException('Operator not found');
+      }
+
+      isUnlockRequest = await this.unlockRequestRepository.findOne({
+        where: {
+          operatorId: operator.id,
+          userId,
+          status: UnlockRequestStatus.UNLOCKED
+        }
+      });
     }
 
     let resourceArr: string[] = ['bank-statement', 'company-information', 'tax-return', 'other', 'hr', 'authorized-signatories', 'financial-information', 'applicant-checklist'];
@@ -5359,11 +5794,17 @@ export class WarehouseService {
     // check for assignments for the user and application
     const assignments = await this.assignmentRepository.find({
       where: {
-        ...(isLocationApplication ?
-          { applicationLocationId: applicationId } :
-          { applicationId: applicationId }),
+        ...(isUnlockRequest ? {
+          unlockRequestId: isUnlockRequest.id,
+          processType: AssignmentProcessType.UNLOCK,
+          level: AssignmentLevel.ADMIN_TO_APPLICANT
+        } : {
+          ...(isLocationApplication ?
+            { applicationLocationId: applicationId } :
+            { applicationId: applicationId }),
+          level: AssignmentLevel.HOD_TO_APPLICANT
+        }),
         assignedTo: userId,
-        level: AssignmentLevel.HOD_TO_APPLICANT
       }
     });
 
@@ -5399,7 +5840,7 @@ export class WarehouseService {
             case 'human-resources':
               return section.sectionType === '7-human-resources';
             case 'checklist':
-              return section.sectionType === '8-checklist';
+              return section.sectionType === '8-key-submission-checklist';
           }
         } else {
           switch (resourceType) {
@@ -5419,7 +5860,6 @@ export class WarehouseService {
         }
       });
 
-      console.log(filteredSections, 'filteredSections------');
       unlockedSections = filteredSections.map((section) => section.resourceId as string).filter((id): id is string => id !== null && id !== undefined);
     }
 
@@ -6050,45 +6490,7 @@ export class WarehouseService {
       .filter((name, index, self) => self.indexOf(name) === index); // unique
 
     for (const assignment of assignmentsToMove) {
-      // Move all sections for this assignment to history
-      if (assignment.sections && assignment.sections.length > 0) {
-        for (const section of assignment.sections) {
-          // Move assignment section fields to history
-          if (section.fields && section.fields.length > 0) {
-            for (const field of section.fields) {
-              const fieldHistory = assignmentSectionFieldHistoryRepo.create({
-                assignmentSectionFieldId: field.id,
-                assignmentSectionId: section.id,
-                fieldName: field.fieldName,
-                remarks: field.remarks,
-                status: field.status,
-                isActive: false,
-              });
-              // Preserve original createdAt
-              fieldHistory.createdAt = field.createdAt;
-              await assignmentSectionFieldHistoryRepo.save(fieldHistory);
-            }
-          }
-
-          // Move assignment section to history
-          const sectionHistory = assignmentSectionHistoryRepo.create({
-            assignmentSectionId: section.id,
-            assignmentId: assignment.id,
-            sectionType: section.sectionType,
-            resourceId: section.resourceId,
-            resourceType: section.resourceType,
-            isActive: false,
-          });
-          // Preserve original createdAt
-          sectionHistory.createdAt = section.createdAt;
-          await assignmentSectionHistoryRepo.save(sectionHistory);
-        }
-
-        // Delete all sections (cascade will delete fields)
-        await assignmentSectionRepo.remove(assignment.sections);
-      }
-
-      // Move assignment to history
+      // Move assignment to history first (needed for section history relationship)
       const assignmentHistory = assignmentHistoryRepo.create({
         assignmentId: assignment.id,
         parentAssignmentId: assignment.parentAssignment?.id || null,
@@ -6104,6 +6506,45 @@ export class WarehouseService {
       // Preserve original createdAt
       assignmentHistory.createdAt = assignment.createdAt;
       await assignmentHistoryRepo.save(assignmentHistory);
+
+      // Move all sections for this assignment to history
+      if (assignment.sections && assignment.sections.length > 0) {
+        for (const section of assignment.sections) {
+          // Move assignment section to history (needed for field history relationship)
+          const sectionHistory = assignmentSectionHistoryRepo.create({
+            assignmentSectionId: section.id,
+            assignmentHistoryId: assignmentHistory.id,
+            sectionType: section.sectionType,
+            resourceId: section.resourceId,
+            resourceType: section.resourceType,
+            isActive: false,
+          });
+          // Preserve original createdAt
+          sectionHistory.createdAt = section.createdAt;
+          await assignmentSectionHistoryRepo.save(sectionHistory);
+
+          // Move assignment section fields to history
+          if (section.fields && section.fields.length > 0) {
+            for (const field of section.fields) {
+              const fieldHistory = assignmentSectionFieldHistoryRepo.create({
+                assignmentSectionFieldId: field.id,
+                assignmentSectionId: section.id, // Keep for backward compatibility
+                assignmentSectionHistoryId: sectionHistory.id, // New relationship
+                fieldName: field.fieldName,
+                remarks: field.remarks,
+                status: field.status,
+                isActive: false,
+              });
+              // Preserve original createdAt
+              fieldHistory.createdAt = field.createdAt;
+              await assignmentSectionFieldHistoryRepo.save(fieldHistory);
+            }
+          }
+        }
+
+        // Delete all sections (cascade will delete fields)
+        await assignmentSectionRepo.remove(assignment.sections);
+      }
 
       // Delete the assignment
       await assignmentRepo.remove(assignment);
@@ -6315,6 +6756,42 @@ export class WarehouseService {
       throw new BadRequestException('Bank payment slip is required');
     }
 
+    // Try to get mimeType, originalFileName, iv, and authTag from WarehouseDocument
+    // bankPaymentSlip could be either a document ID (UUID) or a file path
+    let mimeType: string | null = null;
+    let originalFileName: string | null = null;
+    let iv: string | null = null;
+    let authTag: string | null = null;
+    const bankPaymentSlipValue = operatorUnlockRequestDto.bankPaymentSlip.trim();
+
+    // Try to find document by ID first (if it's a UUID)
+    if (uuidValidate(bankPaymentSlipValue)) {
+      const document = await this.warehouseDocumentRepository.findOne({
+        where: { id: bankPaymentSlipValue },
+      });
+
+      if (document) {
+        mimeType = document.mimeType || null;
+        originalFileName = document.originalFileName || null;
+        iv = document.iv || null;
+        authTag = document.authTag || null;
+      }
+    }
+
+    // If not found by ID, try to find by filePath
+    if (!mimeType && !originalFileName) {
+      const document = await this.warehouseDocumentRepository.findOne({
+        where: { filePath: bankPaymentSlipValue },
+      });
+
+      if (document) {
+        mimeType = document.mimeType || null;
+        originalFileName = document.originalFileName || null;
+        iv = document.iv || null;
+        authTag = document.authTag || null;
+      }
+    }
+
     // Use transaction for data consistency
     const unlockRequest = await this.dataSource.transaction(async (manager) => {
       const unlockRequestRepo = manager.getRepository(UnlockRequest);
@@ -6324,7 +6801,11 @@ export class WarehouseService {
         locationId: undefined,
         userId,
         remarks: operatorUnlockRequestDto.remarks.trim(),
-        bankPaymentSlip: operatorUnlockRequestDto.bankPaymentSlip.trim(),
+        bankPaymentSlip: bankPaymentSlipValue,
+        mimeType: mimeType || undefined,
+        originalFileName: originalFileName || undefined,
+        iv: iv || undefined,
+        authTag: authTag || undefined,
         status: UnlockRequestStatus.PENDING,
       };
 
@@ -6339,5 +6820,79 @@ export class WarehouseService {
       message: 'Unlock request submitted successfully',
       data: unlockRequest,
     };
+  }
+
+  async getUnlockRequests(userId: string): Promise<{ message: string, data: UnlockRequest[] }> {
+    const unlockRequests = await this.unlockRequestRepository.find({
+      where: {
+        userId,
+        status: UnlockRequestStatus.UNLOCKED
+      },
+    });
+
+    return {
+      message: 'Unlock requests retrieved successfully',
+      data: unlockRequests,
+    };
+  }
+
+  private async createUnlockUpdate(
+    authorizedSignatoryId: string,
+    updateDto: CreateAuthorizedSignatoryDto,
+    unlockRequestId: string,
+    userId: string
+  ) {
+    const existingUpdate = await this.dataSource.getRepository(AuthorizedSignatoryUnlockUpdate).findOne({
+      where: {
+        authorizedSignatoryId,
+        unlockRequestId,
+        status: UnlockUpdateStatus.PENDING
+      }
+    });
+
+    const updateData = {
+      unlockRequestId,
+      authorizedSignatoryId,
+      name: updateDto.name,
+      authorizedSignatoryName: updateDto.authorizedSignatoryName,
+      cnic: updateDto.cnic.toString(),
+      passport: updateDto.passport ?? '',
+      issuanceDateOfCnic: updateDto.issuanceDateOfCnic,
+      expiryDateOfCnic: updateDto.expiryDateOfCnic,
+      mailingAddress: updateDto.mailingAddress,
+      city: updateDto.city,
+      country: updateDto.country,
+      postalCode: updateDto.postalCode,
+      designation: updateDto.designation,
+      mobileNumber: updateDto.mobileNumber,
+      email: updateDto.email,
+      landlineNumber: updateDto.landlineNumber ?? '',
+      status: UnlockUpdateStatus.PENDING,
+    };
+
+    if (existingUpdate) {
+      Object.assign(existingUpdate, updateData);
+      await this.dataSource.getRepository(AuthorizedSignatoryUnlockUpdate).save(existingUpdate);
+      return {
+        message: 'Unlock request update saved successfully. Waiting for admin review.',
+        updateId: existingUpdate.id,
+        status: 'PENDING',
+      };
+    } else {
+      const newUpdate = this.dataSource.getRepository(AuthorizedSignatoryUnlockUpdate).create(updateData);
+      const saved = await this.dataSource.getRepository(AuthorizedSignatoryUnlockUpdate).save(newUpdate);
+      // Track resubmission for unlock request
+      // await this.trackUnlockResubmission(
+      //   unlockRequestId,
+      //   '1-authorize-signatory-information',
+      //   authorizedSignatoryId,
+      //   saved.id
+      // );
+      return {
+        message: 'Unlock request update saved successfully. Waiting for admin review.',
+        updateId: saved.id,
+        status: 'PENDING',
+      };
+    }
   }
 }

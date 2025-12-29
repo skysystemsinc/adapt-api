@@ -5,7 +5,7 @@ import { CreateSecurityDto } from './dto/create-security.dto';
 import { UpdateSecurityDto } from './dto/update-security.dto';
 import { Security } from './entities/security.entity';
 import { WarehouseLocation, WarehouseLocationStatus } from '../entities/warehouse-location.entity';
-import { WarehouseService } from '../../warehouse/warehouse.service';
+import { WarehouseLocationService } from '../warehouse-location.service';
 import { AssignmentSection } from '../../warehouse/operator/assignment/entities/assignment-section.entity';
 import { Assignment, AssignmentLevel, AssignmentStatus } from '../../warehouse/operator/assignment/entities/assignment.entity';
 import { SecurityHistory } from './entities/security-history.entity';
@@ -25,8 +25,8 @@ export class SecurityService {
     @InjectRepository(AssignmentSection)
     private readonly assignmentSectionRepository: Repository<AssignmentSection>,
 
-    @Inject(forwardRef(() => WarehouseService))
-    private readonly warehouseService: WarehouseService,
+    @Inject(forwardRef(() => WarehouseLocationService))
+    private readonly warehouseLocationService: WarehouseLocationService,
   ) { }
 
   /**
@@ -173,7 +173,7 @@ export class SecurityService {
         }
       }
 
-      await this.warehouseService['trackResubmissionAndUpdateStatus'](
+      await this.warehouseLocationService.trackWarehouseLocationResubmissionAndUpdateStatus(
         warehouseLocationId,
         '4-security-fire-safety',
         existingSecurity.id,

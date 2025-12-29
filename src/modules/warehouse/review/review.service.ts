@@ -15,6 +15,8 @@ import { WarehouseOperatorApplicationRequest } from '../entities/warehouse-opera
 import { WarehouseOperator } from '../entities/warehouse-operator.entity';
 import { WarehouseLocation, WarehouseLocationStatus } from 'src/modules/warehouse-location/entities/warehouse-location.entity';
 import { WarehouseOperatorLocation, WarehouseOperatorLocationStatus } from 'src/modules/warehouse-operator-location/entities/warehouse-operator-location.entity';
+import { AssessmentSubmission } from 'src/modules/expert-assessment/assessment-submission/entities/assessment-submission.entity';
+import { Assignment, AssignmentLevel } from '../operator/assignment/entities/assignment.entity';
 
 const REQUIRED_ASSESSMENT_TYPES: ReviewType[] = [
   ReviewType.HR,
@@ -338,5 +340,82 @@ export class ReviewService {
 
   remove(id: number) {
     return `This action removes a #${id} review`;
+  }
+
+  async getAssessmentByApplicationIdAndType(userId: string, applicationId: string, type: string, assessmentId: string) {
+    const assessment = await this.reviewRepository.findOne({
+      where: {
+        applicationId,
+        type: 'HOD',
+        // userId,
+        details: { id: assessmentId }
+      },
+      select: {
+        id: true,
+        applicationId: true,
+        applicationLocationId: true,
+        details: {
+          id: true,
+          submissionId: true,
+        },
+      },
+      relations: ['details'],
+    });
+
+    if (!assessment) {
+      throw new NotFoundException('Assessment not found');
+    }
+
+    if(assessment.details.length === 0) {
+      throw new NotFoundException('Assessment details not found');
+    }
+
+    const assessmentSubmission = await this.dataSource.getRepository(AssessmentSubmission).findOne({
+      where: {
+        id: assessment.details[0].submissionId,
+      },
+      select: {
+        inspectionReportId: true
+      }
+    });
+
+    if(!assessmentSubmission) {
+      throw new NotFoundException('Assessment submission not found');
+    }
+
+    const assignments = await this.dataSource.getRepository(Assignment).find({
+      where: {
+        assessmentId: assessmentSubmission.inspectionReportId,
+      },
+      select: {
+        id: true,
+        assignedTo: true,
+      },
+    });
+
+    if(assignments.length === 0) {
+      throw new NotFoundException('Assignments not found');
+    }
+
+    const HODAssignment = await this.dataSource.getRepository(Assignment).findOne({
+      where: {
+        assignedTo: assignments[0].assignedTo,
+        level: AssignmentLevel.OFFICER_TO_HOD,
+        ...(assessment.applicationLocationId ? { applicationLocationId: assessment.applicationLocationId } : { applicationId: assessment.applicationId }),
+      },
+      select: {
+        id: true,
+      },
+      relations: ['sections', 'sections.fields'],
+    });
+
+    if(!HODAssignment) {
+      throw new NotFoundException('HOD assignment not found');
+    }
+
+    return {
+      ...assessment,
+      HODAssignment: HODAssignment,
+    };
   }
 }

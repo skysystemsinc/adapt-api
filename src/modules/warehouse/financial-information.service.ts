@@ -14,7 +14,8 @@ import { AuditReportHistoryEntity } from './entities/financial/audit-report-hist
 import { TaxReturnHistoryEntity } from './entities/financial/tax-return-history.entity';
 import { BankStatementHistoryEntity } from './entities/financial/bank-statement-history.entity';
 import { OthersHistoryEntity } from './entities/financial/others-history.entity';
-import { AssignmentLevel, AssignmentStatus } from './operator/assignment/entities/assignment.entity';
+import { AssignmentLevel } from './operator/assignment/entities/assignment.entity';
+import { AssignmentStatus } from '../../utilites/enum';
 
 @Injectable()
 export class FinancialInformationService {

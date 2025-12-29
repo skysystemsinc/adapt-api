@@ -4,9 +4,10 @@ import { CreateWarehouseAdminDto } from './dto/create-warehouse-admin.dto';
 import { UpdateWarehouseAdminDto } from './dto/update-warehouse-admin.dto';
 import { QueryOperatorApplicationDto } from './dto/query-operator-application.dto';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
-import { ApiBearerAuth, ApiOperation, ApiConsumes } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response as ExpressResponse } from 'express';
+import { UnlockRequestApprovalDto } from './dto/unlock-request-approval.dto';
 
 @Controller('warehouse-admin')
 export class WarehouseAdminController {
@@ -39,6 +40,18 @@ export class WarehouseAdminController {
   ) {
     const userId = req.user.id;
     return this.warehouseAdminService.findOne(id, userId);
+  }
+
+  @Get('/application/:id/operator-unlock-request')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get unlock request by ID' })
+  findOneUnlockRequest(
+    @Param('id') id: string,
+    @Req() req: any
+  ) {
+    const userId = req.user.id;
+    return this.warehouseAdminService.findOneUnlockRequest(id, userId);
   }
 
   @Get('/application/roles')
@@ -139,5 +152,51 @@ export class WarehouseAdminController {
     @Req() req: any,
   ) {
     return this.warehouseAdminService.deleteOperatorCertificate(id);
+  }
+
+  @Post('/operators/request-approvals')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Request approval for operator' })
+  async listOperatorRequestApprovals(
+    @Query() query: QueryOperatorApplicationDto,
+    @Req() req: any,
+  ) {
+    const userId = req.user.id;
+    return this.warehouseAdminService.listOperatorRequestApprovals(query, userId);
+  }
+
+  @Get('/operators/request-approvals/:id/bankslip/download')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Download bank payment slip for unlock request' })
+  async downloadUnlockRequestBankslip(
+    @Param('id') id: string,
+    @Res() res: ExpressResponse,
+  ) {
+    const { buffer, mimeType, filename } = await this.warehouseAdminService.downloadUnlockRequestBankslip(id);
+
+    // Set security headers
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'");
+    res.setHeader('X-Frame-Options', 'DENY');
+
+    res.send(buffer);
+  }
+
+  @Patch('/operators/request-approvals/:id/review')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Review unlock request' })
+  @ApiBody({ type: UnlockRequestApprovalDto })
+  async reviewUnlockRequest(
+    @Param('id') id: string,
+    @Body() reviewUnlockRequestDto: UnlockRequestApprovalDto,
+    @Req() req: any,
+  ) {
+    const userId = req.user.id;
+    return this.warehouseAdminService.reviewUnlockRequest(id, reviewUnlockRequestDto, userId);
   }
 }

@@ -13,6 +13,21 @@ import { RequirePermissions } from '../../../common/decorators/require-permissio
 export class ReviewController {
   constructor(private readonly reviewService: ReviewService) {}
 
+  @Get('application/:applicationId/assignments/:type/assessment/:assessmentId')
+  @ApiOperation({ summary: 'Get an assessment by application ID and type' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @RequirePermissions(Permissions.REVIEW_ASSESSMENT, Permissions.REVIEW_FINAL_APPLICATION)
+  async getAssessmentByApplicationIdAndType(
+    @Param('applicationId') applicationId: string,
+    @Param('type') type: string,
+    @Param('assessmentId') assessmentId: string,
+    @Req() req: any,
+  ) {
+    const user = req.user as User;
+    return await this.reviewService.getAssessmentByApplicationIdAndType(user.id, applicationId, type, assessmentId);
+  }
+
   @Post('/:applicationId/assessment/:assessmentId')
   @ApiOperation({ summary: 'Create a review' })
   @UseGuards(JwtAuthGuard)

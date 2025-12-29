@@ -8,10 +8,12 @@ import { AssignmentSectionField } from './entities/assignment-section-field.enti
 import { User } from 'src/modules/users/entities/user.entity';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { UnlockRequest } from '../../entities/unlock-request.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Assignment, AssignmentSection, AssignmentSectionField, User]),
+    TypeOrmModule.forFeature([Assignment, AssignmentSection, AssignmentSectionField,
+      User, UnlockRequest]),
     ConfigModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -25,4 +27,4 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
   controllers: [AssignmentController],
   providers: [AssignmentService],
 })
-export class AssignmentModule {}
+export class AssignmentModule { }
