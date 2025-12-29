@@ -103,6 +103,7 @@ export class RBACSeeder {
       const excludedPermissions = [
         Permissions.IS_HOD,
         Permissions.IS_EXPERT,
+        Permissions.FINAL_APPROVAL_USER
       ];
 
       const permissionsForSuperAdmin = createdPermissions.filter(
