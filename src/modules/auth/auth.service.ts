@@ -158,6 +158,7 @@ export class AuthService {
     
     return { 
       message: 'OTP has been sent to your email',
+      otp: otp,
     };
   }
 
