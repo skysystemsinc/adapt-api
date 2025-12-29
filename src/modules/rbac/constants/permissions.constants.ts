@@ -77,6 +77,7 @@ export enum Permissions {
   // Expert Assessment permissions
   VIEW_EXPERT_ASSESSMENT = 'view_expert_assessment',
   MANAGE_EXPERT_ASSESSMENT = 'manage_expert_assessment',
+  MANAGE_EXPERT_ASSESSMENT_REQUESTS = 'manage_expert_assessment_requests',
 
   // Settings Tab Permissions
   VIEW_SETTINGS = 'view_settings',
@@ -100,8 +101,14 @@ export enum Permissions {
   // Role Requests permissions
   MANAGE_ROLE_REQUESTS = 'manage_role_requests',
 
+  // User Requests permissions
+  MANAGE_USER_REQUESTS = 'manage_user_requests',
+
   // Dynamic Calculator permissions
   MANAGE_CALCULATOR = 'manage_calculator',
+
+  // User Final Approval
+  FINAL_APPROVAL_USER = 'final_approval_user',
 
   // Warehouse Admin permissions
   IS_OFFICER = 'is_officer',

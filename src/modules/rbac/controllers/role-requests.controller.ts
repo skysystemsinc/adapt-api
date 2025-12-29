@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   HttpCode,
   HttpStatus,
   ParseUUIDPipe,
@@ -23,6 +24,7 @@ import { RoleRequestsService } from '../services/role-requests.service';
 import { CreateRoleRequestDto } from '../dto/create-role-request.dto';
 import { ReviewRoleRequestDto } from '../dto/review-role-request.dto';
 import { RoleRequestResponseDto } from '../dto/role-request-response.dto';
+import { QueryRoleRequestsDto } from '../dto/query-role-requests.dto';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../../common/decorators/require-permissions.decorator';
@@ -53,14 +55,36 @@ export class RoleRequestsController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all role requests' })
+  @ApiOperation({ summary: 'Get all role requests with pagination and search' })
   @ApiResponse({
     status: 200,
-    description: 'List of all role requests',
-    type: [RoleRequestResponseDto],
+    description: 'Paginated list of role requests',
+    schema: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/RoleRequestResponseDto' },
+        },
+        meta: {
+          type: 'object',
+          properties: {
+            total: { type: 'number' },
+            page: { type: 'number' },
+            limit: { type: 'number' },
+            totalPages: { type: 'number' },
+          },
+        },
+      },
+    },
   })
-  async findAll(): Promise<RoleRequestResponseDto[]> {
-    return this.roleRequestsService.findAll();
+  async findAll(
+    @Query() query: QueryRoleRequestsDto,
+  ): Promise<{
+    data: RoleRequestResponseDto[];
+    meta: { total: number; page: number; limit: number; totalPages: number };
+  }> {
+    return this.roleRequestsService.findAll(query);
   }
 
   @Get(':id')

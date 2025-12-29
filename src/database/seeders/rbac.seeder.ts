@@ -103,6 +103,7 @@ export class RBACSeeder {
       const excludedPermissions = [
         Permissions.IS_HOD,
         Permissions.IS_EXPERT,
+        Permissions.FINAL_APPROVAL_USER
       ];
 
       const permissionsForSuperAdmin = createdPermissions.filter(
@@ -761,7 +762,8 @@ export class RBACSeeder {
         Permissions.WAREHOUSE_OPERATOR_DESCISION,
         Permissions.VIEW_WAREHOUSE_APPLICATION_ASSIGNMENT,
         Permissions.VIEW_KYC,
-        Permissions.REVIEW_FINAL_APPLICATION
+        Permissions.REVIEW_FINAL_APPLICATION,
+        Permissions.FINAL_APPROVAL_USER
       ];
 
       for (const permissionName of ceoCommitteePermissions) {
