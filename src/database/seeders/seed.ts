@@ -64,8 +64,8 @@ async function runSeeders() {
     const dynamicCalculatorSeeder = new DynamicCalculatorSeeder();
     await dynamicCalculatorSeeder.run(AppDataSource);
 
-    const formsSeeder = new FormsSeeder();
-    await formsSeeder.run(AppDataSource);
+    // const formsSeeder = new FormsSeeder();
+    // await formsSeeder.run(AppDataSource);
 
     console.log('\n✅ Seeding completed successfully!');
     process.exit(0);
