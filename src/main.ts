@@ -27,7 +27,11 @@ async function bootstrap() {
     transform: true,
   }));
 
-  app.setGlobalPrefix('api');
+  if (process.env.ENVIRONMENT == 'UAT' || process.env.ENVIRONMENT == 'gateway') {
+    app.setGlobalPrefix('gateway');
+  } else {
+    app.setGlobalPrefix('api');
+  }
 
   const config = new DocumentBuilder()
     .setTitle('NCMCL API')
