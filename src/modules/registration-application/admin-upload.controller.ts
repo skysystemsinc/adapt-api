@@ -3,14 +3,12 @@ import {
   Get,
   Post,
   Param,
-  UploadedFile,
-  UseInterceptors,
+  Body,
   HttpCode,
   HttpStatus,
   BadRequestException,
   Response,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiTags,
   ApiOperation,
@@ -21,7 +19,7 @@ import {
 } from '@nestjs/swagger';
 import type { Response as ExpressResponse } from 'express';
 import { RegistrationApplicationService } from './registration-application.service';
-import { UploadAdminDocumentResponseDto, AdminDocumentResponseDto } from './dto/upload-admin-document.dto';
+import { UploadAdminDocumentResponseDto, AdminDocumentResponseDto, UploadAdminDocumentDto } from './dto/upload-admin-document.dto';
 
 @ApiTags('Admin Upload')
 @Controller('admin/registration')
@@ -50,28 +48,13 @@ export class AdminUploadController {
 
   @Post(':registrationId/detail/:detailId/upload')
   @HttpCode(HttpStatus.CREATED)
-  @UseInterceptors(
-    FileInterceptor('file', {
-      limits: {
-        fileSize: 100 * 1024 * 1024, // 100MB max
-      },
-    }),
-  )
   @ApiOperation({ summary: 'Upload admin document for registration application detail' })
-  @ApiConsumes('multipart/form-data')
+  @ApiConsumes('application/json')
   @ApiParam({ name: 'registrationId', description: 'Registration application ID' })
   @ApiParam({ name: 'detailId', description: 'Registration application detail ID' })
   @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        file: {
-          type: 'string',
-          format: 'binary',
-        },
-      },
-      required: ['file'],
-    },
+    type: UploadAdminDocumentDto,
+    description: 'File upload with base64 encoded content',
   })
   @ApiResponse({
     status: 201,
@@ -83,11 +66,36 @@ export class AdminUploadController {
   async uploadAdminDocument(
     @Param('registrationId') registrationId: string,
     @Param('detailId') detailId: string,
-    @UploadedFile() file: any,
+    @Body() uploadDto: UploadAdminDocumentDto,
   ): Promise<UploadAdminDocumentResponseDto> {
-    if (!file) {
+    if (!uploadDto.file) {
       throw new BadRequestException('No file provided');
     }
+
+    // Decode base64 to buffer
+    let fileBuffer: Buffer;
+    try {
+      fileBuffer = Buffer.from(uploadDto.file, 'base64');
+    } catch (error) {
+      throw new BadRequestException('Invalid base64 file data');
+    }
+
+    // Validate file size (100MB max)
+    const maxSizeBytes = 100 * 1024 * 1024;
+    if (fileBuffer.length > maxSizeBytes) {
+      throw new BadRequestException(
+        `File size ${(fileBuffer.length / 1024 / 1024).toFixed(2)}MB exceeds maximum allowed size of 100MB`,
+      );
+    }
+
+    // Create file-like object that matches Multer file structure
+    // This ensures existing service code continues to work
+    const file = {
+      buffer: fileBuffer,
+      originalname: uploadDto.fileName,
+      size: uploadDto.fileSize || fileBuffer.length,
+      mimetype: uploadDto.mimeType || 'application/octet-stream',
+    };
 
     return this.registrationApplicationService.uploadAdminDocument(
       registrationId,
