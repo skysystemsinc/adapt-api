@@ -65,6 +65,5 @@ export class CreateHumanResourceDto {
     photograph?: BaseFileUploadDto;
 
     @IsOptional()
-    @Exclude()
     hrId?: string; // Excluded from validation - comes from URL parameter
 }

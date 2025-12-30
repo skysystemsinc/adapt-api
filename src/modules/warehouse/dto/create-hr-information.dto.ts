@@ -23,7 +23,7 @@ export class HrPersonalDetailsDto {
   designationName?: string;
 
   @IsOptional()
-  photograph?: BaseFileUploadDto;
+  photograph?: string | BaseFileUploadDto;
 
   @IsString()
   @IsNotEmpty()
@@ -98,7 +98,7 @@ export class HrAcademicQualificationDto {
   grade?: string;
 
   @IsOptional()
-  academicCertificate?: BaseFileUploadDto;
+  academicCertificate?: string | BaseFileUploadDto;
 }
 
 export class HrProfessionalQualificationDto {
@@ -127,7 +127,7 @@ export class HrProfessionalQualificationDto {
   membershipNumber?: string;
 
   @IsOptional()
-  professionalCertificate?: BaseFileUploadDto;
+  professionalCertificate?: string | BaseFileUploadDto;
 }
 
 export class HrTrainingDto {
@@ -156,7 +156,7 @@ export class HrTrainingDto {
   dateOfCompletion!: string;
 
   @IsOptional()
-  trainingCertificate?: BaseFileUploadDto;
+  trainingCertificate?: string | BaseFileUploadDto;
 }
 
 export class HrExperienceDto {
@@ -193,7 +193,7 @@ export class HrExperienceDto {
   responsibilities?: string;
 
   @IsOptional()
-  experienceLetter?: BaseFileUploadDto;
+  experienceLetter?: string | BaseFileUploadDto;
 }
 
 export class HrDeclarationDto {

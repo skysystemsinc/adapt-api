@@ -84,7 +84,7 @@ export class CreateCompanyInformationRequestDto {
     nationalTaxNumber!: string;
 
     @ApiPropertyOptional({
-        type: 'object',
+        type: BaseFileUploadDto,
         description: 'NTN certificate file (base64 encoded). Max size: 100MB',
     })
     @IsOptional()

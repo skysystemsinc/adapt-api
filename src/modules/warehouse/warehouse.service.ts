@@ -22,6 +22,7 @@ import { encryptBuffer, decryptBuffer } from 'src/common/utils/helper.utils';
 import { StepStatus } from './entities/bank-details.entity';
 import { BankDetails } from './entities/bank-details.entity';
 import { UpsertHrInformationDto, HrPersonalDetailsDto, HrDeclarationDto, HrAcademicQualificationDto, HrProfessionalQualificationDto, HrTrainingDto, HrExperienceDto } from './dto/create-hr-information.dto';
+import { BaseFileUploadDto } from 'src/common/dto/base-file-upload.dto';
 import { Designation } from '../common/entities/designation.entity';
 import { AccountType, UpdateBankDetailsDto } from './dto/create-bank-details.dto';
 import { FinancialInformationEntity } from './entities/financial-information.entity';
@@ -1141,33 +1142,33 @@ export class WarehouseService {
 
     // Map uploaded document IDs to DTO (override any existing document IDs from DTO if files were uploaded)
     if (uploadedDocumentIds.photograph) {
-      dto.personalDetails.photograph = uploadedDocumentIds.photograph;
+      dto.personalDetails.photograph = uploadedDocumentIds.photograph as string;
     }
     if (uploadedDocumentIds.academicCertificates.length > 0) {
       dto.academicQualifications.forEach((item, idx) => {
         if (uploadedDocumentIds.academicCertificates[idx]) {
-          item.academicCertificate = uploadedDocumentIds.academicCertificates[idx];
+          item.academicCertificate = uploadedDocumentIds.academicCertificates[idx] as string;
         }
       });
     }
     if (uploadedDocumentIds.professionalCertificates.length > 0) {
       dto.professionalQualifications.forEach((item, idx) => {
         if (uploadedDocumentIds.professionalCertificates[idx]) {
-          item.professionalCertificate = uploadedDocumentIds.professionalCertificates[idx];
+          item.professionalCertificate = uploadedDocumentIds.professionalCertificates[idx] as string;
         }
       });
     }
     if (uploadedDocumentIds.trainingCertificates.length > 0) {
       dto.trainings.forEach((item, idx) => {
         if (uploadedDocumentIds.trainingCertificates[idx]) {
-          item.trainingCertificate = uploadedDocumentIds.trainingCertificates[idx];
+          item.trainingCertificate = uploadedDocumentIds.trainingCertificates[idx] as string;
         }
       });
     }
     if (uploadedDocumentIds.experienceLetters.length > 0) {
       dto.experiences.forEach((item, idx) => {
         if (uploadedDocumentIds.experienceLetters[idx]) {
-          item.experienceLetter = uploadedDocumentIds.experienceLetters[idx];
+          item.experienceLetter = uploadedDocumentIds.experienceLetters[idx] as string;
         }
       });
     }
@@ -1182,6 +1183,14 @@ export class WarehouseService {
       const declarationRepo = manager.getRepository(DeclarationEntity);
       const designationRepo = manager.getRepository(Designation);
       const documentRepo = manager.getRepository(WarehouseDocument);
+
+      // Helper to extract string UUID from DTO field (handles string | BaseFileUploadDto | undefined)
+      const extractDocumentId = (value: string | BaseFileUploadDto | undefined | null): string | null | undefined => {
+        if (!value) return value as null | undefined;
+        if (typeof value === 'string') return value;
+        // If it's BaseFileUploadDto, it should have been handled by controller, return undefined
+        return undefined;
+      };
 
       const assignDocument = async (
         documentId: string | undefined | null,
@@ -1266,7 +1275,7 @@ export class WarehouseService {
         await personalRepo.save(existingHr.personalDetails);
 
         await assignDocument(
-          existingHr.personalDetails.photograph ?? dto.personalDetails.photograph ?? null,
+          extractDocumentId(existingHr.personalDetails.photograph ?? dto.personalDetails.photograph ?? null),
           'HrPersonalDetails',
           'photograph',
           existingHr.personalDetails.id,
@@ -1281,7 +1290,7 @@ export class WarehouseService {
           dto.academicQualifications.map((item) =>
             academicRepo.create({
               ...item,
-              academicCertificate: item.academicCertificate ?? null,
+              academicCertificate: extractDocumentId(item.academicCertificate ?? null) ?? null,
               hrId: existingHr.id,
             }),
           ),
@@ -1290,7 +1299,7 @@ export class WarehouseService {
         await Promise.all(
           academicEntities.map((entity, idx) =>
             assignDocument(
-              dto.academicQualifications[idx]?.academicCertificate ?? null,
+              extractDocumentId(dto.academicQualifications[idx]?.academicCertificate ?? null),
               'HrAcademicQualification',
               'academicCertificate',
               entity.id,
@@ -1302,7 +1311,7 @@ export class WarehouseService {
           dto.professionalQualifications.map((item) =>
             professionalRepo.create({
               ...item,
-              professionalCertificate: item.professionalCertificate ?? null,
+              professionalCertificate: extractDocumentId(item.professionalCertificate ?? null) ?? null,
               hrId: existingHr.id,
             }),
           ),
@@ -1311,7 +1320,7 @@ export class WarehouseService {
         await Promise.all(
           professionalEntities.map((entity, idx) =>
             assignDocument(
-              dto.professionalQualifications[idx]?.professionalCertificate ?? null,
+              extractDocumentId(dto.professionalQualifications[idx]?.professionalCertificate ?? null),
               'HrProfessionalQualification',
               'professionalCertificate',
               entity.id,
@@ -1323,7 +1332,7 @@ export class WarehouseService {
           dto.trainings.map((item) =>
             trainingsRepo.create({
               ...item,
-              trainingCertificate: item.trainingCertificate ?? null,
+              trainingCertificate: extractDocumentId(item.trainingCertificate ?? null) ?? null,
               hrId: existingHr.id,
             }),
           ),
@@ -1332,7 +1341,7 @@ export class WarehouseService {
         await Promise.all(
           trainingEntities.map((entity, idx) =>
             assignDocument(
-              dto.trainings[idx]?.trainingCertificate ?? null,
+              extractDocumentId(dto.trainings[idx]?.trainingCertificate ?? null),
               'HrTraining',
               'trainingCertificate',
               entity.id,
@@ -1344,7 +1353,7 @@ export class WarehouseService {
           dto.experiences.map((item) =>
             experienceRepo.create({
               ...item,
-              experienceLetter: item.experienceLetter ?? null,
+              experienceLetter: extractDocumentId(item.experienceLetter ?? null) ?? null,
               hrId: existingHr.id,
             }),
           ),
@@ -1353,7 +1362,7 @@ export class WarehouseService {
         await Promise.all(
           experienceEntities.map((entity, idx) =>
             assignDocument(
-              dto.experiences[idx]?.experienceLetter ?? null,
+              extractDocumentId(dto.experiences[idx]?.experienceLetter ?? null),
               'HrExperience',
               'experienceLetter',
               entity.id,
@@ -1383,12 +1392,12 @@ export class WarehouseService {
         ...dto.personalDetails,
         designationId: resolvedDesignationId ?? undefined,
         dateOfBirth: normalizeDate(dto.personalDetails.dateOfBirth),
-        photograph: dto.personalDetails.photograph ?? undefined,
+        photograph: extractDocumentId(dto.personalDetails.photograph ?? undefined) ?? undefined,
       });
       await personalRepo.save(personalDetails);
 
       await assignDocument(
-        dto.personalDetails.photograph ?? null,
+        extractDocumentId(dto.personalDetails.photograph ?? null),
         'HrPersonalDetails',
         'photograph',
         personalDetails.id,
@@ -1410,7 +1419,7 @@ export class WarehouseService {
         dto.academicQualifications.map((item) =>
           academicRepo.create({
             ...item,
-            academicCertificate: item.academicCertificate ?? null,
+            academicCertificate: extractDocumentId(item.academicCertificate ?? null) ?? null,
             hrId: hr.id,
           }),
         ),
@@ -1419,7 +1428,7 @@ export class WarehouseService {
       await Promise.all(
         academicEntities.map((entity, idx) =>
           assignDocument(
-            dto.academicQualifications[idx]?.academicCertificate ?? null,
+            extractDocumentId(dto.academicQualifications[idx]?.academicCertificate ?? null),
             'HrAcademicQualification',
             'academicCertificate',
             entity.id,
@@ -1431,7 +1440,7 @@ export class WarehouseService {
         dto.professionalQualifications.map((item) =>
           professionalRepo.create({
             ...item,
-            professionalCertificate: item.professionalCertificate ?? null,
+            professionalCertificate: extractDocumentId(item.professionalCertificate ?? null) ?? null,
             hrId: hr.id,
           }),
         ),
@@ -1440,7 +1449,7 @@ export class WarehouseService {
       await Promise.all(
         professionalEntities.map((entity, idx) =>
           assignDocument(
-            dto.professionalQualifications[idx]?.professionalCertificate ?? null,
+            extractDocumentId(dto.professionalQualifications[idx]?.professionalCertificate ?? null),
             'HrProfessionalQualification',
             'professionalCertificate',
             entity.id,
@@ -1452,7 +1461,7 @@ export class WarehouseService {
         dto.trainings.map((item) =>
           trainingsRepo.create({
             ...item,
-            trainingCertificate: item.trainingCertificate ?? null,
+            trainingCertificate: extractDocumentId(item.trainingCertificate ?? null) ?? null,
             hrId: hr.id,
           }),
         ),
@@ -1461,7 +1470,7 @@ export class WarehouseService {
       await Promise.all(
         trainingEntities.map((entity, idx) =>
           assignDocument(
-            dto.trainings[idx]?.trainingCertificate ?? null,
+            extractDocumentId(dto.trainings[idx]?.trainingCertificate ?? null),
             'HrTraining',
             'trainingCertificate',
             entity.id,
@@ -1473,7 +1482,7 @@ export class WarehouseService {
         dto.experiences.map((item) =>
           experienceRepo.create({
             ...item,
-            experienceLetter: item.experienceLetter ?? null,
+            experienceLetter: extractDocumentId(item.experienceLetter ?? null) ?? null,
             hrId: hr.id,
           }),
         ),
@@ -1482,7 +1491,7 @@ export class WarehouseService {
       await Promise.all(
         experienceEntities.map((entity, idx) =>
           assignDocument(
-            dto.experiences[idx]?.experienceLetter ?? null,
+            extractDocumentId(dto.experiences[idx]?.experienceLetter ?? null),
             'HrExperience',
             'experienceLetter',
             entity.id,
@@ -2127,8 +2136,15 @@ export class WarehouseService {
         (await resolveDesignationId(dto.designationName)) ??
         null;
 
+      // Helper to extract string UUID from DTO field
+      const extractDocumentId = (value: string | BaseFileUploadDto | undefined | null): string | null | undefined => {
+        if (!value) return value as null | undefined;
+        if (typeof value === 'string') return value;
+        return undefined;
+      };
+
       // Upload photograph if provided
-      let photographDocumentId = dto.photograph;
+      let photographDocumentId: string | undefined = extractDocumentId(dto.photograph) ?? undefined;
       if (photographFile) {
         const photoDoc = await this.uploadWarehouseDocument(
           photographFile,
@@ -2529,8 +2545,15 @@ export class WarehouseService {
         await documentRepo.save(document);
       };
 
+      // Helper to extract string UUID from DTO field
+      const extractDocumentId = (value: string | BaseFileUploadDto | undefined | null): string | null | undefined => {
+        if (!value) return value as null | undefined;
+        if (typeof value === 'string') return value;
+        return undefined;
+      };
+
       // Upload certificate if provided
-      let certificateDocumentId = dto.academicCertificate;
+      let certificateDocumentId: string | undefined = extractDocumentId(dto.academicCertificate) ?? undefined;
       if (certificateFile) {
         const certDoc = await this.uploadWarehouseDocument(
           certificateFile,
@@ -2774,7 +2797,14 @@ export class WarehouseService {
       };
 
       // Upload certificate if provided
-      let certificateDocumentId = dto.professionalCertificate;
+      // Helper to extract string UUID from DTO field
+      const extractDocumentId = (value: string | BaseFileUploadDto | undefined | null): string | null | undefined => {
+        if (!value) return value as null | undefined;
+        if (typeof value === 'string') return value;
+        return undefined;
+      };
+
+      let certificateDocumentId: string | undefined = extractDocumentId(dto.professionalCertificate) ?? undefined;
       if (certificateFile) {
         const certDoc = await this.uploadWarehouseDocument(
           certificateFile,
@@ -3018,7 +3048,14 @@ export class WarehouseService {
       };
 
       // Upload certificate if provided
-      let certificateDocumentId = dto.trainingCertificate;
+      // Helper to extract string UUID from DTO field
+      const extractDocumentId = (value: string | BaseFileUploadDto | undefined | null): string | null | undefined => {
+        if (!value) return value as null | undefined;
+        if (typeof value === 'string') return value;
+        return undefined;
+      };
+
+      let certificateDocumentId: string | undefined = extractDocumentId(dto.trainingCertificate) ?? undefined;
       if (certificateFile) {
         const certDoc = await this.uploadWarehouseDocument(
           certificateFile,
@@ -3262,7 +3299,14 @@ export class WarehouseService {
       };
 
       // Upload experience letter if provided
-      let letterDocumentId = dto.experienceLetter;
+      // Helper to extract string UUID from DTO field
+      const extractDocumentId = (value: string | BaseFileUploadDto | undefined | null): string | null | undefined => {
+        if (!value) return value as null | undefined;
+        if (typeof value === 'string') return value;
+        return undefined;
+      };
+
+      let letterDocumentId: string | undefined = extractDocumentId(dto.experienceLetter) ?? undefined;
       if (experienceLetterFile) {
         const letterDoc = await this.uploadWarehouseDocument(
           experienceLetterFile,
