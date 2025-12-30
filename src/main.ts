@@ -27,7 +27,7 @@ async function bootstrap() {
     transform: true,
   }));
 
-  if (process.env.ENVIRONMENT == 'UAT' || process.env.ENVIRONMENT == 'gateway') {
+  if (process.env.NODE_ENV == 'UAT' || process.env.NODE_ENV == 'production') {
     app.setGlobalPrefix('gateway');
   } else {
     app.setGlobalPrefix('api');
