@@ -46,25 +46,11 @@ export class UploadsController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @UseGuards(UploadRateLimitGuard)
-  @UseInterceptors(
-    FileInterceptor('file', {
-      limits: {
-        fileSize: 100 * 1024 * 1024, // 100MB max
-      },
-    }),
-  )
   @ApiOperation({ summary: 'Upload a file for form submission' })
-  @ApiConsumes('multipart/form-data')
+  @ApiConsumes('application/json')
   @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        formId: { type: 'string', format: 'uuid' },
-        fieldId: { type: 'string', format: 'uuid' },
-        file: { type: 'string', format: 'binary' },
-      },
-      required: ['formId', 'fieldId', 'file'],
-    },
+    type: UploadFileDto,
+    description: 'File upload with base64 encoded content',
   })
   @ApiResponse({
     status: 201,
@@ -75,32 +61,59 @@ export class UploadsController {
   @ApiResponse({ status: 404, description: 'Form or field not found' })
   @ApiResponse({ status: 429, description: 'Too many requests' })
   async uploadFile(
-    @Body('formId') formId: string,
-    @Body('fieldId') fieldId: string,
-    @Body('userId') userId: string | undefined,
-    @UploadedFile() file: any, // Multer file type
+    @Body() uploadDto: UploadFileDto,
   ): Promise<UploadFileResponseDto> {
     console.log('📥 Upload request received:', {
-      formId,
-      fieldId,
-      fileReceived: !!file,
-      fileName: file?.originalname,
-      fileSize: file?.size,
+      formId: uploadDto.formId,
+      fieldId: uploadDto.fieldId,
+      fileName: uploadDto.fileName,
+      fileSize: uploadDto.fileSize,
+      hasBase64: !!uploadDto.file,
     });
 
-    if (!file) {
+    if (!uploadDto.file) {
       throw new BadRequestException('No file provided');
     }
 
-    if (!formId) {
+    if (!uploadDto.formId) {
       throw new BadRequestException('formId is required');
     }
 
-    if (!fieldId) {
+    if (!uploadDto.fieldId) {
       throw new BadRequestException('fieldId is required');
     }
 
-    return this.uploadsService.uploadFile(formId, fieldId, file, userId);
+    // Decode base64 to buffer
+    let fileBuffer: Buffer;
+    try {
+      fileBuffer = Buffer.from(uploadDto.file, 'base64');
+    } catch (error) {
+      throw new BadRequestException('Invalid base64 file data');
+    }
+
+    // Validate file size (100MB max)
+    const maxSizeBytes = 100 * 1024 * 1024;
+    if (fileBuffer.length > maxSizeBytes) {
+      throw new BadRequestException(
+        `File size ${(fileBuffer.length / 1024 / 1024).toFixed(2)}MB exceeds maximum allowed size of 100MB`,
+      );
+    }
+
+    // Create file-like object that matches Multer file structure
+    // This ensures existing service code continues to work
+    const file = {
+      buffer: fileBuffer,
+      originalname: uploadDto.fileName,
+      size: uploadDto.fileSize || fileBuffer.length,
+      mimetype: uploadDto.mimeType || 'application/octet-stream',
+    };
+
+    return this.uploadsService.uploadFile(
+      uploadDto.formId,
+      uploadDto.fieldId,
+      file,
+      uploadDto.userId,
+    );
   }
 
   @Get('*')
