@@ -5,15 +5,19 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { UsersModule } from '../users/users.module';
+import { RegistrationApplicationModule } from '../registration-application/registration-application.module';
 import { User } from '../users/entities/user.entity';
+import { RegistrationApplication } from '../registration-application/entities/registration-application.entity';
+import { RegistrationApplicationDetails } from '../registration-application/entities/registration-application-details.entity';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RecaptchaService } from './services/recaptcha.service';
 import { ForgotPasswordRateLimitGuard } from './guards/forgot-password-rate-limit.guard';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User]),
+    TypeOrmModule.forFeature([User, RegistrationApplication, RegistrationApplicationDetails]),
     UsersModule,
+    RegistrationApplicationModule,
     ConfigModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],

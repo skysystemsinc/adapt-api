@@ -12,6 +12,9 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { VerifyOTPDto } from './dto/verify-otp.dto';
 import { RecaptchaService } from './services/recaptcha.service';
+import { RegistrationApplicationService } from '../registration-application/registration-application.service';
+import { RegistrationApplication } from '../registration-application/entities/registration-application.entity';
+import { RegistrationApplicationDetails } from '../registration-application/entities/registration-application-details.entity';
 
 @Injectable()
 export class AuthService {
@@ -20,8 +23,13 @@ export class AuthService {
     private jwtService: JwtService,
     private usersService: UsersService,
     private recaptchaService: RecaptchaService,
+    private registrationApplicationService: RegistrationApplicationService,
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    @InjectRepository(RegistrationApplication)
+    private registrationApplicationRepository: Repository<RegistrationApplication>,
+    @InjectRepository(RegistrationApplicationDetails)
+    private registrationApplicationDetailsRepository: Repository<RegistrationApplicationDetails>,
   ) {}
 
   async login(loginDto: LoginDto) {
@@ -144,8 +152,8 @@ export class AuthService {
     }
 
     // Generate OTP (4 digits)
-    // const otp = Math.floor(1000 + Math.random() * 9000).toString();
-    const otp = "1234";
+    const otp = Math.floor(1000 + Math.random() * 9000).toString();
+    // const otp = "1234";
     const otpExpires = new Date(Date.now() + 2 * 60 * 1000); // 2 minutes
 
     await this.userRepository.update(user.id, {
@@ -155,10 +163,28 @@ export class AuthService {
 
     // TODO: Send OTP via email service
     console.log(`OTP for ${user.email}: ${otp}`);
+
+    const registrationApplication = await this.registrationApplicationRepository.findOne({
+      where: {
+        user: { id: user.id }
+      }
+    });
+
+    const registrationApplicationDetail = await this.registrationApplicationDetailsRepository.findOne({
+      where: {
+        application: { id: registrationApplication?.id },
+        label: 'Registered Mobile No. of Applicant Authorized Signatory'
+      }
+    });
+
+    if (!registrationApplicationDetail) {
+      throw new BadRequestException('Registration application detail not found');
+    }
     
     return { 
       message: 'OTP has been sent to your email and mobile number',
       otp: otp,
+      mobileNumber: registrationApplicationDetail?.value,
     };
   }
 
