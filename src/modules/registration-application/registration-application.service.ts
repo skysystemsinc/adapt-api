@@ -569,7 +569,7 @@ export class RegistrationApplicationService {
       await this.registrationApplicationRepository.save(application);
     }
 
-    const updatedApplication = await this.findOne(applicationId);
+    var updatedApplication = await this.findOne(applicationId);
 
     // Check if all fields are approved
     const isApproved = updatedApplication?.details.every((detail) => detail.status === DetailStatus.APPROVED);
@@ -577,8 +577,9 @@ export class RegistrationApplicationService {
       application.status = ApplicationStatus.SENT_TO_HOD;
       await this.registrationApplicationRepository.save(application);
     }
+    updatedApplication = await this.findOne(applicationId);
+
     return updatedApplication;
-    
   }
 
   /**
