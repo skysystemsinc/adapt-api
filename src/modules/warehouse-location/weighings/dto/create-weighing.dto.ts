@@ -1,6 +1,7 @@
 import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsDateString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import { Exclude, Transform } from 'class-transformer';
+import { Transform } from 'class-transformer';
+import { BaseFileUploadDto } from 'src/common/dto/base-file-upload.dto';
 
 const transformToBoolean = (value: any): boolean => {
   if (value === 'true' || value === true) return true;
@@ -49,18 +50,10 @@ export class CreateWeighingDto {
   weighbridgeDistanceFromFacility?: string;
 
   @ApiProperty({
-    type: 'string',
-    format: 'binary',
-    description: 'Weighbridge calibration certificate file (PDF, PNG, JPG, JPEG, DOC, DOCX). Max size: 10MB',
-    required: true,
-  })
-  @Transform(({ value }) => {
-    // Transform empty strings to undefined to avoid validation errors
-    // The actual file is handled by FileInterceptor, not the DTO
-    if (value === '' || value === null) return undefined;
-    return value;
+    type: BaseFileUploadDto,
+    description: 'Weighbridge calibration certificate file (base64 encoded). Max size: 10MB',
+    required: false,
   })
   @IsOptional()
-  @Exclude()
-  weighbridgeCalibrationCertificate?: any;
+  weighbridgeCalibrationCertificate?: BaseFileUploadDto;
 }

@@ -11,6 +11,7 @@ import {
   MaxLength,
   ValidateNested,
 } from 'class-validator';
+import { BaseFileUploadDto } from 'src/common/dto/base-file-upload.dto';
 
 export class HrPersonalDetailsDto {
   @IsOptional()
@@ -22,8 +23,7 @@ export class HrPersonalDetailsDto {
   designationName?: string;
 
   @IsOptional()
-  @Exclude()
-  photograph?: string;
+  photograph?: BaseFileUploadDto;
 
   @IsString()
   @IsNotEmpty()
@@ -98,8 +98,7 @@ export class HrAcademicQualificationDto {
   grade?: string;
 
   @IsOptional()
-  @Exclude()
-  academicCertificate?: string;
+  academicCertificate?: BaseFileUploadDto;
 }
 
 export class HrProfessionalQualificationDto {
@@ -128,8 +127,7 @@ export class HrProfessionalQualificationDto {
   membershipNumber?: string;
 
   @IsOptional()
-  @Exclude()
-  professionalCertificate?: string;
+  professionalCertificate?: BaseFileUploadDto;
 }
 
 export class HrTrainingDto {
@@ -158,8 +156,7 @@ export class HrTrainingDto {
   dateOfCompletion!: string;
 
   @IsOptional()
-  @Exclude()
-  trainingCertificate?: string;
+  trainingCertificate?: BaseFileUploadDto;
 }
 
 export class HrExperienceDto {
@@ -196,8 +193,7 @@ export class HrExperienceDto {
   responsibilities?: string;
 
   @IsOptional()
-  @Exclude()
-  experienceLetter?: string;
+  experienceLetter?: BaseFileUploadDto;
 }
 
 export class HrDeclarationDto {
@@ -258,5 +254,35 @@ export class UpsertHrInformationDto {
   @ValidateNested()
   @Type(() => HrDeclarationDto)
   declaration!: HrDeclarationDto;
+
+  // File arrays for bulk upload
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  photograph?: BaseFileUploadDto;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => BaseFileUploadDto)
+  academicCertificates?: BaseFileUploadDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => BaseFileUploadDto)
+  professionalCertificates?: BaseFileUploadDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => BaseFileUploadDto)
+  trainingCertificates?: BaseFileUploadDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => BaseFileUploadDto)
+  experienceLetters?: BaseFileUploadDto[];
 }
 

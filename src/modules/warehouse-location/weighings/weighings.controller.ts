@@ -1,10 +1,10 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, UseInterceptors, UploadedFile } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request } from '@nestjs/common';
 import { ApiConsumes, ApiBody, ApiOperation } from '@nestjs/swagger';
 import { WeighingsService } from './weighings.service';
 import { CreateWeighingDto } from './dto/create-weighing.dto';
 import { UpdateWeighingDto } from './dto/update-weighing.dto';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import { createAndValidateFileFromBase64 } from 'src/common/utils/file-utils';
 
 @Controller('warehouse-location')
 export class WeighingsController {
@@ -24,50 +24,68 @@ export class WeighingsController {
   @Post(':id/weighing')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Create or update weighing information' })
-  @ApiConsumes('multipart/form-data')
+  @ApiConsumes('application/json')
   @ApiBody({
     type: CreateWeighingDto,
-    description: 'Weighing data with required calibration certificate file'
+    description: 'Weighing data with required calibration certificate file (base64 encoded)'
   })
-  @UseInterceptors(
-    FileInterceptor('weighbridgeCalibrationCertificate', {
-      limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB max
-      },
-    }),
-  )
   async createWeighing(
     @Param('id') id: string,
     @Body() createWeighingDto: CreateWeighingDto,
-    @UploadedFile() weighbridgeCalibrationCertificateFile: any,
     @Request() req: any
   ) {
     const userId = req.user.sub;
+    
+    // Extract and convert base64 certificate to file-like object if provided
+    let weighbridgeCalibrationCertificateFile: any = undefined;
+    if (createWeighingDto.weighbridgeCalibrationCertificate && typeof createWeighingDto.weighbridgeCalibrationCertificate === 'object' && 'file' in createWeighingDto.weighbridgeCalibrationCertificate) {
+      weighbridgeCalibrationCertificateFile = createAndValidateFileFromBase64(
+        {
+          file: createWeighingDto.weighbridgeCalibrationCertificate.file,
+          fileName: createWeighingDto.weighbridgeCalibrationCertificate.fileName,
+          fileSize: createWeighingDto.weighbridgeCalibrationCertificate.fileSize,
+          mimeType: createWeighingDto.weighbridgeCalibrationCertificate.mimeType,
+        },
+        10 * 1024 * 1024, // 10MB max
+      );
+      // Remove from DTO - service expects undefined for new files
+      (createWeighingDto as any).weighbridgeCalibrationCertificate = undefined;
+    }
+    
     return this.weighingsService.create(id, createWeighingDto, userId, weighbridgeCalibrationCertificateFile);
   }
 
   @Patch(':id/weighing')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Update weighing information' })
-  @ApiConsumes('multipart/form-data')
+  @ApiConsumes('application/json')
   @ApiBody({
     type: CreateWeighingDto,
-    description: 'Weighing data with optional calibration certificate file'
+    description: 'Weighing data with optional calibration certificate file (base64 encoded)'
   })
-  @UseInterceptors(
-    FileInterceptor('weighbridgeCalibrationCertificate', {
-      limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB max
-      },
-    }),
-  )
   async updateWeighing(
     @Param('id') id: string,
     @Body() updateWeighingDto: CreateWeighingDto,
-    @UploadedFile() weighbridgeCalibrationCertificateFile: any,
     @Request() req: any
   ) {
     const userId = req.user.sub;
+    
+    // Extract and convert base64 certificate to file-like object if provided
+    let weighbridgeCalibrationCertificateFile: any = undefined;
+    if (updateWeighingDto.weighbridgeCalibrationCertificate && typeof updateWeighingDto.weighbridgeCalibrationCertificate === 'object' && 'file' in updateWeighingDto.weighbridgeCalibrationCertificate) {
+      weighbridgeCalibrationCertificateFile = createAndValidateFileFromBase64(
+        {
+          file: updateWeighingDto.weighbridgeCalibrationCertificate.file,
+          fileName: updateWeighingDto.weighbridgeCalibrationCertificate.fileName,
+          fileSize: updateWeighingDto.weighbridgeCalibrationCertificate.fileSize,
+          mimeType: updateWeighingDto.weighbridgeCalibrationCertificate.mimeType,
+        },
+        10 * 1024 * 1024, // 10MB max
+      );
+      // Remove from DTO - service expects undefined for new files
+      (updateWeighingDto as any).weighbridgeCalibrationCertificate = undefined;
+    }
+    
     return this.weighingsService.updateByWarehouseLocationId(id, updateWeighingDto, userId, weighbridgeCalibrationCertificateFile);
   }
 

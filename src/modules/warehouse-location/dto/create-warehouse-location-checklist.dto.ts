@@ -9,6 +9,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { RegistrationFeeChecklistDto, DeclarationChecklistDto } from '../../warehouse/dto/create-applicant-checklist.dto';
+import { BaseFileUploadDto } from 'src/common/dto/base-file-upload.dto';
 
 export class OwnershipLegalDocumentsDto {
   @ApiProperty({ type: Boolean, description: 'Whether ownership deed is submitted', example: true })
@@ -485,6 +486,241 @@ export class CreateWarehouseLocationChecklistDto {
   @ValidateNested()
   @Type(() => DeclarationChecklistDto)
   declaration!: DeclarationChecklistDto;
+
+  // Optional file uploads (base64 encoded) - for new file uploads
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  ownershipDeedFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  mutationDeedFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  nocNecFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  factoryLayoutFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  leaseAgreementFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  propertyWarrantyFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  agreementUndertakingFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  qcPersonnelFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  warehouseSupervisorFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  dataEntryOperatorFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  warehouseOutsideFloodingAreaFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  securedBoundaryWallFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  reinforcedBarbedWireFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  fullyGatedFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  securityGuards24x7File?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  cctvCamerasFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  functionalWeighbridgeFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  samplingTestingAreaFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  calibratedInstrumentsFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  functionalOfficeFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  operationalToiletsFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  electricityGasUtilitiesFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  backupGeneratorFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  adequateResidentialArrangementsFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  axialAerationFansFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  ventsExhaustFansFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  technicalDrawingFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  dryingFacilityFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  temperatureSensorCablesFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  securedDoorsFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  plasteredFlooringFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  plasteredWallsFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  intactCeilingFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  functionalWindowsFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  protectiveNettingFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  functionalExhaustFansFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  freeFromPestsFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  fireSafetyMeasuresFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  bankPaymentSlip?: BaseFileUploadDto;
 }
 
 

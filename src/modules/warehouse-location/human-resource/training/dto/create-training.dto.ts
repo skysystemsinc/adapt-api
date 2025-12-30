@@ -1,6 +1,7 @@
 import { IsString, IsNotEmpty, IsOptional, IsDateString, MaxLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import { Exclude, Transform } from 'class-transformer';
+import { Transform } from 'class-transformer';
+import { BaseFileUploadDto } from 'src/common/dto/base-file-upload.dto';
 
 export class CreateTrainingDto {
   @IsString()
@@ -28,16 +29,10 @@ export class CreateTrainingDto {
   dateOfCompletion?: Date | null;
 
   @ApiProperty({
-    type: 'string',
-    format: 'binary',
-    description: 'Training certificate file (PDF, PNG, JPG, JPEG, DOC, DOCX). Max size: 10MB',
+    type: BaseFileUploadDto,
+    description: 'Training certificate file (base64 encoded). Max size: 10MB',
     required: false,
   })
-  @Transform(({ value }) => {
-    if (value === '' || value === null) return undefined;
-    return value;
-  })
   @IsOptional()
-  @Exclude()
-  trainingCertificate?: any;
+  trainingCertificate?: BaseFileUploadDto;
 }

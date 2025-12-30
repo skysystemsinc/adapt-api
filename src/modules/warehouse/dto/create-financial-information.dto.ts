@@ -8,6 +8,7 @@ import {
   MaxLength,
   ValidateNested,
 } from 'class-validator';
+import { BaseFileUploadDto } from 'src/common/dto/base-file-upload.dto';
 
 export class AuditReportDto {
   @IsString()
@@ -140,6 +141,9 @@ export class OthersDto {
   @IsString()
   @MaxLength(200)
   remarks?: string;
+
+  @IsOptional()
+  document?: BaseFileUploadDto;
 }
 
 export class CreateFinancialInformationDto {
@@ -162,5 +166,16 @@ export class CreateFinancialInformationDto {
   @ValidateNested()
   @Type(() => OthersDto)
   other!: OthersDto;
+}
+
+export class FinancialSubsectionDto {
+  @IsNotEmpty()
+  data: AuditReportDto | TaxReturnDto | BankStatementDto | OthersDto;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => BaseFileUploadDto)
+  documents?: BaseFileUploadDto[];
 }
 

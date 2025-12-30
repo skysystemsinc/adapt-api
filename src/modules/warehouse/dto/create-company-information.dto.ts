@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsBoolean, IsISO8601, IsNotEmpty,  IsOptional, IsString, MaxLength } from "class-validator";
-import { Exclude, Transform } from "class-transformer";
+import { IsBoolean, IsISO8601, IsNotEmpty,  IsOptional, IsString, MaxLength, IsNumber } from "class-validator";
+import { Transform } from "class-transformer";
+import { BaseFileUploadDto } from "src/common/dto/base-file-upload.dto";
 export { CreateBankDetailsDto } from "./create-bank-details.dto";
 
 export class CreateCompanyInformationRequestDto {
@@ -82,21 +83,12 @@ export class CreateCompanyInformationRequestDto {
     @IsNotEmpty()
     nationalTaxNumber!: string;
 
-    @ApiProperty({
-        type: 'string',
-        format: 'binary',
-        description: 'NTN certificate file (PDF, PNG, JPG, JPEG, DOC, DOCX). Max size: 100MB',
-        required: false,
-    })
-    @Transform(({ value }) => {
-        // Transform empty strings to undefined to avoid validation errors
-        // The actual file is handled by FileInterceptor, not the DTO
-        if (value === '' || value === null) return undefined;
-        return value;
+    @ApiPropertyOptional({
+        type: 'object',
+        description: 'NTN certificate file (base64 encoded). Max size: 100MB',
     })
     @IsOptional()
-    @Exclude()
-    ntcCertificate?: any;
+    ntcCertificate?: BaseFileUploadDto;
 
     @ApiProperty({
         type: String,

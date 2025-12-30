@@ -1,7 +1,7 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, UseInterceptors, UploadedFile, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, Query } from '@nestjs/common';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
-import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiConsumes, ApiBody, ApiOperation, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { createAndValidateFileFromBase64 } from 'src/common/utils/file-utils';
 import { HumanResourceService } from './human-resource.service';
 import { CreateHumanResourceDto } from './dto/create-human-resource.dto';
 import { CreateDeclarationDto } from './declaration/dto/create-declaration.dto';
@@ -39,51 +39,69 @@ export class HumanResourceController {
 
   @Post(':id/human-resources/personal-details')
   @ApiOperation({ summary: 'Create HR entry with personal details' })
-  @ApiConsumes('multipart/form-data')
+  @ApiConsumes('application/json')
   @ApiBody({
     type: CreateHumanResourceDto,
-    description: 'Personal details data with optional photograph file'
+    description: 'Personal details data with optional photograph file (base64 encoded)'
   })
-  @UseInterceptors(
-    FileInterceptor('photograph', {
-      limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB max
-      },
-    }),
-  )
   async createPersonalDetails(
     @Param('id') id: string,
-    @Body() CreateHumanResourceDto: CreateHumanResourceDto,
-    @UploadedFile() photographFile: any,
+    @Body() createHumanResourceDto: CreateHumanResourceDto,
     @Request() req: any
   ) {
     const userId = req.user.sub;
-    return this.humanResourceService.createPersonalDetails(id, CreateHumanResourceDto, userId, photographFile);
+    
+    // Extract and convert base64 photograph to file-like object if provided
+    let photographFile: any = undefined;
+    if (createHumanResourceDto.photograph && typeof createHumanResourceDto.photograph === 'object' && 'file' in createHumanResourceDto.photograph) {
+      photographFile = createAndValidateFileFromBase64(
+        {
+          file: createHumanResourceDto.photograph.file,
+          fileName: createHumanResourceDto.photograph.fileName,
+          fileSize: createHumanResourceDto.photograph.fileSize,
+          mimeType: createHumanResourceDto.photograph.mimeType,
+        },
+        10 * 1024 * 1024, // 10MB max
+      );
+      // Remove from DTO - service expects undefined for new files
+      (createHumanResourceDto as any).photograph = undefined;
+    }
+    
+    return this.humanResourceService.createPersonalDetails(id, createHumanResourceDto, userId, photographFile);
   }
 
   @Patch(':id/human-resources/:hrId/personal-details')
   @ApiOperation({ summary: 'Update personal details for HR entry' })
-  @ApiConsumes('multipart/form-data')
+  @ApiConsumes('application/json')
   @ApiBody({
     type: CreateHumanResourceDto,
-    description: 'Personal details data with optional photograph file'
+    description: 'Personal details data with optional photograph file (base64 encoded)'
   })
-  @UseInterceptors(
-    FileInterceptor('photograph', {
-      limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB max
-      },
-    }),
-  )
   async updatePersonalDetails(
     @Param('id') id: string,
     @Param('hrId') hrId: string,
-    @Body() CreateHumanResourceDto: CreateHumanResourceDto,
-    @UploadedFile() photographFile: any,
+    @Body() createHumanResourceDto: CreateHumanResourceDto,
     @Request() req: any
   ) {
     const userId = req.user.sub;
-    return this.humanResourceService.createPersonalDetails(id, CreateHumanResourceDto, userId, photographFile, hrId);
+    
+    // Extract and convert base64 photograph to file-like object if provided
+    let photographFile: any = undefined;
+    if (createHumanResourceDto.photograph && typeof createHumanResourceDto.photograph === 'object' && 'file' in createHumanResourceDto.photograph) {
+      photographFile = createAndValidateFileFromBase64(
+        {
+          file: createHumanResourceDto.photograph.file,
+          fileName: createHumanResourceDto.photograph.fileName,
+          fileSize: createHumanResourceDto.photograph.fileSize,
+          mimeType: createHumanResourceDto.photograph.mimeType,
+        },
+        10 * 1024 * 1024, // 10MB max
+      );
+      // Remove from DTO - service expects undefined for new files
+      (createHumanResourceDto as any).photograph = undefined;
+    }
+    
+    return this.humanResourceService.createPersonalDetails(id, createHumanResourceDto, userId, photographFile, hrId);
   }
 
   @Post(':id/human-resources/:hrId/declaration')
@@ -100,52 +118,70 @@ export class HumanResourceController {
 
   @Post(':id/human-resources/:hrId/academic-qualifications')
   @ApiOperation({ summary: 'Create academic qualification for HR entry' })
-  @ApiConsumes('multipart/form-data')
+  @ApiConsumes('application/json')
   @ApiBody({
     type: CreateAcademicQualificationDto,
-    description: 'Academic qualification data with optional certificate file'
+    description: 'Academic qualification data with optional certificate file (base64 encoded)'
   })
-  @UseInterceptors(
-    FileInterceptor('academicCertificate', {
-      limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB max
-      },
-    }),
-  )
   async createAcademicQualification(
     @Param('id') id: string,
     @Param('hrId') hrId: string,
     @Body() createAcademicQualificationDto: CreateAcademicQualificationDto,
-    @UploadedFile() certificateFile: any,
     @Request() req: any
   ) {
     const userId = req.user.sub;
+    
+    // Extract and convert base64 certificate to file-like object if provided
+    let certificateFile: any = undefined;
+    if (createAcademicQualificationDto.academicCertificate && typeof createAcademicQualificationDto.academicCertificate === 'object' && 'file' in createAcademicQualificationDto.academicCertificate) {
+      certificateFile = createAndValidateFileFromBase64(
+        {
+          file: createAcademicQualificationDto.academicCertificate.file,
+          fileName: createAcademicQualificationDto.academicCertificate.fileName,
+          fileSize: createAcademicQualificationDto.academicCertificate.fileSize,
+          mimeType: createAcademicQualificationDto.academicCertificate.mimeType,
+        },
+        10 * 1024 * 1024, // 10MB max
+      );
+      // Remove from DTO - service expects undefined for new files
+      (createAcademicQualificationDto as any).academicCertificate = undefined;
+    }
+    
     return this.academicQualificationService.create(hrId, createAcademicQualificationDto, userId, certificateFile);
   }
 
   @Patch(':id/human-resources/:hrId/academic-qualifications/:qualId')
   @ApiOperation({ summary: 'Update academic qualification' })
-  @ApiConsumes('multipart/form-data')
+  @ApiConsumes('application/json')
   @ApiBody({
     type: CreateAcademicQualificationDto,
-    description: 'Academic qualification data with optional certificate file'
+    description: 'Academic qualification data with optional certificate file (base64 encoded)'
   })
-  @UseInterceptors(
-    FileInterceptor('academicCertificate', {
-      limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB max
-      },
-    }),
-  )
   async updateAcademicQualification(
     @Param('id') id: string,
     @Param('hrId') hrId: string,
     @Param('qualId') qualId: string,
     @Body() createAcademicQualificationDto: CreateAcademicQualificationDto,
-    @UploadedFile() certificateFile: any,
     @Request() req: any
   ) {
     const userId = req.user.sub;
+    
+    // Extract and convert base64 certificate to file-like object if provided
+    let certificateFile: any = undefined;
+    if (createAcademicQualificationDto.academicCertificate && typeof createAcademicQualificationDto.academicCertificate === 'object' && 'file' in createAcademicQualificationDto.academicCertificate) {
+      certificateFile = createAndValidateFileFromBase64(
+        {
+          file: createAcademicQualificationDto.academicCertificate.file,
+          fileName: createAcademicQualificationDto.academicCertificate.fileName,
+          fileSize: createAcademicQualificationDto.academicCertificate.fileSize,
+          mimeType: createAcademicQualificationDto.academicCertificate.mimeType,
+        },
+        10 * 1024 * 1024, // 10MB max
+      );
+      // Remove from DTO - service expects undefined for new files
+      (createAcademicQualificationDto as any).academicCertificate = undefined;
+    }
+    
     return this.academicQualificationService.update(qualId, hrId, createAcademicQualificationDto, userId, certificateFile);
   }
 
@@ -161,52 +197,70 @@ export class HumanResourceController {
 
   @Post(':id/human-resources/:hrId/professional-qualifications')
   @ApiOperation({ summary: 'Create professional qualification for HR entry' })
-  @ApiConsumes('multipart/form-data')
+  @ApiConsumes('application/json')
   @ApiBody({
     type: CreateProfessionalQualificationDto,
-    description: 'Professional qualification data with optional certificate file'
+    description: 'Professional qualification data with optional certificate file (base64 encoded)'
   })
-  @UseInterceptors(
-    FileInterceptor('professionalCertificate', {
-      limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB max
-      },
-    }),
-  )
   async createProfessionalQualification(
     @Param('id') id: string,
     @Param('hrId') hrId: string,
     @Body() createProfessionalQualificationDto: CreateProfessionalQualificationDto,
-    @UploadedFile() certificateFile: any,
     @Request() req: any
   ) {
     const userId = req.user.sub;
+    
+    // Extract and convert base64 certificate to file-like object if provided
+    let certificateFile: any = undefined;
+    if (createProfessionalQualificationDto.professionalCertificate && typeof createProfessionalQualificationDto.professionalCertificate === 'object' && 'file' in createProfessionalQualificationDto.professionalCertificate) {
+      certificateFile = createAndValidateFileFromBase64(
+        {
+          file: createProfessionalQualificationDto.professionalCertificate.file,
+          fileName: createProfessionalQualificationDto.professionalCertificate.fileName,
+          fileSize: createProfessionalQualificationDto.professionalCertificate.fileSize,
+          mimeType: createProfessionalQualificationDto.professionalCertificate.mimeType,
+        },
+        10 * 1024 * 1024, // 10MB max
+      );
+      // Remove from DTO - service expects undefined for new files
+      (createProfessionalQualificationDto as any).professionalCertificate = undefined;
+    }
+    
     return this.professionalQualificationService.create(hrId, createProfessionalQualificationDto, userId, certificateFile);
   }
 
   @Patch(':id/human-resources/:hrId/professional-qualifications/:qualId')
   @ApiOperation({ summary: 'Update professional qualification' })
-  @ApiConsumes('multipart/form-data')
+  @ApiConsumes('application/json')
   @ApiBody({
     type: CreateProfessionalQualificationDto,
-    description: 'Professional qualification data with optional certificate file'
+    description: 'Professional qualification data with optional certificate file (base64 encoded)'
   })
-  @UseInterceptors(
-    FileInterceptor('professionalCertificate', {
-      limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB max
-      },
-    }),
-  )
   async updateProfessionalQualification(
     @Param('id') id: string,
     @Param('hrId') hrId: string,
     @Param('qualId') qualId: string,
     @Body() createProfessionalQualificationDto: CreateProfessionalQualificationDto,
-    @UploadedFile() certificateFile: any,
     @Request() req: any
   ) {
     const userId = req.user.sub;
+    
+    // Extract and convert base64 certificate to file-like object if provided
+    let certificateFile: any = undefined;
+    if (createProfessionalQualificationDto.professionalCertificate && typeof createProfessionalQualificationDto.professionalCertificate === 'object' && 'file' in createProfessionalQualificationDto.professionalCertificate) {
+      certificateFile = createAndValidateFileFromBase64(
+        {
+          file: createProfessionalQualificationDto.professionalCertificate.file,
+          fileName: createProfessionalQualificationDto.professionalCertificate.fileName,
+          fileSize: createProfessionalQualificationDto.professionalCertificate.fileSize,
+          mimeType: createProfessionalQualificationDto.professionalCertificate.mimeType,
+        },
+        10 * 1024 * 1024, // 10MB max
+      );
+      // Remove from DTO - service expects undefined for new files
+      (createProfessionalQualificationDto as any).professionalCertificate = undefined;
+    }
+    
     return this.professionalQualificationService.update(qualId, hrId, createProfessionalQualificationDto, userId, certificateFile);
   }
 
@@ -222,52 +276,70 @@ export class HumanResourceController {
 
   @Post(':id/human-resources/:hrId/trainings')
   @ApiOperation({ summary: 'Create training for HR entry' })
-  @ApiConsumes('multipart/form-data')
+  @ApiConsumes('application/json')
   @ApiBody({
     type: CreateTrainingDto,
-    description: 'Training data with optional certificate file'
+    description: 'Training data with optional certificate file (base64 encoded)'
   })
-  @UseInterceptors(
-    FileInterceptor('trainingCertificate', {
-      limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB max
-      },
-    }),
-  )
   async createTraining(
     @Param('id') id: string,
     @Param('hrId') hrId: string,
     @Body() createTrainingDto: CreateTrainingDto,
-    @UploadedFile() certificateFile: any,
     @Request() req: any
   ) {
     const userId = req.user.sub;
+    
+    // Extract and convert base64 certificate to file-like object if provided
+    let certificateFile: any = undefined;
+    if (createTrainingDto.trainingCertificate && typeof createTrainingDto.trainingCertificate === 'object' && 'file' in createTrainingDto.trainingCertificate) {
+      certificateFile = createAndValidateFileFromBase64(
+        {
+          file: createTrainingDto.trainingCertificate.file,
+          fileName: createTrainingDto.trainingCertificate.fileName,
+          fileSize: createTrainingDto.trainingCertificate.fileSize,
+          mimeType: createTrainingDto.trainingCertificate.mimeType,
+        },
+        10 * 1024 * 1024, // 10MB max
+      );
+      // Remove from DTO - service expects undefined for new files
+      (createTrainingDto as any).trainingCertificate = undefined;
+    }
+    
     return this.trainingService.create(hrId, createTrainingDto, userId, certificateFile);
   }
 
   @Patch(':id/human-resources/:hrId/trainings/:trainingId')
   @ApiOperation({ summary: 'Update training' })
-  @ApiConsumes('multipart/form-data')
+  @ApiConsumes('application/json')
   @ApiBody({
     type: CreateTrainingDto,
-    description: 'Training data with optional certificate file'
+    description: 'Training data with optional certificate file (base64 encoded)'
   })
-  @UseInterceptors(
-    FileInterceptor('trainingCertificate', {
-      limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB max
-      },
-    }),
-  )
   async updateTraining(
     @Param('id') id: string,
     @Param('hrId') hrId: string,
     @Param('trainingId') trainingId: string,
     @Body() createTrainingDto: CreateTrainingDto,
-    @UploadedFile() certificateFile: any,
     @Request() req: any
   ) {
     const userId = req.user.sub;
+    
+    // Extract and convert base64 certificate to file-like object if provided
+    let certificateFile: any = undefined;
+    if (createTrainingDto.trainingCertificate && typeof createTrainingDto.trainingCertificate === 'object' && 'file' in createTrainingDto.trainingCertificate) {
+      certificateFile = createAndValidateFileFromBase64(
+        {
+          file: createTrainingDto.trainingCertificate.file,
+          fileName: createTrainingDto.trainingCertificate.fileName,
+          fileSize: createTrainingDto.trainingCertificate.fileSize,
+          mimeType: createTrainingDto.trainingCertificate.mimeType,
+        },
+        10 * 1024 * 1024, // 10MB max
+      );
+      // Remove from DTO - service expects undefined for new files
+      (createTrainingDto as any).trainingCertificate = undefined;
+    }
+    
     return this.trainingService.update(trainingId, hrId, createTrainingDto, userId, certificateFile);
   }
 
@@ -283,52 +355,70 @@ export class HumanResourceController {
 
   @Post(':id/human-resources/:hrId/professional-experiences')
   @ApiOperation({ summary: 'Create professional experience for HR entry' })
-  @ApiConsumes('multipart/form-data')
+  @ApiConsumes('application/json')
   @ApiBody({
     type: CreateProfessionalExperienceDto,
-    description: 'Professional experience data with optional experience letter file'
+    description: 'Professional experience data with optional experience letter file (base64 encoded)'
   })
-  @UseInterceptors(
-    FileInterceptor('experienceLetter', {
-      limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB max
-      },
-    }),
-  )
   async createProfessionalExperience(
     @Param('id') id: string,
     @Param('hrId') hrId: string,
     @Body() createProfessionalExperienceDto: CreateProfessionalExperienceDto,
-    @UploadedFile() experienceLetterFile: any,
     @Request() req: any
   ) {
     const userId = req.user.sub;
+    
+    // Extract and convert base64 letter to file-like object if provided
+    let experienceLetterFile: any = undefined;
+    if (createProfessionalExperienceDto.experienceLetter && typeof createProfessionalExperienceDto.experienceLetter === 'object' && 'file' in createProfessionalExperienceDto.experienceLetter) {
+      experienceLetterFile = createAndValidateFileFromBase64(
+        {
+          file: createProfessionalExperienceDto.experienceLetter.file,
+          fileName: createProfessionalExperienceDto.experienceLetter.fileName,
+          fileSize: createProfessionalExperienceDto.experienceLetter.fileSize,
+          mimeType: createProfessionalExperienceDto.experienceLetter.mimeType,
+        },
+        10 * 1024 * 1024, // 10MB max
+      );
+      // Remove from DTO - service expects undefined for new files
+      (createProfessionalExperienceDto as any).experienceLetter = undefined;
+    }
+    
     return this.professionalExperienceService.create(hrId, createProfessionalExperienceDto, userId, experienceLetterFile);
   }
 
   @Patch(':id/human-resources/:hrId/professional-experiences/:expId')
   @ApiOperation({ summary: 'Update professional experience' })
-  @ApiConsumes('multipart/form-data')
+  @ApiConsumes('application/json')
   @ApiBody({
     type: CreateProfessionalExperienceDto,
-    description: 'Professional experience data with optional experience letter file'
+    description: 'Professional experience data with optional experience letter file (base64 encoded)'
   })
-  @UseInterceptors(
-    FileInterceptor('experienceLetter', {
-      limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB max
-      },
-    }),
-  )
   async updateProfessionalExperience(
     @Param('id') id: string,
     @Param('hrId') hrId: string,
     @Param('expId') expId: string,
     @Body() createProfessionalExperienceDto: CreateProfessionalExperienceDto,
-    @UploadedFile() experienceLetterFile: any,
     @Request() req: any
   ) {
     const userId = req.user.sub;
+    
+    // Extract and convert base64 letter to file-like object if provided
+    let experienceLetterFile: any = undefined;
+    if (createProfessionalExperienceDto.experienceLetter && typeof createProfessionalExperienceDto.experienceLetter === 'object' && 'file' in createProfessionalExperienceDto.experienceLetter) {
+      experienceLetterFile = createAndValidateFileFromBase64(
+        {
+          file: createProfessionalExperienceDto.experienceLetter.file,
+          fileName: createProfessionalExperienceDto.experienceLetter.fileName,
+          fileSize: createProfessionalExperienceDto.experienceLetter.fileSize,
+          mimeType: createProfessionalExperienceDto.experienceLetter.mimeType,
+        },
+        10 * 1024 * 1024, // 10MB max
+      );
+      // Remove from DTO - service expects undefined for new files
+      (createProfessionalExperienceDto as any).experienceLetter = undefined;
+    }
+    
     return this.professionalExperienceService.update(expId, hrId, createProfessionalExperienceDto, userId, experienceLetterFile);
   }
 

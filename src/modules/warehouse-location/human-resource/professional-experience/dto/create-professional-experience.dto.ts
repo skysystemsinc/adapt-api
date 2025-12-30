@@ -1,6 +1,7 @@
 import { IsString, IsNotEmpty, IsOptional, IsDateString, MaxLength, ValidateIf, ValidationArguments, ValidatorConstraint, ValidatorConstraintInterface, Validate } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import { Exclude, Transform } from 'class-transformer';
+import { Transform } from 'class-transformer';
+import { BaseFileUploadDto } from 'src/common/dto/base-file-upload.dto';
 
 @ValidatorConstraint({ name: 'isDateOfAppointmentBeforeLeaving', async: false })
 export class IsDateOfAppointmentBeforeLeavingConstraint implements ValidatorConstraintInterface {
@@ -75,18 +76,12 @@ export class CreateProfessionalExperienceDto {
   responsibilities?: string;
 
   @ApiProperty({
-    type: 'string',
-    format: 'binary',
-    description: 'Experience letter file (PDF, PNG, JPG, JPEG, DOC, DOCX). Max size: 10MB. Required when dateOfLeaving is provided.',
+    type: BaseFileUploadDto,
+    description: 'Experience letter file (base64 encoded). Max size: 10MB. Required when dateOfLeaving is provided.',
     required: false,
-  })
-  @Transform(({ value }) => {
-    if (value === '' || value === null) return undefined;
-    return value;
   })
   @ValidateIf((o) => o.dateOfLeaving)
   @Validate(IsExperienceLetterRequiredWhenLeavingConstraint)
   @IsOptional()
-  @Exclude()
-  experienceLetter?: any;
+  experienceLetter?: BaseFileUploadDto;
 }

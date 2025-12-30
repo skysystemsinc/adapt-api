@@ -8,6 +8,7 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
+import { BaseFileUploadDto } from 'src/common/dto/base-file-upload.dto';
 
 export class HumanResourcesChecklistDto {
   @ApiProperty({
@@ -287,5 +288,72 @@ export class CreateApplicantChecklistDto {
   @ValidateNested()
   @Type(() => DeclarationChecklistDto)
   declaration!: DeclarationChecklistDto;
+
+  // Optional file uploads (base64 encoded) - for new file uploads
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  qcPersonnelFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  warehouseSupervisorFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  dataEntryOperatorFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  auditedFinancialStatementsFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  positiveNetWorthFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  noLoanDefaultsFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  cleanCreditHistoryFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  adequateWorkingCapitalFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  validInsuranceCoverageFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  noFinancialFraudFile?: BaseFileUploadDto;
+
+  @ApiPropertyOptional({ type: BaseFileUploadDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BaseFileUploadDto)
+  bankPaymentSlip?: BaseFileUploadDto;
 }
 

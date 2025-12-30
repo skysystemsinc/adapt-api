@@ -1,6 +1,7 @@
 import { IsString, IsNotEmpty, IsOptional, IsEmail, IsDateString, MaxLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import { Exclude, Transform } from 'class-transformer';
+import { Transform } from 'class-transformer';
+import { BaseFileUploadDto } from 'src/common/dto/base-file-upload.dto';
 
 export class CreateHumanResourceDto {
     @IsString()
@@ -56,18 +57,12 @@ export class CreateHumanResourceDto {
     hrNationalTaxNumber?: string;
 
     @ApiProperty({
-        type: 'string',
-        format: 'binary',
-        description: 'Photograph file (PDF, PNG, JPG, JPEG). Max size: 10MB',
+        type: BaseFileUploadDto,
+        description: 'Photograph file (base64 encoded). Max size: 10MB',
         required: false,
     })
-    @Transform(({ value }) => {
-        if (value === '' || value === null) return undefined;
-        return value;
-    })
     @IsOptional()
-    @Exclude()
-    photograph?: any; // Made optional in DTO for FileInterceptor
+    photograph?: BaseFileUploadDto;
 
     @IsOptional()
     @Exclude()

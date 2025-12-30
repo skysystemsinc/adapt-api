@@ -4,9 +4,6 @@ import {
   Get,
   Body,
   Param,
-  UploadedFile,
-  UploadedFiles,
-  UseInterceptors,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -14,7 +11,6 @@ import {
   BadRequestException,
   Req,
 } from '@nestjs/common';
-import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import {
   ApiTags,
   ApiOperation,
@@ -27,13 +23,19 @@ import type { Response as ExpressResponse } from 'express';
 import * as path from 'path';
 
 import { UploadsService } from './uploads.service';
-import { UploadFileDto, UploadFileResponseDto } from './dto/upload-file.dto';
+import {
+  UploadFileDto,
+  UploadFileResponseDto,
+  ScanFileDto,
+  BatchScanFileDto,
+} from './dto/upload-file.dto';
 import { UploadRateLimitGuard } from './guards/upload-rate-limit.guard';
 import { ClamAVService } from '../clamav/clamav.service';
 import {
   FileScanResponseDto,
   BatchScanResponseDto,
 } from '../clamav/dto/scan-result.dto';
+import { createAndValidateFileFromBase64 } from 'src/common/utils/file-utils';
 
 @ApiTags('File Uploads')
 @Controller('uploads')
@@ -83,30 +85,16 @@ export class UploadsController {
       throw new BadRequestException('fieldId is required');
     }
 
-    // Decode base64 to buffer
-    let fileBuffer: Buffer;
-    try {
-      fileBuffer = Buffer.from(uploadDto.file, 'base64');
-    } catch (error) {
-      throw new BadRequestException('Invalid base64 file data');
-    }
-
-    // Validate file size (100MB max)
-    const maxSizeBytes = 100 * 1024 * 1024;
-    if (fileBuffer.length > maxSizeBytes) {
-      throw new BadRequestException(
-        `File size ${(fileBuffer.length / 1024 / 1024).toFixed(2)}MB exceeds maximum allowed size of 100MB`,
-      );
-    }
-
-    // Create file-like object that matches Multer file structure
-    // This ensures existing service code continues to work
-    const file = {
-      buffer: fileBuffer,
-      originalname: uploadDto.fileName,
-      size: uploadDto.fileSize || fileBuffer.length,
-      mimetype: uploadDto.mimeType || 'application/octet-stream',
-    };
+    // Create and validate file from base64 using reusable utility
+    const file = createAndValidateFileFromBase64(
+      {
+        file: uploadDto.file,
+        fileName: uploadDto.fileName,
+        fileSize: uploadDto.fileSize,
+        mimeType: uploadDto.mimeType,
+      },
+      100 * 1024 * 1024, // 100MB max
+    );
 
     return this.uploadsService.uploadFile(
       uploadDto.formId,
@@ -165,27 +153,15 @@ export class UploadsController {
   @Post('scan')
   @HttpCode(HttpStatus.OK)
   @UseGuards(UploadRateLimitGuard)
-  @UseInterceptors(
-    FileInterceptor('file', {
-      limits: {
-        fileSize: 100 * 1024 * 1024, // 100MB max
-      },
-    }),
-  )
   @ApiOperation({
     summary: 'Upload and scan a file with ClamAV',
     description:
       'Uploads a file and scans it with ClamAV. Returns scan result without saving the file.',
   })
-  @ApiConsumes('multipart/form-data')
+  @ApiConsumes('application/json')
   @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        file: { type: 'string', format: 'binary' },
-      },
-      required: ['file'],
-    },
+    type: ScanFileDto,
+    description: 'File upload with base64 encoded content for scanning',
   })
   @ApiResponse({
     status: 200,
@@ -193,12 +169,17 @@ export class UploadsController {
     type: FileScanResponseDto,
   })
   @ApiResponse({ status: 400, description: 'Invalid file or malware detected' })
-  async scanFile(
-    @UploadedFile() file: any,
-  ): Promise<FileScanResponseDto> {
-    if (!file) {
-      throw new BadRequestException('No file provided');
-    }
+  async scanFile(@Body() scanDto: ScanFileDto): Promise<FileScanResponseDto> {
+    // Create and validate file from base64 using reusable utility
+    const file = createAndValidateFileFromBase64(
+      {
+        file: scanDto.file,
+        fileName: scanDto.fileName,
+        fileSize: scanDto.fileSize,
+        mimeType: scanDto.mimeType,
+      },
+      100 * 1024 * 1024, // 100MB max
+    );
 
     try {
       const scanResult = await this.clamAVService.scanBuffer(
@@ -235,30 +216,15 @@ export class UploadsController {
   @Post('scan/batch')
   @HttpCode(HttpStatus.OK)
   @UseGuards(UploadRateLimitGuard)
-  @UseInterceptors(
-    FilesInterceptor('files', 10, {
-      limits: {
-        fileSize: 100 * 1024 * 1024, // 100MB max per file
-      },
-    }),
-  )
   @ApiOperation({
     summary: 'Upload and scan multiple files with ClamAV',
     description:
       'Uploads multiple files and scans each with ClamAV. Returns batch scan results.',
   })
-  @ApiConsumes('multipart/form-data')
+  @ApiConsumes('application/json')
   @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        files: {
-          type: 'array',
-          items: { type: 'string', format: 'binary' },
-        },
-      },
-      required: ['files'],
-    },
+    type: BatchScanFileDto,
+    description: 'Batch file upload with base64 encoded content for scanning',
   })
   @ApiResponse({
     status: 200,
@@ -267,9 +233,9 @@ export class UploadsController {
   })
   @ApiResponse({ status: 400, description: 'Invalid files or request' })
   async scanBatchFiles(
-    @UploadedFiles() files: any[],
+    @Body() batchScanDto: BatchScanFileDto,
   ): Promise<BatchScanResponseDto> {
-    if (!files || files.length === 0) {
+    if (!batchScanDto.files || batchScanDto.files.length === 0) {
       throw new BadRequestException('No files provided');
     }
 
@@ -277,10 +243,20 @@ export class UploadsController {
     let cleanCount = 0;
     let infectedCount = 0;
 
-    // Scan all files in parallel for better performance
-    // Future enhancement: Use a queue-based approach for very large batches
-    const scanPromises = files.map(async (file) => {
+    // Create file objects from base64 and scan all files in parallel
+    const scanPromises = batchScanDto.files.map(async (fileDto) => {
       try {
+        // Create and validate file from base64 using reusable utility
+        const file = createAndValidateFileFromBase64(
+          {
+            file: fileDto.file,
+            fileName: fileDto.fileName,
+            fileSize: fileDto.fileSize,
+            mimeType: fileDto.mimeType,
+          },
+          100 * 1024 * 1024, // 100MB max per file
+        );
+
         const scanResult = await this.clamAVService.scanBuffer(
           file.buffer,
           file.originalname,
@@ -302,11 +278,11 @@ export class UploadsController {
         }
       } catch (error) {
         // Log error but continue processing other files
-        console.error(`Error scanning ${file.originalname}:`, error);
+        console.error(`Error scanning ${fileDto.fileName}:`, error);
         infectedCount++;
         return {
           status: 'infected' as const,
-          file: file.originalname,
+          file: fileDto.fileName,
           viruses: [`Scan error: ${error.message}`],
         };
       }
@@ -315,7 +291,7 @@ export class UploadsController {
     results.push(...(await Promise.all(scanPromises)));
 
     return {
-      total: files.length,
+      total: batchScanDto.files.length,
       clean: cleanCount,
       infected: infectedCount,
       results,

@@ -1,6 +1,7 @@
 import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsDateString, MaxLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import { Exclude, Transform } from 'class-transformer';
+import { Transform } from 'class-transformer';
+import { BaseFileUploadDto } from 'src/common/dto/base-file-upload.dto';
 
 const transformToBoolean = (value: any): boolean => {
   if (value === 'true' || value === true) return true;
@@ -39,16 +40,10 @@ export class CreateProfessionalQualificationDto {
   hasExpiryDate?: boolean;
 
   @ApiProperty({
-    type: 'string',
-    format: 'binary',
-    description: 'Professional certificate file (PDF, PNG, JPG, JPEG, DOC, DOCX). Max size: 10MB',
+    type: BaseFileUploadDto,
+    description: 'Professional certificate file (base64 encoded). Max size: 10MB',
     required: false,
   })
-  @Transform(({ value }) => {
-    if (value === '' || value === null) return undefined;
-    return value;
-  })
   @IsOptional()
-  @Exclude()
-  professionalCertificate?: any;
+  professionalCertificate?: BaseFileUploadDto;
 }

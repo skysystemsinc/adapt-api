@@ -1,10 +1,10 @@
-import { Controller, Get, Post, Patch, Body, Param, UseGuards, Request, UseInterceptors, UploadedFiles, BadRequestException, Query } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, UseGuards, Request, BadRequestException, Query } from '@nestjs/common';
 import { WarehouseLocationChecklistService } from './warehouse-location-checklist.service';
 import { CreateWarehouseLocationChecklistDto } from '../dto/create-warehouse-location-checklist.dto';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { ApiBearerAuth, ApiOperation, ApiTags, ApiConsumes } from '@nestjs/swagger';
 import { User } from '../../users/entities/user.entity';
-import { FileFieldsInterceptor } from '@nestjs/platform-express';
+import { createAndValidateFileFromBase64 } from 'src/common/utils/file-utils';
 
 @ApiTags('Warehouse Location')
 @ApiBearerAuth('JWT-auth')
@@ -28,70 +28,22 @@ export class WarehouseLocationChecklistController {
 
   @ApiOperation({ summary: 'Create or update warehouse location checklist' })
   @ApiBearerAuth('JWT-auth')
-  @ApiConsumes('multipart/form-data')
-  @UseInterceptors(
-    FileFieldsInterceptor(
-      [
-        // Ownership & Legal Documents
-        { name: 'ownershipDeedFile', maxCount: 1 },
-        { name: 'mutationDeedFile', maxCount: 1 },
-        { name: 'nocNecFile', maxCount: 1 },
-        { name: 'factoryLayoutFile', maxCount: 1 },
-        { name: 'leaseAgreementFile', maxCount: 1 },
-        { name: 'propertyWarrantyFile', maxCount: 1 },
-        { name: 'agreementUndertakingFile', maxCount: 1 },
-        // Human Resources Key
-        { name: 'qcPersonnelFile', maxCount: 1 },
-        { name: 'warehouseSupervisorFile', maxCount: 1 },
-        { name: 'dataEntryOperatorFile', maxCount: 1 },
-        // Location & Risk
-        { name: 'warehouseOutsideFloodingAreaFile', maxCount: 1 },
-        // Security & Perimeter
-        { name: 'securedBoundaryWallFile', maxCount: 1 },
-        { name: 'reinforcedBarbedWireFile', maxCount: 1 },
-        { name: 'fullyGatedFile', maxCount: 1 },
-        { name: 'securityGuards24x7File', maxCount: 1 },
-        { name: 'cctvCamerasFile', maxCount: 1 },
-        // Infrastructure & Utilities
-        { name: 'functionalWeighbridgeFile', maxCount: 1 },
-        { name: 'samplingTestingAreaFile', maxCount: 1 },
-        { name: 'calibratedInstrumentsFile', maxCount: 1 },
-        { name: 'functionalOfficeFile', maxCount: 1 },
-        { name: 'operationalToiletsFile', maxCount: 1 },
-        { name: 'electricityGasUtilitiesFile', maxCount: 1 },
-        { name: 'backupGeneratorFile', maxCount: 1 },
-        { name: 'adequateResidentialArrangementsFile', maxCount: 1 },
-        { name: 'axialAerationFansFile', maxCount: 1 },
-        { name: 'ventsExhaustFansFile', maxCount: 1 },
-        { name: 'technicalDrawingFile', maxCount: 1 },
-        { name: 'dryingFacilityFile', maxCount: 1 },
-        { name: 'temperatureSensorCablesFile', maxCount: 1 },
-        // Storage Facilities
-        { name: 'securedDoorsFile', maxCount: 1 },
-        { name: 'plasteredFlooringFile', maxCount: 1 },
-        { name: 'plasteredWallsFile', maxCount: 1 },
-        { name: 'intactCeilingFile', maxCount: 1 },
-        { name: 'functionalWindowsFile', maxCount: 1 },
-        { name: 'protectiveNettingFile', maxCount: 1 },
-        { name: 'functionalExhaustFansFile', maxCount: 1 },
-        { name: 'freeFromPestsFile', maxCount: 1 },
-        { name: 'fireSafetyMeasuresFile', maxCount: 1 },
-        // Registration Fee
-        { name: 'bankPaymentSlip', maxCount: 1 },
-      ],
-      {
-        limits: {
-          fileSize: 10 * 1024 * 1024, // 10MB max per file
-        },
-      },
-    ),
-  )
+  @ApiConsumes('application/json')
   @Post('/:id/key-submission-checklist')
   createWarehouseLocationChecklist(
     @Param('id') warehouseLocationId: string,
-    @Body('data') dataString: string,
+    @Body() payload: CreateWarehouseLocationChecklistDto,
     @Query('submit') submitParam?: string,
-    @UploadedFiles() files?: {
+    @Request() request?: any,
+  ) {
+    const user = request?.user as User;
+    if (!user) {
+      throw new BadRequestException('User not found in request');
+    }
+    const submit = submitParam === 'true' || submitParam === '1';
+    
+    // Convert base64 files to file-like objects
+    const files: {
       ownershipDeedFile?: any[];
       mutationDeedFile?: any[];
       nocNecFile?: any[];
@@ -131,25 +83,41 @@ export class WarehouseLocationChecklistController {
       freeFromPestsFile?: any[];
       fireSafetyMeasuresFile?: any[];
       bankPaymentSlip?: any[];
-    },
-    @Request() request?: any,
-  ) {
-    if (!dataString) {
-      throw new BadRequestException('Data field is required');
-    }
+    } = {};
 
-    let payload: CreateWarehouseLocationChecklistDto;
-    try {
-      payload = JSON.parse(dataString);
-    } catch (error) {
-      throw new BadRequestException('Invalid JSON in data field');
-    }
+    const fileFields = [
+      'ownershipDeedFile', 'mutationDeedFile', 'nocNecFile', 'factoryLayoutFile',
+      'leaseAgreementFile', 'propertyWarrantyFile', 'agreementUndertakingFile',
+      'qcPersonnelFile', 'warehouseSupervisorFile', 'dataEntryOperatorFile',
+      'warehouseOutsideFloodingAreaFile', 'securedBoundaryWallFile', 'reinforcedBarbedWireFile',
+      'fullyGatedFile', 'securityGuards24x7File', 'cctvCamerasFile',
+      'functionalWeighbridgeFile', 'samplingTestingAreaFile', 'calibratedInstrumentsFile',
+      'functionalOfficeFile', 'operationalToiletsFile', 'electricityGasUtilitiesFile',
+      'backupGeneratorFile', 'adequateResidentialArrangementsFile', 'axialAerationFansFile',
+      'ventsExhaustFansFile', 'technicalDrawingFile', 'dryingFacilityFile',
+      'temperatureSensorCablesFile', 'securedDoorsFile', 'plasteredFlooringFile',
+      'plasteredWallsFile', 'intactCeilingFile', 'functionalWindowsFile',
+      'protectiveNettingFile', 'functionalExhaustFansFile', 'freeFromPestsFile',
+      'fireSafetyMeasuresFile', 'bankPaymentSlip',
+    ];
 
-    const user = request?.user as User;
-    if (!user) {
-      throw new BadRequestException('User not found in request');
-    }
-    const submit = submitParam === 'true' || submitParam === '1';
+    fileFields.forEach((field) => {
+      const fileDto = (payload as any)[field];
+      if (fileDto && typeof fileDto === 'object' && 'file' in fileDto) {
+        (files as any)[field] = [
+          createAndValidateFileFromBase64(
+            {
+              file: fileDto.file,
+              fileName: fileDto.fileName,
+              fileSize: fileDto.fileSize,
+              mimeType: fileDto.mimeType,
+            },
+            10 * 1024 * 1024, // 10MB max
+          ),
+        ];
+      }
+    });
+
     return this.warehouseLocationChecklistService.createWarehouseLocationChecklist(
       warehouseLocationId,
       payload,
@@ -161,70 +129,22 @@ export class WarehouseLocationChecklistController {
 
   @ApiOperation({ summary: 'Update warehouse location checklist' })
   @ApiBearerAuth('JWT-auth')
-  @ApiConsumes('multipart/form-data')
-  @UseInterceptors(
-    FileFieldsInterceptor(
-      [
-        // Ownership & Legal Documents
-        { name: 'ownershipDeedFile', maxCount: 1 },
-        { name: 'mutationDeedFile', maxCount: 1 },
-        { name: 'nocNecFile', maxCount: 1 },
-        { name: 'factoryLayoutFile', maxCount: 1 },
-        { name: 'leaseAgreementFile', maxCount: 1 },
-        { name: 'propertyWarrantyFile', maxCount: 1 },
-        { name: 'agreementUndertakingFile', maxCount: 1 },
-        // Human Resources Key
-        { name: 'qcPersonnelFile', maxCount: 1 },
-        { name: 'warehouseSupervisorFile', maxCount: 1 },
-        { name: 'dataEntryOperatorFile', maxCount: 1 },
-        // Location & Risk
-        { name: 'warehouseOutsideFloodingAreaFile', maxCount: 1 },
-        // Security & Perimeter
-        { name: 'securedBoundaryWallFile', maxCount: 1 },
-        { name: 'reinforcedBarbedWireFile', maxCount: 1 },
-        { name: 'fullyGatedFile', maxCount: 1 },
-        { name: 'securityGuards24x7File', maxCount: 1 },
-        { name: 'cctvCamerasFile', maxCount: 1 },
-        // Infrastructure & Utilities
-        { name: 'functionalWeighbridgeFile', maxCount: 1 },
-        { name: 'samplingTestingAreaFile', maxCount: 1 },
-        { name: 'calibratedInstrumentsFile', maxCount: 1 },
-        { name: 'functionalOfficeFile', maxCount: 1 },
-        { name: 'operationalToiletsFile', maxCount: 1 },
-        { name: 'electricityGasUtilitiesFile', maxCount: 1 },
-        { name: 'backupGeneratorFile', maxCount: 1 },
-        { name: 'adequateResidentialArrangementsFile', maxCount: 1 },
-        { name: 'axialAerationFansFile', maxCount: 1 },
-        { name: 'ventsExhaustFansFile', maxCount: 1 },
-        { name: 'technicalDrawingFile', maxCount: 1 },
-        { name: 'dryingFacilityFile', maxCount: 1 },
-        { name: 'temperatureSensorCablesFile', maxCount: 1 },
-        // Storage Facilities
-        { name: 'securedDoorsFile', maxCount: 1 },
-        { name: 'plasteredFlooringFile', maxCount: 1 },
-        { name: 'plasteredWallsFile', maxCount: 1 },
-        { name: 'intactCeilingFile', maxCount: 1 },
-        { name: 'functionalWindowsFile', maxCount: 1 },
-        { name: 'protectiveNettingFile', maxCount: 1 },
-        { name: 'functionalExhaustFansFile', maxCount: 1 },
-        { name: 'freeFromPestsFile', maxCount: 1 },
-        { name: 'fireSafetyMeasuresFile', maxCount: 1 },
-        // Registration Fee
-        { name: 'bankPaymentSlip', maxCount: 1 },
-      ],
-      {
-        limits: {
-          fileSize: 10 * 1024 * 1024, // 10MB max per file
-        },
-      },
-    ),
-  )
+  @ApiConsumes('application/json')
   @Patch('/:id/key-submission-checklist')
   updateWarehouseLocationChecklist(
     @Param('id') warehouseLocationId: string,
-    @Body('data') dataString: string,
+    @Body() payload: CreateWarehouseLocationChecklistDto,
     @Query('submit') submitParam?: string,
-    @UploadedFiles() files?: {
+    @Request() request?: any,
+  ) {
+    const user = request?.user as User;
+    if (!user) {
+      throw new BadRequestException('User not found in request');
+    }
+    const submit = submitParam === 'true' || submitParam === '1';
+    
+    // Convert base64 files to file-like objects
+    const files: {
       ownershipDeedFile?: any[];
       mutationDeedFile?: any[];
       nocNecFile?: any[];
@@ -264,25 +184,41 @@ export class WarehouseLocationChecklistController {
       freeFromPestsFile?: any[];
       fireSafetyMeasuresFile?: any[];
       bankPaymentSlip?: any[];
-    },
-    @Request() request?: any,
-  ) {
-    if (!dataString) {
-      throw new BadRequestException('Data field is required');
-    }
+    } = {};
 
-    let payload: CreateWarehouseLocationChecklistDto;
-    try {
-      payload = JSON.parse(dataString);
-    } catch (error) {
-      throw new BadRequestException('Invalid JSON in data field');
-    }
+    const fileFields = [
+      'ownershipDeedFile', 'mutationDeedFile', 'nocNecFile', 'factoryLayoutFile',
+      'leaseAgreementFile', 'propertyWarrantyFile', 'agreementUndertakingFile',
+      'qcPersonnelFile', 'warehouseSupervisorFile', 'dataEntryOperatorFile',
+      'warehouseOutsideFloodingAreaFile', 'securedBoundaryWallFile', 'reinforcedBarbedWireFile',
+      'fullyGatedFile', 'securityGuards24x7File', 'cctvCamerasFile',
+      'functionalWeighbridgeFile', 'samplingTestingAreaFile', 'calibratedInstrumentsFile',
+      'functionalOfficeFile', 'operationalToiletsFile', 'electricityGasUtilitiesFile',
+      'backupGeneratorFile', 'adequateResidentialArrangementsFile', 'axialAerationFansFile',
+      'ventsExhaustFansFile', 'technicalDrawingFile', 'dryingFacilityFile',
+      'temperatureSensorCablesFile', 'securedDoorsFile', 'plasteredFlooringFile',
+      'plasteredWallsFile', 'intactCeilingFile', 'functionalWindowsFile',
+      'protectiveNettingFile', 'functionalExhaustFansFile', 'freeFromPestsFile',
+      'fireSafetyMeasuresFile', 'bankPaymentSlip',
+    ];
 
-    const user = request?.user as User;
-    if (!user) {
-      throw new BadRequestException('User not found in request');
-    }
-    const submit = submitParam === 'true' || submitParam === '1';
+    fileFields.forEach((field) => {
+      const fileDto = (payload as any)[field];
+      if (fileDto && typeof fileDto === 'object' && 'file' in fileDto) {
+        (files as any)[field] = [
+          createAndValidateFileFromBase64(
+            {
+              file: fileDto.file,
+              fileName: fileDto.fileName,
+              fileSize: fileDto.fileSize,
+              mimeType: fileDto.mimeType,
+            },
+            10 * 1024 * 1024, // 10MB max
+          ),
+        ];
+      }
+    });
+
     return this.warehouseLocationChecklistService.updateWarehouseLocationChecklist(
       warehouseLocationId,
       payload,

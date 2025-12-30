@@ -1,6 +1,7 @@
 import { IsString, IsNotEmpty, IsOptional, MaxLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import { Exclude, Transform } from 'class-transformer';
+import { Transform } from 'class-transformer';
+import { BaseFileUploadDto } from 'src/common/dto/base-file-upload.dto';
 
 export class CreateAcademicQualificationDto {
   @IsString()
@@ -34,16 +35,10 @@ export class CreateAcademicQualificationDto {
   grade?: string;
 
   @ApiProperty({
-    type: 'string',
-    format: 'binary',
-    description: 'Academic certificate file (PDF, PNG, JPG, JPEG, DOC, DOCX). Max size: 10MB',
+    type: BaseFileUploadDto,
+    description: 'Academic certificate file (base64 encoded). Max size: 10MB',
     required: false,
   })
-  @Transform(({ value }) => {
-    if (value === '' || value === null) return undefined;
-    return value;
-  })
   @IsOptional()
-  @Exclude()
-  academicCertificate?: any; // Made optional in DTO for FileInterceptor
+  academicCertificate?: BaseFileUploadDto;
 }
