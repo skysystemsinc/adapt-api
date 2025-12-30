@@ -45,11 +45,13 @@ export class UsersController {
     return users;
   }
 
-  @Get(':id')
+  @Get('hod')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
-  async findOne(@Param('id') id: string): Promise<User | null> {
-    return this.usersService.findOne(id);
+  @ApiOperation({ summary: 'Get all HOD users (requires authentication only, no specific permission)' })
+  @HttpCode(HttpStatus.OK)
+  async findHodUsers(): Promise<User[]> {
+    return this.usersService.findHodUsers();
   }
 
   @Get('me/permissions')
@@ -60,5 +62,12 @@ export class UsersController {
     const userId = req.user.sub;
     const permissions = await this.rbacService.getUserPermissionNames(userId);
     return { permissions };
+  }
+
+  @Get(':id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  async findOne(@Param('id') id: string): Promise<User | null> {
+    return this.usersService.findOne(id);
   }
 }
