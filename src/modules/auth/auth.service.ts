@@ -172,7 +172,7 @@ export class AuthService {
 
     // find all occurence of number in registrationApplicationDetails
     // could be any thing: mobile number, number, contact number, etc.
-    const numberOccurrences = registrationApplicationDetails.filter(detail => detail.key.toLowerCase().includes('mobile'));
+    const numberOccurrences = registrationApplicationDetails.filter(detail => detail.label && detail.label.toLowerCase().includes('mobile'));
     if(numberOccurrences.length === 0) {
       throw new BadRequestException('Number not found in registration application details');
     }
