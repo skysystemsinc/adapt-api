@@ -1,4 +1,4 @@
-import { Exclude, Type } from 'class-transformer';
+import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
@@ -22,8 +22,16 @@ export class HrPersonalDetailsDto {
   designationName?: string;
 
   @IsOptional()
-  @Exclude()
+  @IsString()
   photograph?: string;
+
+  @IsOptional()
+  @IsString()
+  photographFileName?: string;
+
+  @IsOptional()
+  @IsString()
+  photographMimeType?: string;
 
   @IsString()
   @IsNotEmpty()
@@ -98,8 +106,16 @@ export class HrAcademicQualificationDto {
   grade?: string;
 
   @IsOptional()
-  @Exclude()
+  @IsString()
   academicCertificate?: string;
+
+  @IsOptional()
+  @IsString()
+  academicCertificateFileName?: string;
+
+  @IsOptional()
+  @IsString()
+  academicCertificateMimeType?: string;
 }
 
 export class HrProfessionalQualificationDto {
@@ -128,8 +144,16 @@ export class HrProfessionalQualificationDto {
   membershipNumber?: string;
 
   @IsOptional()
-  @Exclude()
+  @IsString()
   professionalCertificate?: string;
+
+  @IsOptional()
+  @IsString()
+  professionalCertificateFileName?: string;
+
+  @IsOptional()
+  @IsString()
+  professionalCertificateMimeType?: string;
 }
 
 export class HrTrainingDto {
@@ -158,8 +182,16 @@ export class HrTrainingDto {
   dateOfCompletion!: string;
 
   @IsOptional()
-  @Exclude()
+  @IsString()
   trainingCertificate?: string;
+
+  @IsOptional()
+  @IsString()
+  trainingCertificateFileName?: string;
+
+  @IsOptional()
+  @IsString()
+  trainingCertificateMimeType?: string;
 }
 
 export class HrExperienceDto {
@@ -196,8 +228,16 @@ export class HrExperienceDto {
   responsibilities?: string;
 
   @IsOptional()
-  @Exclude()
+  @IsString()
   experienceLetter?: string;
+
+  @IsOptional()
+  @IsString()
+  experienceLetterFileName?: string;
+
+  @IsOptional()
+  @IsString()
+  experienceLetterMimeType?: string;
 }
 
 export class HrDeclarationDto {

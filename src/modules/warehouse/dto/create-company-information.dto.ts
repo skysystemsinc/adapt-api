@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { IsBoolean, IsISO8601, IsNotEmpty,  IsOptional, IsString, MaxLength } from "class-validator";
-import { Exclude, Transform } from "class-transformer";
+import { Transform } from "class-transformer";
 export { CreateBankDetailsDto } from "./create-bank-details.dto";
 
 export class CreateCompanyInformationRequestDto {
@@ -83,20 +83,34 @@ export class CreateCompanyInformationRequestDto {
     nationalTaxNumber!: string;
 
     @ApiProperty({
-        type: 'string',
-        format: 'binary',
-        description: 'NTN certificate file (PDF, PNG, JPG, JPEG, DOC, DOCX). Max size: 100MB',
+        type: String,
+        description: 'NTN certificate file as base64 encoded string (PDF, PNG, JPG, JPEG, DOC, DOCX). Max size: 100MB',
         required: false,
-    })
-    @Transform(({ value }) => {
-        // Transform empty strings to undefined to avoid validation errors
-        // The actual file is handled by FileInterceptor, not the DTO
-        if (value === '' || value === null) return undefined;
-        return value;
+        example: 'data:application/pdf;base64,JVBERi0xLjQKJeLjz9MKMy...',
     })
     @IsOptional()
-    @Exclude()
-    ntcCertificate?: any;
+    @IsString()
+    ntcCertificate?: string;
+
+    @ApiProperty({
+        type: String,
+        description: 'Original filename for the NTC certificate (required if ntcCertificate is provided)',
+        required: false,
+        example: 'ntc-certificate.pdf',
+    })
+    @IsOptional()
+    @IsString()
+    ntcCertificateFileName?: string;
+
+    @ApiProperty({
+        type: String,
+        description: 'MIME type for the NTC certificate (required if ntcCertificate is provided)',
+        required: false,
+        example: 'application/pdf',
+    })
+    @IsOptional()
+    @IsString()
+    ntcCertificateMimeType?: string;
 
     @ApiProperty({
         type: String,

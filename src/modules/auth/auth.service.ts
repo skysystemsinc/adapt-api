@@ -144,8 +144,8 @@ export class AuthService {
     }
 
     // Generate OTP (4 digits)
-    // const otp = Math.floor(1000 + Math.random() * 9000).toString();
-    const otp = "1234";
+    const otp = Math.floor(1000 + Math.random() * 9000).toString();
+    // const otp = "1234";
     const otpExpires = new Date(Date.now() + 2 * 60 * 1000); // 2 minutes
 
     await this.userRepository.update(user.id, {

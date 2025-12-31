@@ -161,22 +161,13 @@ export class WarehouseController {
 
   @ApiOperation({ summary: 'Create company information' })
   @ApiBearerAuth('JWT-auth')
-  @ApiConsumes('multipart/form-data')
   @ApiBody({
     type: CreateCompanyInformationRequestDto,
-    description: 'Company information data with optional NTN certificate file'
+    description: 'Company information data with optional NTN certificate as base64 string'
   })
-  @UseInterceptors(
-    FileInterceptor('ntcCertificate', {
-      limits: {
-        fileSize: 100 * 1024 * 1024, // 100MB max
-      },
-    }),
-  )
   @Post('/operator/application/:id/company-information')
   createCompanyInformation(
     @Body() createCompanyInformationDto: CreateCompanyInformationRequestDto,
-    @UploadedFile() ntcCertificateFile: any,
     @Request() request: any,
     @Param('id') id: string
   ) {
@@ -184,25 +175,19 @@ export class WarehouseController {
     return this.warehouseService.createCompanyInformation(
       createCompanyInformationDto,
       user.id,
-      id,
-      ntcCertificateFile
+      id
     );
   }
 
   @ApiOperation({ summary: 'Update company information for a warehouse operator application' })
   @ApiBearerAuth('JWT-auth')
-  @ApiConsumes('multipart/form-data')
-  @UseInterceptors(
-    FileInterceptor('ntcCertificate', {
-      limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB max
-      },
-    }),
-  )
+  @ApiBody({
+    type: CreateCompanyInformationRequestDto,
+    description: 'Company information data with optional NTN certificate as base64 string'
+  })
   @Patch('/operator/application/:applicationId/company-information/:companyInformationId')
   updateCompanyInformation(
     @Body() createCompanyInformationDto: CreateCompanyInformationRequestDto,
-    @UploadedFile() ntcCertificateFile: any,
     @Request() request: any,
     @Param('applicationId') applicationId: string,
     @Param('companyInformationId') companyInformationId: string
@@ -212,8 +197,7 @@ export class WarehouseController {
       createCompanyInformationDto,
       user.id,
       applicationId,
-      companyInformationId,
-      ntcCertificateFile
+      companyInformationId
     );
   }
 
@@ -454,38 +438,20 @@ export class WarehouseController {
 
   @ApiOperation({ summary: 'Save or update personal details' })
   @ApiBearerAuth('JWT-auth')
-  @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FileInterceptor('photograph', {
-    limits: {
-      fileSize: 10 * 1024 * 1024, // 10MB max
-    },
-  }))
+  @ApiBody({ type: HrPersonalDetailsDto, description: 'Personal details data with optional photograph as base64 string' })
   @Post('/operator/application/:applicationId/hr/personal-details')
   savePersonalDetails(
     @Param('applicationId') applicationId: string,
-    @Body('data') dataString: string,
-    @UploadedFile() photograph: any,
+    @Body() payload: HrPersonalDetailsDto,
     @Request() request: any,
     @Query('hrInformationId') hrInformationId?: string,
   ) {
-    if (!dataString) {
-      throw new BadRequestException('Data field is required');
-    }
-
-    let payload: HrPersonalDetailsDto;
-    try {
-      payload = JSON.parse(dataString);
-    } catch (error) {
-      throw new BadRequestException('Invalid JSON in data field');
-    }
-
     const user = request.user as User;
     return this.warehouseService.savePersonalDetails(
       applicationId,
       payload,
       user.id,
       hrInformationId,
-      photograph,
     );
   }
 
@@ -509,77 +475,41 @@ export class WarehouseController {
 
   @ApiOperation({ summary: 'Save a single academic qualification' })
   @ApiBearerAuth('JWT-auth')
-  @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FileInterceptor('academicCertificate', {
-    limits: {
-      fileSize: 10 * 1024 * 1024, // 10MB max
-    },
-  }))
+  @ApiBody({ type: HrAcademicQualificationDto, description: 'Academic qualification data with optional certificate as base64 string' })
   @Post('/operator/application/:applicationId/hr/academic-qualifications')
   createAcademicQualification(
     @Param('applicationId') applicationId: string,
-    @Body('data') dataString: string,
-    @UploadedFile() academicCertificate: any,
+    @Body() payload: HrAcademicQualificationDto,
     @Request() request: any,
     @Query('hrInformationId') hrInformationId?: string,
   ) {
-    if (!dataString) {
-      throw new BadRequestException('Data field is required');
-    }
-
-    let payload: HrAcademicQualificationDto;
-    try {
-      payload = JSON.parse(dataString);
-    } catch (error) {
-      throw new BadRequestException('Invalid JSON in data field');
-    }
-
     const user = request.user as User;
     return this.warehouseService.saveAcademicQualification(
       applicationId,
       payload,
       user.id,
       undefined,
-      academicCertificate,
       hrInformationId,
     );
   }
 
   @ApiOperation({ summary: 'Update a single academic qualification' })
   @ApiBearerAuth('JWT-auth')
-  @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FileInterceptor('academicCertificate', {
-    limits: {
-      fileSize: 10 * 1024 * 1024, // 10MB max
-    },
-  }))
+  @ApiBody({ type: HrAcademicQualificationDto, description: 'Academic qualification data with optional certificate as base64 string' })
   @Post('/operator/application/:applicationId/hr/academic-qualifications/:id')
   updateAcademicQualification(
     @Param('applicationId') applicationId: string,
     @Param('id') id: string,
-    @Body('data') dataString: string,
-    @UploadedFile() academicCertificate: any,
+    @Body() payload: HrAcademicQualificationDto,
     @Request() request: any,
     @Query('hrInformationId') hrInformationId?: string,
   ) {
-    if (!dataString) {
-      throw new BadRequestException('Data field is required');
-    }
-
-    let payload: HrAcademicQualificationDto;
-    try {
-      payload = JSON.parse(dataString);
-    } catch (error) {
-      throw new BadRequestException('Invalid JSON in data field');
-    }
-
     const user = request.user as User;
     return this.warehouseService.saveAcademicQualification(
       applicationId,
       payload,
       user.id,
       id,
-      academicCertificate,
       hrInformationId,
     );
   }
@@ -597,77 +527,41 @@ export class WarehouseController {
 
   @ApiOperation({ summary: 'Save a single professional qualification' })
   @ApiBearerAuth('JWT-auth')
-  @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FileInterceptor('professionalCertificate', {
-    limits: {
-      fileSize: 10 * 1024 * 1024, // 10MB max
-    },
-  }))
+  @ApiBody({ type: HrProfessionalQualificationDto, description: 'Professional qualification data with optional certificate as base64 string' })
   @Post('/operator/application/:applicationId/hr/professional-qualifications')
   createProfessionalQualification(
     @Param('applicationId') applicationId: string,
-    @Body('data') dataString: string,
-    @UploadedFile() professionalCertificate: any,
+    @Body() payload: HrProfessionalQualificationDto,
     @Request() request: any,
     @Query('hrInformationId') hrInformationId?: string,
   ) {
-    if (!dataString) {
-      throw new BadRequestException('Data field is required');
-    }
-
-    let payload: HrProfessionalQualificationDto;
-    try {
-      payload = JSON.parse(dataString);
-    } catch (error) {
-      throw new BadRequestException('Invalid JSON in data field');
-    }
-
     const user = request.user as User;
     return this.warehouseService.saveProfessionalQualification(
       applicationId,
       payload,
       user.id,
       undefined,
-      professionalCertificate,
       hrInformationId,
     );
   }
 
   @ApiOperation({ summary: 'Update a single professional qualification' })
   @ApiBearerAuth('JWT-auth')
-  @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FileInterceptor('professionalCertificate', {
-    limits: {
-      fileSize: 10 * 1024 * 1024, // 10MB max
-    },
-  }))
+  @ApiBody({ type: HrProfessionalQualificationDto, description: 'Professional qualification data with optional certificate as base64 string' })
   @Post('/operator/application/:applicationId/hr/professional-qualifications/:id')
   updateProfessionalQualification(
     @Param('applicationId') applicationId: string,
     @Param('id') id: string,
-    @Body('data') dataString: string,
-    @UploadedFile() professionalCertificate: any,
+    @Body() payload: HrProfessionalQualificationDto,
     @Request() request: any,
     @Query('hrInformationId') hrInformationId?: string,
   ) {
-    if (!dataString) {
-      throw new BadRequestException('Data field is required');
-    }
-
-    let payload: HrProfessionalQualificationDto;
-    try {
-      payload = JSON.parse(dataString);
-    } catch (error) {
-      throw new BadRequestException('Invalid JSON in data field');
-    }
-
     const user = request.user as User;
     return this.warehouseService.saveProfessionalQualification(
       applicationId,
       payload,
       user.id,
       id,
-      professionalCertificate,
       hrInformationId,
     );
   }
@@ -685,77 +579,41 @@ export class WarehouseController {
 
   @ApiOperation({ summary: 'Save a single training' })
   @ApiBearerAuth('JWT-auth')
-  @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FileInterceptor('trainingCertificate', {
-    limits: {
-      fileSize: 10 * 1024 * 1024, // 10MB max
-    },
-  }))
+  @ApiBody({ type: HrTrainingDto, description: 'Training data with optional certificate as base64 string' })
   @Post('/operator/application/:applicationId/hr/trainings')
   createTraining(
     @Param('applicationId') applicationId: string,
-    @Body('data') dataString: string,
-    @UploadedFile() trainingCertificate: any,
+    @Body() payload: HrTrainingDto,
     @Request() request: any,
     @Query('hrInformationId') hrInformationId?: string,
   ) {
-    if (!dataString) {
-      throw new BadRequestException('Data field is required');
-    }
-
-    let payload: HrTrainingDto;
-    try {
-      payload = JSON.parse(dataString);
-    } catch (error) {
-      throw new BadRequestException('Invalid JSON in data field');
-    }
-
     const user = request.user as User;
     return this.warehouseService.saveTraining(
       applicationId,
       payload,
       user.id,
       undefined,
-      trainingCertificate,
       hrInformationId,
     );
   }
 
   @ApiOperation({ summary: 'Update a single training' })
   @ApiBearerAuth('JWT-auth')
-  @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FileInterceptor('trainingCertificate', {
-    limits: {
-      fileSize: 10 * 1024 * 1024, // 10MB max
-    },
-  }))
+  @ApiBody({ type: HrTrainingDto, description: 'Training data with optional certificate as base64 string' })
   @Post('/operator/application/:applicationId/hr/trainings/:id')
   updateTraining(
     @Param('applicationId') applicationId: string,
     @Param('id') id: string,
-    @Body('data') dataString: string,
-    @UploadedFile() trainingCertificate: any,
+    @Body() payload: HrTrainingDto,
     @Request() request: any,
     @Query('hrInformationId') hrInformationId?: string,
   ) {
-    if (!dataString) {
-      throw new BadRequestException('Data field is required');
-    }
-
-    let payload: HrTrainingDto;
-    try {
-      payload = JSON.parse(dataString);
-    } catch (error) {
-      throw new BadRequestException('Invalid JSON in data field');
-    }
-
     const user = request.user as User;
     return this.warehouseService.saveTraining(
       applicationId,
       payload,
       user.id,
       id,
-      trainingCertificate,
       hrInformationId,
     );
   }
@@ -773,77 +631,41 @@ export class WarehouseController {
 
   @ApiOperation({ summary: 'Save a single experience' })
   @ApiBearerAuth('JWT-auth')
-  @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FileInterceptor('experienceLetter', {
-    limits: {
-      fileSize: 10 * 1024 * 1024, // 10MB max
-    },
-  }))
+  @ApiBody({ type: HrExperienceDto, description: 'Experience data with optional letter as base64 string' })
   @Post('/operator/application/:applicationId/hr/experience')
   createExperience(
     @Param('applicationId') applicationId: string,
-    @Body('data') dataString: string,
-    @UploadedFile() experienceLetter: any,
+    @Body() payload: HrExperienceDto,
     @Request() request: any,
     @Query('hrInformationId') hrInformationId?: string,
   ) {
-    if (!dataString) {
-      throw new BadRequestException('Data field is required');
-    }
-
-    let payload: HrExperienceDto;
-    try {
-      payload = JSON.parse(dataString);
-    } catch (error) {
-      throw new BadRequestException('Invalid JSON in data field');
-    }
-
     const user = request.user as User;
     return this.warehouseService.saveExperience(
       applicationId,
       payload,
       user.id,
       undefined,
-      experienceLetter,
       hrInformationId,
     );
   }
 
   @ApiOperation({ summary: 'Update a single experience' })
   @ApiBearerAuth('JWT-auth')
-  @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FileInterceptor('experienceLetter', {
-    limits: {
-      fileSize: 10 * 1024 * 1024, // 10MB max
-    },
-  }))
+  @ApiBody({ type: HrExperienceDto, description: 'Experience data with optional letter as base64 string' })
   @Post('/operator/application/:applicationId/hr/experience/:id')
   updateExperience(
     @Param('applicationId') applicationId: string,
     @Param('id') id: string,
-    @Body('data') dataString: string,
-    @UploadedFile() experienceLetter: any,
+    @Body() payload: HrExperienceDto,
     @Request() request: any,
     @Query('hrInformationId') hrInformationId?: string,
   ) {
-    if (!dataString) {
-      throw new BadRequestException('Data field is required');
-    }
-
-    let payload: HrExperienceDto;
-    try {
-      payload = JSON.parse(dataString);
-    } catch (error) {
-      throw new BadRequestException('Invalid JSON in data field');
-    }
-
     const user = request.user as User;
     return this.warehouseService.saveExperience(
       applicationId,
       payload,
       user.id,
       id,
-      experienceLetter,
       hrInformationId,
     );
   }
@@ -874,67 +696,29 @@ export class WarehouseController {
 
   @ApiOperation({ summary: 'Save a new other document' })
   @ApiBearerAuth('JWT-auth')
-  @ApiConsumes('multipart/form-data')
-  @UseInterceptors(
-    FileInterceptor('document', {
-      limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB max
-      },
-    }),
-  )
+  @ApiBody({ type: OthersDto, description: 'Other document data with optional document as base64 string' })
   @Post('/operator/application/:applicationId/financial-information/others')
   saveOther(
     @Param('applicationId') applicationId: string,
-    @Body('data') dataString: string,
-    @UploadedFile() documentFile: any,
+    @Body() payload: OthersDto,
     @Request() request: any,
   ) {
-    if (!dataString) {
-      throw new BadRequestException('Data field is required');
-    }
-
-    let payload: OthersDto;
-    try {
-      payload = JSON.parse(dataString);
-    } catch (error) {
-      throw new BadRequestException('Invalid JSON in data field');
-    }
-
     const user = request.user as User;
-    return this.warehouseService.saveOther(applicationId, payload, user.id, undefined, documentFile);
+    return this.warehouseService.saveOther(applicationId, payload, user.id, undefined);
   }
 
   @ApiOperation({ summary: 'Update an existing other document' })
   @ApiBearerAuth('JWT-auth')
-  @ApiConsumes('multipart/form-data')
-  @UseInterceptors(
-    FileInterceptor('document', {
-      limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB max
-      },
-    }),
-  )
+  @ApiBody({ type: OthersDto, description: 'Other document data with optional document as base64 string' })
   @Post('/operator/application/:applicationId/financial-information/others/:id')
   updateOther(
     @Param('applicationId') applicationId: string,
     @Param('id') id: string,
-    @Body('data') dataString: string,
-    @UploadedFile() documentFile: any,
+    @Body() payload: OthersDto,
     @Request() request: any,
   ) {
-    if (!dataString) {
-      throw new BadRequestException('Data field is required');
-    }
-
-    let payload: OthersDto;
-    try {
-      payload = JSON.parse(dataString);
-    } catch (error) {
-      throw new BadRequestException('Invalid JSON in data field');
-    }
-
     const user = request.user as User;
-    return this.warehouseService.saveOther(applicationId, payload, user.id, id, documentFile);
+    return this.warehouseService.saveOther(applicationId, payload, user.id, id);
   }
 
   @ApiOperation({ summary: 'Delete an other document' })
@@ -950,107 +734,44 @@ export class WarehouseController {
 
   @ApiOperation({ summary: 'Save a new financial subsection (unified endpoint)' })
   @ApiBearerAuth('JWT-auth')
-  @ApiConsumes('multipart/form-data')
   @ApiParam({ name: 'sectionType', enum: ['audit-report', 'tax-return', 'bank-statement', 'other'] })
-  @UseInterceptors(
-    FilesInterceptor('documents', 10, {
-      limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB max per file
-      },
-    }),
-  )
+  @ApiBody({ description: 'Financial subsection data with optional documents as base64 strings' })
   @Post('/operator/application/:applicationId/financial-information/:sectionType')
   saveFinancialSubsection(
     @Param('applicationId') applicationId: string,
     @Param('sectionType') sectionType: 'audit-report' | 'tax-return' | 'bank-statement' | 'other',
-    @Body('data') dataString: string,
-    @UploadedFiles() documentFiles: any,
+    @Body() payload: any,
     @Request() request: any,
   ) {
-    if (!dataString) {
-      throw new BadRequestException('Data field is required');
-    }
-
-    let payload: any;
-    try {
-      payload = JSON.parse(dataString);
-    } catch (error) {
-      throw new BadRequestException('Invalid JSON in data field');
-    }
-
     const user = request.user as User;
-
-    // For tax-return and audit-report, use multiple files; for others, use first file (backward compatibility)
-    let documentFile: any = undefined;
-    if (sectionType === 'tax-return' || sectionType === 'audit-report') {
-      // Multiple files for tax-return and audit-report
-      documentFile = documentFiles && documentFiles.length > 0 ? documentFiles : undefined;
-    } else {
-      // Single file for other sections (backward compatibility)
-      // Also check for 'document' field in case frontend sends single file
-      documentFile = documentFiles && documentFiles.length > 0 ? documentFiles[0] : request.body?.document;
-    }
-
     return this.warehouseService.saveFinancialSubsection(
       sectionType,
       applicationId,
       payload,
       user.id,
       undefined,
-      documentFile,
     );
   }
 
   @ApiOperation({ summary: 'Update an existing financial subsection (unified endpoint)' })
   @ApiBearerAuth('JWT-auth')
-  @ApiConsumes('multipart/form-data')
   @ApiParam({ name: 'sectionType', enum: ['audit-report', 'tax-return', 'bank-statement', 'other'] })
-  @UseInterceptors(
-    FilesInterceptor('documents', 10, {
-      limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB max per file
-      },
-    }),
-  )
+  @ApiBody({ description: 'Financial subsection data with optional documents as base64 strings' })
   @Post('/operator/application/:applicationId/financial-information/:sectionType/:id')
   updateFinancialSubsection(
     @Param('applicationId') applicationId: string,
     @Param('sectionType') sectionType: 'audit-report' | 'tax-return' | 'bank-statement' | 'other',
     @Param('id') id: string,
-    @Body('data') dataString: string,
-    @UploadedFiles() documentFiles: any,
+    @Body() payload: any,
     @Request() request: any,
   ) {
-    if (!dataString) {
-      throw new BadRequestException('Data field is required');
-    }
-
-    let payload: any;
-    try {
-      payload = JSON.parse(dataString);
-    } catch (error) {
-      throw new BadRequestException('Invalid JSON in data field');
-    }
-
     const user = request.user as User;
-
-    // For tax-return and audit-report, use multiple files; for others, use first file (backward compatibility)
-    let documentFile: any = undefined;
-    if (sectionType === 'tax-return' || sectionType === 'audit-report') {
-      // Multiple files for tax-return and audit-report
-      documentFile = documentFiles && documentFiles.length > 0 ? documentFiles : undefined;
-    } else {
-      // Single file for other sections (backward compatibility)
-      documentFile = documentFiles && documentFiles.length > 0 ? documentFiles[0] : request.body?.document;
-    }
-
     return this.warehouseService.saveFinancialSubsection(
       sectionType,
       applicationId,
       payload,
       user.id,
       id,
-      documentFile,
     );
   }
 
@@ -1084,72 +805,28 @@ export class WarehouseController {
 
   @ApiOperation({
     summary: 'Create or update applicant checklist for a warehouse operator application',
-    description: 'Submit applicant checklist with optional file uploads. Files are uploaded via multipart/form-data and linked to warehouse_documents table.'
+    description: 'Submit applicant checklist with optional file uploads as base64 encoded strings. Files are sent as JSON payload and linked to warehouse_documents table.'
   })
   @ApiBearerAuth('JWT-auth')
-  @ApiConsumes('multipart/form-data')
   @ApiParam(ApplicantChecklistApiParam)
-  @ApiBody(ApplicantChecklistApiBodySchema)
+  @ApiBody({ type: CreateApplicantChecklistDto, description: 'Applicant checklist data with optional files as base64 encoded strings' })
   @ApiResponse(ApplicantChecklistApiResponseSchema)
   @ApiResponse(ApplicantChecklistApiResponse400)
   @ApiResponse(ApplicantChecklistApiResponse401)
   @ApiResponse(ApplicantChecklistApiResponse404)
-  @UseInterceptors(
-    FileFieldsInterceptor([
-      { name: 'qcPersonnelFile', maxCount: 1 },
-      { name: 'warehouseSupervisorFile', maxCount: 1 },
-      { name: 'dataEntryOperatorFile', maxCount: 1 },
-      { name: 'auditedFinancialStatementsFile', maxCount: 1 },
-      { name: 'positiveNetWorthFile', maxCount: 1 },
-      { name: 'noLoanDefaultsFile', maxCount: 1 },
-      { name: 'cleanCreditHistoryFile', maxCount: 1 },
-      { name: 'adequateWorkingCapitalFile', maxCount: 1 },
-      { name: 'validInsuranceCoverageFile', maxCount: 1 },
-      { name: 'noFinancialFraudFile', maxCount: 1 },
-      { name: 'bankPaymentSlip', maxCount: 1 },
-    ], {
-      limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB max per file
-      },
-    }),
-  )
   @Post('/operator/application/:applicationId/applicant-checklist')
   createApplicantChecklist(
     @Param('applicationId') applicationId: string,
-    @Body('data') dataString: string,
+    @Body() payload: CreateApplicantChecklistDto,
     @Query('submit') submitParam?: string,
-    @UploadedFiles() files?: {
-      qcPersonnelFile?: any[];
-      warehouseSupervisorFile?: any[];
-      dataEntryOperatorFile?: any[];
-      auditedFinancialStatementsFile?: any[];
-      positiveNetWorthFile?: any[];
-      noLoanDefaultsFile?: any[];
-      cleanCreditHistoryFile?: any[];
-      adequateWorkingCapitalFile?: any[];
-      validInsuranceCoverageFile?: any[];
-      noFinancialFraudFile?: any[];
-      bankPaymentSlip?: any[];
-    },
     @Request() request?: any,
   ) {
-    if (!dataString) {
-      throw new BadRequestException('Data field is required');
-    }
-
-    let payload: CreateApplicantChecklistDto;
-    try {
-      payload = JSON.parse(dataString);
-    } catch (error) {
-      throw new BadRequestException('Invalid JSON in data field');
-    }
-
     const user = request?.user as User;
     if (!user) {
       throw new BadRequestException('User not found in request');
     }
     const submit = submitParam === 'true' || submitParam === '1';
-    return this.warehouseService.createApplicantChecklist(applicationId, payload, user.id, files, submit);
+    return this.warehouseService.createApplicantChecklist(applicationId, payload, user.id, undefined, submit);
   }
 
   @Get()

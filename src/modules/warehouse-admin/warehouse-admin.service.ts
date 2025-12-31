@@ -484,6 +484,7 @@ export class WarehouseAdminService {
   }
 
   async findOne(id: string, userId: string) {
+    console.log("Request Received for Warehouse Operator Application: ", id);
     let user: User | null = null;
 
     if (userId) {

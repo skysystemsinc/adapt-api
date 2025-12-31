@@ -49,8 +49,11 @@ export class FinancialInformationService {
     dto: any,
     userId: string,
     id?: string,
-    documentFile?: any,
   ) {
+    if (!dto) {
+      throw new BadRequestException('Request body is required');
+    }
+
     const application = await this.warehouseOperatorRepository.findOne({
       where: { id: applicationId, userId },
     });
@@ -74,13 +77,13 @@ export class FinancialInformationService {
 
     switch (sectionType) {
       case 'audit-report':
-        return this.saveAuditReport(financialInfo, dto, userId, id, documentFile);
+        return this.saveAuditReport(financialInfo, dto, userId, id);
       case 'tax-return':
-        return this.saveTaxReturn(financialInfo, dto, userId, id, documentFile);
+        return this.saveTaxReturn(financialInfo, dto, userId, id);
       case 'bank-statement':
-        return this.saveBankStatement(financialInfo, dto, userId, id, documentFile);
+        return this.saveBankStatement(financialInfo, dto, userId, id);
       case 'other':
-        return this.saveOther(applicationId, dto, userId, id, documentFile);
+        return this.saveOther(applicationId, dto, userId, id);
       default:
         throw new BadRequestException(`Invalid section type: ${sectionType}`);
     }
@@ -95,8 +98,11 @@ export class FinancialInformationService {
     dto: any,
     userId: string,
     id?: string,
-    documentFiles?: any, // Can be single file, array of files, or array of document IDs
   ) {
+    if (!dto) {
+      throw new BadRequestException('Request body is required');
+    }
+
     const savedResult = await this.dataSource.transaction(async (manager) => {
       const auditReportRepo = manager.getRepository(AuditReportEntity);
       const documentRepo = manager.getRepository(WarehouseDocument);
@@ -113,36 +119,34 @@ export class FinancialInformationService {
         throw new BadRequestException('Cannot update audit report after application is approved, submitted, or rejected');
       }
 
-      // Normalize documentFiles to array
+      // Handle documents from DTO: can be base64 strings or document IDs
+      // Note: We'll handle file uploads outside the transaction since file operations are not transactional
       let filesToUpload: any[] = [];
       let documentIdsToKeep: string[] = [];
       
-      if (documentFiles) {
-        if (Array.isArray(documentFiles)) {
-          // Check if array contains files or document IDs
-          documentFiles.forEach((item) => {
-            if (item && typeof item === 'object' && item.buffer) {
-              // It's a file
-              filesToUpload.push(item);
-            } else if (typeof item === 'string') {
-              // It's a document ID
-              documentIdsToKeep.push(item);
+      if (dto?.documents && Array.isArray(dto.documents)) {
+        const fileNames = dto.documentFileNames || [];
+        const mimeTypes = dto.documentMimeTypes || [];
+        
+        dto.documents.forEach((doc: string, index: number) => {
+          if (typeof doc === 'string') {
+            // Check if it's base64 (contains data URL prefix) or document ID
+            if (doc.includes('base64') || doc.includes(',')) {
+              // It's base64 - will convert to file and upload outside transaction
+              if (!fileNames[index]) {
+                throw new BadRequestException(`documentFileNames[${index}] is required when documents[${index}] is provided as base64`);
+              }
+              
+              const fileForUpload = this.warehouseService.convertBase64ToFile(
+                doc,
+                fileNames[index],
+                mimeTypes[index]
+              );
+              filesToUpload.push(fileForUpload);
+            } else {
+              // It's a document ID string - use it directly
+              documentIdsToKeep.push(doc);
             }
-          });
-        } else if (documentFiles.buffer) {
-          // Single file
-          filesToUpload = [documentFiles];
-        } else if (typeof documentFiles === 'string') {
-          // Single document ID
-          documentIdsToKeep = [documentFiles];
-        }
-      }
-
-      // Also check dto.documents for document IDs (from frontend)
-      if (dto.documents && Array.isArray(dto.documents)) {
-        dto.documents.forEach((docId: string) => {
-          if (typeof docId === 'string' && !documentIdsToKeep.includes(docId)) {
-            documentIdsToKeep.push(docId);
           }
         });
       }
@@ -217,7 +221,7 @@ export class FinancialInformationService {
             await documentRepo.remove(documentsToDelete);
           }
 
-          // Upload new files
+          // Upload new files (filesToUpload contains file-like objects from base64 conversion)
           let firstDocument: WarehouseDocument | null = null;
           for (const file of filesToUpload) {
             const doc = await this.warehouseService.uploadWarehouseDocument(
@@ -271,7 +275,7 @@ export class FinancialInformationService {
         financialInfo.auditReportId = auditReport.id;
         await manager.getRepository(FinancialInformationEntity).save(financialInfo);
 
-        // Upload new files
+        // Upload new files (filesToUpload contains file-like objects from base64 conversion)
         let firstDocument: WarehouseDocument | null = null;
         for (const file of filesToUpload) {
           const doc = await this.warehouseService.uploadWarehouseDocument(
@@ -403,44 +407,45 @@ export class FinancialInformationService {
     dto: any,
     userId: string,
     id?: string,
-    documentFiles?: any, // Can be single file, array of files, or array of document IDs
   ) {
+    if (!dto) {
+      throw new BadRequestException('Request body is required');
+    }
+
     const savedResult = await this.dataSource.transaction(async (manager) => {
       const taxReturnRepo = manager.getRepository(TaxReturnEntity);
       const documentRepo = manager.getRepository(WarehouseDocument);
       const appRepo = manager.getRepository(WarehouseOperatorApplicationRequest);
       const historyRepo = manager.getRepository(TaxReturnHistoryEntity);
 
-      // Normalize documentFiles to array
+      // Handle documents from DTO: can be base64 strings or document IDs
+      // Note: We'll handle file uploads inside the transaction (files are converted from base64 before transaction)
       let filesToUpload: any[] = [];
       let documentIdsToKeep: string[] = [];
       
-      if (documentFiles) {
-        if (Array.isArray(documentFiles)) {
-          // Check if array contains files or document IDs
-          documentFiles.forEach((item) => {
-            if (item && typeof item === 'object' && item.buffer) {
-              // It's a file
-              filesToUpload.push(item);
-            } else if (typeof item === 'string') {
-              // It's a document ID
-              documentIdsToKeep.push(item);
+      if (dto?.documents && Array.isArray(dto.documents)) {
+        const fileNames = dto.documentFileNames || [];
+        const mimeTypes = dto.documentMimeTypes || [];
+        
+        dto.documents.forEach((doc: string, index: number) => {
+          if (typeof doc === 'string') {
+            // Check if it's base64 (contains data URL prefix) or document ID
+            if (doc.includes('base64') || doc.includes(',')) {
+              // It's base64 - convert to file-like object
+              if (!fileNames[index]) {
+                throw new BadRequestException(`documentFileNames[${index}] is required when documents[${index}] is provided as base64`);
+              }
+              
+              const fileForUpload = this.warehouseService.convertBase64ToFile(
+                doc,
+                fileNames[index],
+                mimeTypes[index]
+              );
+              filesToUpload.push(fileForUpload);
+            } else {
+              // It's a document ID string - use it directly
+              documentIdsToKeep.push(doc);
             }
-          });
-        } else if (documentFiles.buffer) {
-          // Single file
-          filesToUpload = [documentFiles];
-        } else if (typeof documentFiles === 'string') {
-          // Single document ID
-          documentIdsToKeep = [documentFiles];
-        }
-      }
-
-      // Also check dto.documents for document IDs (from frontend)
-      if (dto.documents && Array.isArray(dto.documents)) {
-        dto.documents.forEach((docId: string) => {
-          if (typeof docId === 'string' && !documentIdsToKeep.includes(docId)) {
-            documentIdsToKeep.push(docId);
           }
         });
       }
@@ -685,8 +690,11 @@ export class FinancialInformationService {
     dto: any,
     userId: string,
     id?: string,
-    documentFile?: any,
   ) {
+    if (!dto) {
+      throw new BadRequestException('Request body is required');
+    }
+
     const savedResult = await this.dataSource.transaction(async (manager) => {
       const bankStatementRepo = manager.getRepository(BankStatementEntity);
       const documentRepo = manager.getRepository(WarehouseDocument);
@@ -739,13 +747,34 @@ export class FinancialInformationService {
           remarks: dto.remarks ?? null,
         });
 
-        // Handle document upload/update
-        // If file is provided, overwrite the old document
-        // If string (documentId) is provided in dto.document, ignore it (keep existing document)
-        if (documentFile) {
+        // Handle document: if base64 is provided, convert and upload; if string (documentId), use it
+        // Note: We'll handle the upload inside the transaction (file is converted from base64 before transaction)
+        let documentFileForUpload: any = undefined;
+        let documentIdToUse: string | undefined = undefined;
+        
+        if (dto.document) {
+          // Check if it's base64 (contains data URL prefix) or document ID
+          if (dto.document.includes('base64') || dto.document.includes(',')) {
+            // It's base64 - convert to file-like object
+            if (!dto.documentFileName) {
+              throw new BadRequestException('documentFileName is required when document is provided as base64');
+            }
+            
+            documentFileForUpload = this.warehouseService.convertBase64ToFile(
+              dto.document,
+              dto.documentFileName,
+              dto.documentMimeType
+            );
+          } else {
+            // It's a document ID string - use it directly
+            documentIdToUse = dto.document;
+          }
+        }
+
+        if (documentFileForUpload) {
           // Upload new document (replace existing if any)
           const doc = await this.warehouseService.uploadWarehouseDocument(
-            documentFile,
+            documentFileForUpload,
             userId,
             'BankStatement',
             existing.id,
@@ -755,15 +784,41 @@ export class FinancialInformationService {
           if (documentEntity) {
             existing.document = documentEntity;
           }
+        } else if (documentIdToUse) {
+          // Use existing document ID
+          const documentEntity = await documentRepo.findOne({ where: { id: documentIdToUse } });
+          if (documentEntity) {
+            existing.document = documentEntity;
+          }
         }
-        // If documentId (string) is provided in dto.document, ignore it - keep existing document relationship
 
         await bankStatementRepo.save(existing);
         return existing;
       } else {
         // Create new - document is required
-        if (!documentFile) {
-          throw new BadRequestException('Document is required for bank statement. Please upload a document.');
+        if (!dto.document) {
+          throw new BadRequestException('Document is required for bank statement. Please provide a document.');
+        }
+
+        // Handle document: if base64 is provided, convert and upload; if string (documentId), use it
+        let documentFileForUpload: any = undefined;
+        let documentIdToUse: string | undefined = undefined;
+        
+        // Check if it's base64 (contains data URL prefix) or document ID
+        if (dto.document.includes('base64') || dto.document.includes(',')) {
+          // It's base64 - convert to file-like object
+          if (!dto.documentFileName) {
+            throw new BadRequestException('documentFileName is required when document is provided as base64');
+          }
+          
+          documentFileForUpload = this.warehouseService.convertBase64ToFile(
+            dto.document,
+            dto.documentFileName,
+            dto.documentMimeType
+          );
+        } else {
+          // It's a document ID string - use it directly
+          documentIdToUse = dto.document;
         }
 
         const bankStatement = bankStatementRepo.create({
@@ -777,17 +832,25 @@ export class FinancialInformationService {
         await bankStatementRepo.save(bankStatement);
 
         // Handle document upload after creating the entity
-        const doc = await this.warehouseService.uploadWarehouseDocument(
-          documentFile,
-          userId,
-          'BankStatement',
-          bankStatement.id,
-          'document',
-        );
-        const documentEntity = await documentRepo.findOne({ where: { id: doc.id } });
-        if (documentEntity) {
-          bankStatement.document = documentEntity;
-          await bankStatementRepo.save(bankStatement);
+        if (documentFileForUpload) {
+          const doc = await this.warehouseService.uploadWarehouseDocument(
+            documentFileForUpload,
+            userId,
+            'BankStatement',
+            bankStatement.id,
+            'document',
+          );
+          const documentEntity = await documentRepo.findOne({ where: { id: doc.id } });
+          if (documentEntity) {
+            bankStatement.document = documentEntity;
+            await bankStatementRepo.save(bankStatement);
+          }
+        } else if (documentIdToUse) {
+          const documentEntity = await documentRepo.findOne({ where: { id: documentIdToUse } });
+          if (documentEntity) {
+            bankStatement.document = documentEntity;
+            await bankStatementRepo.save(bankStatement);
+          }
         }
 
         return bankStatement;
@@ -872,8 +935,11 @@ export class FinancialInformationService {
     dto: OthersDto & { document?: string | { documentId?: string; id?: string } },
     userId: string,
     id?: string,
-    documentFile?: any,
   ) {
+    if (!dto) {
+      throw new BadRequestException('Request body is required');
+    }
+
     const application = await this.warehouseOperatorRepository.findOne({
       where: { id: applicationId, userId },
     });
@@ -969,13 +1035,45 @@ export class FinancialInformationService {
           remarks: dto.remarks ?? null,
         });
 
+        // Handle document: if base64 is provided, convert and upload; if string (documentId), use it
+        // Note: We'll handle the upload inside the transaction (file is converted from base64 before transaction)
+        let documentFileForUpload: any = undefined;
+        let documentIdToUse: string | undefined = undefined;
+        
+        if (dto.document) {
+          // Handle both string (base64 or documentId) and object (legacy format)
+          let documentValue: string | undefined = undefined;
+          if (typeof dto.document === 'string') {
+            documentValue = dto.document;
+          } else if (dto.document && typeof dto.document === 'object' && 'documentId' in dto.document) {
+            documentValue = (dto.document as any).documentId || (dto.document as any).id;
+          }
+          
+          if (documentValue) {
+            // Check if it's base64 (contains data URL prefix) or document ID
+            if (documentValue.includes('base64') || documentValue.includes(',')) {
+              // It's base64 - convert to file-like object
+              if (!dto.documentFileName) {
+                throw new BadRequestException('documentFileName is required when document is provided as base64');
+              }
+              
+              documentFileForUpload = this.warehouseService.convertBase64ToFile(
+                documentValue,
+                dto.documentFileName,
+                dto.documentMimeType
+              );
+            } else {
+              // It's a document ID string - use it directly
+              documentIdToUse = documentValue;
+            }
+          }
+        }
+
         // Handle document upload/update
-        // If file is provided, overwrite the old document
-        // If string (documentId) is provided, ignore it (keep existing document)
-        if (documentFile) {
+        if (documentFileForUpload) {
           // Upload new document (replace existing if any)
           const doc = await this.warehouseService.uploadWarehouseDocument(
-            documentFile,
+            documentFileForUpload,
             userId,
             'FinancialOthers',
             existing.id,
@@ -990,16 +1088,55 @@ export class FinancialInformationService {
           if (documentEntity) {
             existing.document = documentEntity;
           }
+        } else if (documentIdToUse) {
+          // Use existing document ID
+          const documentEntity = await documentRepo.findOne({
+            where: { id: documentIdToUse },
+          });
+
+          if (documentEntity) {
+            existing.document = documentEntity;
+          }
         }
-        // If documentId (string) is provided, ignore it - keep existing document relationship
 
         await othersRepo.save(existing);
 
         return existing;
       } else {
-        // Create new - document file is required
-        if (!documentFile) {
-          throw new BadRequestException('Document is required for other document. Please upload a document.');
+        // Create new - document is required
+        if (!dto.document) {
+          throw new BadRequestException('Document is required for other document. Please provide a document.');
+        }
+
+        // Handle document: if base64 is provided, convert and upload; if string (documentId), use it
+        let documentFileForUpload: any = undefined;
+        let documentIdToUse: string | undefined = undefined;
+        
+        // Handle both string (base64 or documentId) and object (legacy format)
+        let documentValue: string | undefined = undefined;
+        if (typeof dto.document === 'string') {
+          documentValue = dto.document;
+        } else if (dto.document && typeof dto.document === 'object' && 'documentId' in dto.document) {
+          documentValue = (dto.document as any).documentId || (dto.document as any).id;
+        }
+        
+        if (documentValue) {
+          // Check if it's base64 (contains data URL prefix) or document ID
+          if (documentValue.includes('base64') || documentValue.includes(',')) {
+            // It's base64 - convert to file-like object
+            if (!dto.documentFileName) {
+              throw new BadRequestException('documentFileName is required when document is provided as base64');
+            }
+            
+            documentFileForUpload = this.warehouseService.convertBase64ToFile(
+              documentValue,
+              dto.documentFileName,
+              dto.documentMimeType
+            );
+          } else {
+            // It's a document ID string - use it directly
+            documentIdToUse = documentValue;
+          }
         }
 
         const other = othersRepo.create({
@@ -1013,22 +1150,33 @@ export class FinancialInformationService {
         await othersRepo.save(other);
 
         // Handle document upload after creating the entity
-        const doc = await this.warehouseService.uploadWarehouseDocument(
-          documentFile,
-          userId,
-          'FinancialOthers',
-          other.id,
-          'document',
-        );
-        
-        // Get the document entity
-        const documentEntity = await documentRepo.findOne({
-          where: { id: doc.id },
-        });
+        if (documentFileForUpload) {
+          const doc = await this.warehouseService.uploadWarehouseDocument(
+            documentFileForUpload,
+            userId,
+            'FinancialOthers',
+            other.id,
+            'document',
+          );
+          
+          // Get the document entity
+          const documentEntity = await documentRepo.findOne({
+            where: { id: doc.id },
+          });
 
-        if (documentEntity) {
-          other.document = documentEntity;
-          await othersRepo.save(other);
+          if (documentEntity) {
+            other.document = documentEntity;
+            await othersRepo.save(other);
+          }
+        } else if (documentIdToUse) {
+          const documentEntity = await documentRepo.findOne({
+            where: { id: documentIdToUse },
+          });
+
+          if (documentEntity) {
+            other.document = documentEntity;
+            await othersRepo.save(other);
+          }
         }
 
         return other;
