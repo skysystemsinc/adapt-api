@@ -25,7 +25,7 @@ export class AuthService {
     @InjectRepository(User)
     private userRepository: Repository<User>,
     private dataSource: DataSource,
-  ) {}
+  ) { }
 
   async login(loginDto: LoginDto) {
     // Verify reCAPTCHA token first (if provided)
@@ -34,7 +34,7 @@ export class AuthService {
     // }
 
     const user = await this.usersService.findByEmailWithRoles(loginDto.email);
-    
+
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -112,7 +112,7 @@ export class AuthService {
             throw decodeError;
           }
         }
-        
+
         // If we get here, token is truly invalid
         throw new UnauthorizedException('Invalid refresh token');
       }
@@ -141,7 +141,7 @@ export class AuthService {
 
   async forgotPassword(forgotPasswordDto: ForgotPasswordDto) {
     const user = await this.usersService.findByEmail(forgotPasswordDto.email);
-    
+
     if (!user) {
       throw new BadRequestException('Email not found in system');
     }
@@ -154,7 +154,7 @@ export class AuthService {
       },
     });
 
-    if(!registrationApplication) {
+    if (!registrationApplication) {
       throw new BadRequestException('Registration application not found');
     }
 
@@ -166,18 +166,20 @@ export class AuthService {
       },
     });
 
-    if(registrationApplicationDetails.length === 0) {
+    if (registrationApplicationDetails.length === 0) {
       throw new BadRequestException('Registration application details not found');
     }
 
     // find all occurence of number in registrationApplicationDetails
     // could be any thing: mobile number, number, contact number, etc.
     const numberOccurrences = registrationApplicationDetails.filter(detail => detail.label && detail.label.toLowerCase().includes('mobile'));
-    if(numberOccurrences.length === 0) {
+    if (numberOccurrences.length === 0) {
       throw new BadRequestException('Number not found in registration application details');
     }
 
     const number = numberOccurrences[0].value;
+
+
 
     // Generate OTP (4 digits)
     const otp = Math.floor(1000 + Math.random() * 9000).toString();
@@ -192,11 +194,11 @@ export class AuthService {
     // TODO: Send OTP via email service
     console.log(`OTP for ${user.email}: ${otp}`);
     console.log(`Number for ${number}: ${otp}`);
-    
-    return { 
+
+    return {
       message: 'OTP has been sent to your email and mobile number',
       otp: otp,
-      mobileNumber: number,
+      mobileNumber: this.normalizePkPhoneNumber(number.toString()),
     };
   }
 
@@ -233,7 +235,7 @@ export class AuthService {
       otpExpires: undefined, // Clear OTP expiration
     });
 
-    return { 
+    return {
       message: 'OTP verified successfully',
       token: resetToken
     };
@@ -274,10 +276,10 @@ export class AuthService {
   }
 
   private async generateTokens(user: User) {
-    const payload = { 
+    const payload = {
       id: user.id,
       role: user.userRoles?.[0]?.role?.name || null,
-      email: user.email, 
+      email: user.email,
       sub: user.id,
       firstName: user.firstName,
       lastName: user.lastName,
@@ -295,8 +297,8 @@ export class AuthService {
   }
 
   private async updateRefreshToken(userId: string, refreshToken: string | null) {
-    await this.userRepository.update(userId, { 
-      refreshToken: refreshToken || undefined 
+    await this.userRepository.update(userId, {
+      refreshToken: refreshToken || undefined
     });
   }
 
@@ -307,4 +309,31 @@ export class AuthService {
     }
     return user;
   }
+
+  private normalizePkPhoneNumber(input: string) {
+    if (!input) return null;
+
+    // Remove non-numeric characters
+    let number = input.replace(/\D/g, '');
+
+    // Case 1: Starts with country code 92
+    if (number.startsWith('92')) {
+      number = number.slice(2);
+    }
+
+    // Case 2: 10-digit mobile number (e.g. 3321234567)
+    if (/^3\d{9}$/.test(number)) {
+      number = '0' + number;
+    }
+
+    // Case 3: Already starts with 03XXXXXXXXX
+    if (/^03\d{9}$/.test(number)) {
+      return number;
+    }
+
+    // Anything else is invalid
+    return null;
+  }
+
+
 }
