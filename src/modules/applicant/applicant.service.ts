@@ -17,6 +17,7 @@ import {
   DocumentableType,
   CertificateDocumentType,
 } from '../warehouse/entities/warehouse-document.entity';
+import { Assignment } from '../warehouse/operator/assignment/entities/assignment.entity';
 
 @Injectable()
 export class ApplicantService {
@@ -33,6 +34,8 @@ export class ApplicantService {
     private readonly companyInformationRepository: Repository<CompanyInformation>,
     @InjectRepository(WarehouseDocument)
     private readonly warehouseDocumentRepository: Repository<WarehouseDocument>,
+    @InjectRepository(Assignment)
+    private readonly assignmentRepository: Repository<Assignment>,
   ) {}
 
   async getStats(userId: string) {
@@ -207,36 +210,128 @@ export class ApplicantService {
       where: { userId },
       relations: ['facility'],
       order: { createdAt: 'DESC' },
-      select: ['id', 'applicationId', 'status', 'createdAt'],
+      select: {
+        id: true,
+        applicationId: true,
+        status: true,
+        createdAt: true,
+        facility: {
+          facilityName: true,
+        },
+      },
     });
 
     // Fetch all warehouse operator applications with company name
     const [allWarehouseOperators, operatorCount] = await this.warehouseOperatorApplicationRequestRepository.findAndCount({
       where: { userId },
-      relations: ['companyInformation'],
+      relations: ['authorizedSignatories'],
       order: { createdAt: 'DESC' },
-      select: ['id', 'applicationId', 'status', 'createdAt'],
+      select: {
+        id: true,
+        applicationId: true,
+        status: true,
+        createdAt: true,
+        authorizedSignatories: {
+          authorizedSignatoryName: true,
+        },
+      },
+    });
+
+    // Get all IDs for batch assignment check
+    const locationIds = allWarehouseLocations.map(loc => loc.id);
+    const operatorIds = allWarehouseOperators.map(op => op.id);
+
+    // Check for assignments - get first assignment ID per application
+    const locationAssignments = locationIds.length > 0
+      ? await this.assignmentRepository
+          .createQueryBuilder('assignment')
+          .select('assignment.id', 'id')
+          .addSelect('assignment.applicationLocationId', 'applicationLocationId')
+          .where('assignment.applicationLocationId IN (:...ids)', { ids: locationIds })
+          .orderBy('assignment.createdAt', 'ASC')
+          .getRawMany()
+          .then(results => {
+            // Get first assignment per application
+            const assignmentMap = new Map<string, string>();
+            results.forEach((row: any) => {
+              if (!assignmentMap.has(row.applicationLocationId)) {
+                assignmentMap.set(row.applicationLocationId, row.id);
+              }
+            });
+            return Array.from(assignmentMap.entries()).map(([applicationLocationId, id]) => ({
+              applicationLocationId,
+              id,
+            }));
+          })
+      : [];
+
+    const operatorAssignments = operatorIds.length > 0
+      ? await this.assignmentRepository
+          .createQueryBuilder('assignment')
+          .select('assignment.id', 'id')
+          .addSelect('assignment.applicationId', 'applicationId')
+          .where('assignment.applicationId IN (:...ids)', { ids: operatorIds })
+          .orderBy('assignment.createdAt', 'ASC')
+          .getRawMany()
+          .then(results => {
+            // Get first assignment per application
+            const assignmentMap = new Map<string, string>();
+            results.forEach((row: any) => {
+              if (!assignmentMap.has(row.applicationId)) {
+                assignmentMap.set(row.applicationId, row.id);
+              }
+            });
+            return Array.from(assignmentMap.entries()).map(([applicationId, id]) => ({
+              applicationId,
+              id,
+            }));
+          })
+      : [];
+
+    // Create maps for quick lookup (applicationId -> assignmentId)
+    const locationAssignmentMap = new Map<string, string>();
+    locationAssignments.forEach(a => {
+      if (a.applicationLocationId) {
+        locationAssignmentMap.set(a.applicationLocationId, a.id);
+      }
+    });
+
+    const operatorAssignmentMap = new Map<string, string>();
+    operatorAssignments.forEach(a => {
+      if (a.applicationId) {
+        operatorAssignmentMap.set(a.applicationId, a.id);
+      }
     });
 
     // Transform warehouse locations
-    const locationApplications = allWarehouseLocations.map((location) => ({
-      id: location.id,
-      code: location.applicationId,
-      name: location.facility?.facilityName || 'N/A',
-      status: location.status,
-      createdAt: location.createdAt,
-      type: 'location' as const,
-    }));
+    const locationApplications = allWarehouseLocations.map((location) => {
+      const assignmentId = locationAssignmentMap.get(location.id) || null;
+
+      return {
+        id: location.id,
+        code: location.applicationId,
+        name: location.facility?.facilityName || 'N/A',
+        status: location.status,
+        assignmentId,
+        createdAt: location.createdAt,
+        type: 'location' as const,
+      };
+    });
 
     // Transform warehouse operators
-    const operatorApplications = allWarehouseOperators.map((operator) => ({
-      id: operator.id,
-      code: operator.applicationId || 'N/A',
-      name: operator.companyInformation?.companyName || 'N/A',
-      status: operator.status,
-      createdAt: operator.createdAt,
-      type: 'operator' as const,
-    }));
+    const operatorApplications = allWarehouseOperators.map((operator) => {
+      const assignmentId = operatorAssignmentMap.get(operator.id) || null;
+
+      return {
+        id: operator.id,
+        code: operator.applicationId || 'N/A',
+        name: operator.authorizedSignatories[0].authorizedSignatoryName || 'N/A',
+        status: operator.status,
+        assignmentId,
+        createdAt: operator.createdAt,
+        type: 'operator' as const,
+      };
+    });
 
     // Combine and sort by createdAt (most recent first)
     const allApplications = [...locationApplications, ...operatorApplications].sort(
