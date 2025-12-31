@@ -9,6 +9,8 @@ import {
   WarehouseOperatorApplicationRequest,
   WarehouseOperatorApplicationStatus,
 } from '../warehouse/entities/warehouse-operator-application-request.entity';
+import { Facility } from '../warehouse-location/facility/entities/facility.entity';
+import { CompanyInformation } from '../warehouse/entities/company-information.entity';
 
 @Injectable()
 export class ApplicantService {
@@ -17,6 +19,10 @@ export class ApplicantService {
     private readonly warehouseLocationRepository: Repository<WarehouseLocation>,
     @InjectRepository(WarehouseOperatorApplicationRequest)
     private readonly warehouseOperatorApplicationRequestRepository: Repository<WarehouseOperatorApplicationRequest>,
+    @InjectRepository(Facility)
+    private readonly facilityRepository: Repository<Facility>,
+    @InjectRepository(CompanyInformation)
+    private readonly companyInformationRepository: Repository<CompanyInformation>,
   ) {}
 
   async getStats(userId: string) {
@@ -97,6 +103,69 @@ export class ApplicantService {
       allApplicationCount,
       warehouseOperatorApplicationStatus:
         warehouseOperatorApplication?.status || null,
+    };
+  }
+
+  async getApplications(
+    userId: string,
+    page: number = 1,
+    limit: number = 10,
+  ) {
+    // Fetch all warehouse locations with facility name
+    const [allWarehouseLocations, locationCount] = await this.warehouseLocationRepository.findAndCount({
+      where: { userId },
+      relations: ['facility'],
+      order: { createdAt: 'DESC' },
+      select: ['id', 'applicationId', 'status', 'createdAt'],
+    });
+
+    // Fetch all warehouse operator applications with company name
+    const [allWarehouseOperators, operatorCount] = await this.warehouseOperatorApplicationRequestRepository.findAndCount({
+      where: { userId },
+      relations: ['companyInformation'],
+      order: { createdAt: 'DESC' },
+      select: ['id', 'applicationId', 'status', 'createdAt'],
+    });
+
+    // Transform warehouse locations
+    const locationApplications = allWarehouseLocations.map((location) => ({
+      id: location.id,
+      code: location.applicationId,
+      name: location.facility?.facilityName || 'N/A',
+      status: location.status,
+      createdAt: location.createdAt,
+      type: 'location' as const,
+    }));
+
+    // Transform warehouse operators
+    const operatorApplications = allWarehouseOperators.map((operator) => ({
+      id: operator.id,
+      code: operator.applicationId || 'N/A',
+      name: operator.companyInformation?.companyName || 'N/A',
+      status: operator.status,
+      createdAt: operator.createdAt,
+      type: 'operator' as const,
+    }));
+
+    // Combine and sort by createdAt (most recent first)
+    const allApplications = [...locationApplications, ...operatorApplications].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
+    // Paginate the combined results
+    const total = locationCount + operatorCount;
+    const skip = (page - 1) * limit;
+    const paginatedApplications = allApplications.slice(skip, skip + limit);
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      data: paginatedApplications,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages,
+      },
     };
   }
 }
