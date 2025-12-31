@@ -522,7 +522,7 @@ export class InspectionReportsService {
             assessmentType: type as AssessmentCategory,
           }
         ],
-        relations: ['assessmentSubmissions', 'assessmentSubmissions.documents', 'documents'],
+        relations: ['assessmentSubmissions', 'assessmentSubmissions.documents', 'documents', 'createdByUser'],
       });
       if (!inspectionReport) {
         throw new NotFoundException(`Inspection report with application ID ${applicationId} and type ${type} not found`);
@@ -565,7 +565,7 @@ export class InspectionReportsService {
           ...(assessmentId ? { id: assessmentId, createdBy: assignment?.assignedBy } : { createdBy: userId }),
         }
       ],
-      relations: ['assessmentSubmissions', 'assessmentSubmissions.documents', 'documents'],
+      relations: ['assessmentSubmissions', 'assessmentSubmissions.documents', 'documents', 'createdByUser'],
     });
 
     if (!report) {
@@ -713,7 +713,7 @@ export class InspectionReportsService {
         }
 
         await queryRunner.commitTransaction();
-        return savedHistoryRecord; // Return history record, not deleted report
+        return savedHistoryRecord;
       } else {
 
         // Update report status
