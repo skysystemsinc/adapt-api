@@ -35,11 +35,7 @@ export class AuthController {
   @UseGuards(ForgotPasswordRateLimitGuard)
   @HttpCode(HttpStatus.OK)
   async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
-    // return this.authService.forgotPassword(forgotPasswordDto);
-    return { 
-      message: 'OTP has been sent to your email and mobile number',
-      otp: "1234",
-    };
+    return this.authService.forgotPassword(forgotPasswordDto);
   }
 
   @Post('verify-otp')
