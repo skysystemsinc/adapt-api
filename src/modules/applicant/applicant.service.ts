@@ -9,6 +9,7 @@ import {
   WarehouseOperatorApplicationRequest,
   WarehouseOperatorApplicationStatus,
 } from '../warehouse/entities/warehouse-operator-application-request.entity';
+import { WarehouseOperator } from '../warehouse/entities/warehouse-operator.entity';
 
 @Injectable()
 export class ApplicantService {
@@ -17,6 +18,8 @@ export class ApplicantService {
     private readonly warehouseLocationRepository: Repository<WarehouseLocation>,
     @InjectRepository(WarehouseOperatorApplicationRequest)
     private readonly warehouseOperatorApplicationRequestRepository: Repository<WarehouseOperatorApplicationRequest>,
+    @InjectRepository(WarehouseOperator)
+    private readonly warehouseOperatorRepository: Repository<WarehouseOperator>,
   ) {}
 
   async getStats(userId: string) {
@@ -99,4 +102,27 @@ export class ApplicantService {
         warehouseOperatorApplication?.status || null,
     };
   }
+  async getApplication(userId: string) {
+   const warehouseOperator = await this.warehouseOperatorRepository.find({
+      where: {
+        userId,
+      },
+      order: {
+        createdAt: 'DESC',
+      },
+      select: {
+        applicationId: true,
+        application: {
+          id: true,
+    
+          applicationId: true,
+        }
+      },
+      relations: [ 'application'],
+    })
+    
+    
+    return warehouseOperator;
+  }
+
 }

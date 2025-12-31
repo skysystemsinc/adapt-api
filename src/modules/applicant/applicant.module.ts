@@ -6,6 +6,7 @@ import { ApplicantService } from './applicant.service';
 import { ApplicantController } from './applicant.controller';
 import { WarehouseLocation } from '../warehouse-location/entities/warehouse-location.entity';
 import { WarehouseOperatorApplicationRequest } from '../warehouse/entities/warehouse-operator-application-request.entity';
+import { WarehouseOperator } from '../warehouse/entities/warehouse-operator.entity';
 import { AuthModule } from '../auth/auth.module';
 
 @Module({
@@ -15,6 +16,7 @@ import { AuthModule } from '../auth/auth.module';
     TypeOrmModule.forFeature([
       WarehouseLocation,
       WarehouseOperatorApplicationRequest,
+      WarehouseOperator,
     ]),
     forwardRef(() => AuthModule),
     JwtModule.registerAsync({

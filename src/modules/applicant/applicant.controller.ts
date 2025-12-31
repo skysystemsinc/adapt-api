@@ -18,4 +18,13 @@ export class ApplicantController {
     const userId = req.user.sub || req.user.id;
     return this.applicantService.getStats(userId);
   }
+
+  @Get('applications')
+  @ApiOperation({ summary: 'Get applicant application' })
+  @ApiResponse({ status: 200, description: 'Application retrieved successfully' })
+  @HttpCode(HttpStatus.OK)
+  async getApplication(@Request() req: any) {
+    const userId = req.user.sub || req.user.id;
+    return this.applicantService.getApplication(userId);
+  }
 }
