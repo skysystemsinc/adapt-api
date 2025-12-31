@@ -1,7 +1,7 @@
 import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { User } from '../users/entities/user.entity';
@@ -12,6 +12,8 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { VerifyOTPDto } from './dto/verify-otp.dto';
 import { RecaptchaService } from './services/recaptcha.service';
+import { RegistrationApplication } from '../registration-application/entities/registration-application.entity';
+import { RegistrationApplicationDetails } from '../registration-application/entities/registration-application-details.entity';
 
 @Injectable()
 export class AuthService {
@@ -22,6 +24,7 @@ export class AuthService {
     private recaptchaService: RecaptchaService,
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    private dataSource: DataSource,
   ) {}
 
   async login(loginDto: LoginDto) {
@@ -143,6 +146,39 @@ export class AuthService {
       throw new BadRequestException('Email not found in system');
     }
 
+    const registrationApplication = await this.dataSource.getRepository(RegistrationApplication).findOne({
+      where: {
+        user: {
+          id: user.id,
+        },
+      },
+    });
+
+    if(!registrationApplication) {
+      throw new BadRequestException('Registration application not found');
+    }
+
+    const registrationApplicationDetails = await this.dataSource.getRepository(RegistrationApplicationDetails).find({
+      where: {
+        application: {
+          id: registrationApplication.id,
+        },
+      },
+    });
+
+    if(registrationApplicationDetails.length === 0) {
+      throw new BadRequestException('Registration application details not found');
+    }
+
+    // find all occurence of number in registrationApplicationDetails
+    // could be any thing: mobile number, number, contact number, etc.
+    const numberOccurrences = registrationApplicationDetails.filter(detail => detail.key.toLowerCase().includes('mobile'));
+    if(numberOccurrences.length === 0) {
+      throw new BadRequestException('Number not found in registration application details');
+    }
+
+    const number = numberOccurrences[0].value;
+
     // Generate OTP (4 digits)
     const otp = Math.floor(1000 + Math.random() * 9000).toString();
     // const otp = "1234";
@@ -155,10 +191,12 @@ export class AuthService {
 
     // TODO: Send OTP via email service
     console.log(`OTP for ${user.email}: ${otp}`);
+    console.log(`Number for ${number}: ${otp}`);
     
     return { 
       message: 'OTP has been sent to your email and mobile number',
       otp: otp,
+      mobileNumber: number,
     };
   }
 
