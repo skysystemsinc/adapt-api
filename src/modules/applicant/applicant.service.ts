@@ -1,8 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
-import { WarehouseLocation, WarehouseLocationStatus } from '../warehouse-location/entities/warehouse-location.entity';
-import { WarehouseOperatorApplicationRequest, WarehouseOperatorApplicationStatus } from '../warehouse/entities/warehouse-operator-application-request.entity';
+import {
+  WarehouseLocation,
+  WarehouseLocationStatus,
+} from '../warehouse-location/entities/warehouse-location.entity';
+import {
+  WarehouseOperatorApplicationRequest,
+  WarehouseOperatorApplicationStatus,
+} from '../warehouse/entities/warehouse-operator-application-request.entity';
 
 @Injectable()
 export class ApplicantService {
@@ -11,48 +17,86 @@ export class ApplicantService {
     private readonly warehouseLocationRepository: Repository<WarehouseLocation>,
     @InjectRepository(WarehouseOperatorApplicationRequest)
     private readonly warehouseOperatorApplicationRequestRepository: Repository<WarehouseOperatorApplicationRequest>,
-  ) { }
+  ) {}
 
   async getStats(userId: string) {
-
-    const activeApplicationCount = await Promise.all([
+    
+    const allApprovedApplicationCount = await Promise.all([
       this.warehouseLocationRepository.count({
         where: {
           userId,
-          status: In([WarehouseLocationStatus.PENDING, WarehouseLocationStatus.REJECTED]),
+          status: WarehouseLocationStatus.APPROVED,
         },
       }),
       this.warehouseOperatorApplicationRequestRepository.count({
         where: {
           userId,
-          status: In([WarehouseOperatorApplicationStatus.PENDING, WarehouseOperatorApplicationStatus.REJECTED]),
+          status: WarehouseOperatorApplicationStatus.APPROVED,
         },
       }),
     ]).then(([locationCount, operatorCount]) => locationCount + operatorCount);
 
-    const approvedApplicationCount = await this.warehouseLocationRepository.count({
-      where: {
-        userId,
-        status: WarehouseLocationStatus.APPROVED,
-        isActive: true,
-      },
-    });
+    const rejectedApplicationCount = await Promise.all([
+      this.warehouseLocationRepository.count({
+        where: {
+          userId,
+          status: WarehouseLocationStatus.REJECTED,
+        },
+      }),
+      this.warehouseOperatorApplicationRequestRepository.count({
+        where: {
+          userId,
+          status: WarehouseOperatorApplicationStatus.REJECTED,
+        },
+      }),
+    ]).then(([locationCount, operatorCount]) => locationCount + operatorCount);
+    const pendingApplicationCount = await Promise.all([
+      this.warehouseLocationRepository.count({
+        where: {
+          userId,
+          status: WarehouseLocationStatus.PENDING,
+        },
+      }),
+      this.warehouseOperatorApplicationRequestRepository.count({
+        where: {
+          userId,
+          status: WarehouseOperatorApplicationStatus.PENDING,
+        },
+      }),
+    ]).then(([locationCount, operatorCount]) => locationCount + operatorCount);
+    const allApplicationCount = await Promise.all([
+      this.warehouseLocationRepository.count({
+        where: {
+          userId,
+        },
+      }),
+      this.warehouseOperatorApplicationRequestRepository.count({
+        where: {
+          userId,
+        },
+      }),
+    ]).then(([locationCount, operatorCount]) => locationCount + operatorCount);
+
 
     // Get the warehouse operator application request status (most recent one)
-    const warehouseOperatorApplication = await this.warehouseOperatorApplicationRequestRepository.findOne({
-      where: {
-        userId,
-      },
-      order: {
-        createdAt: 'DESC',
-      },
-      select: ['status'],
-    });
+    const warehouseOperatorApplication =
+      await this.warehouseOperatorApplicationRequestRepository.findOne({
+        where: {
+          userId,
+        },
+        order: {
+          createdAt: 'DESC',
+        },
+        select: ['status'],
+      });
 
     return {
-      activeApplicationCount,
-      approvedApplicationCount,
-      warehouseOperatorApplicationStatus: warehouseOperatorApplication?.status || null,
+      allApprovedApplicationCount,
+      rejectedApplicationCount,
+      pendingApplicationCount,
+      allApplicationCount,
+      warehouseOperatorApplicationStatus:
+        warehouseOperatorApplication?.status || null,
     };
   }
 }
