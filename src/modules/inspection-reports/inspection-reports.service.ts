@@ -734,7 +734,12 @@ export class InspectionReportsService {
         });
 
         // If 6 inspection reports are completed (approved), create a ReviewEntity
-        if (completedReportsCount === 6) {
+        let allReportsCompleted = false;
+        let finalHodUsers: User[] = [];
+        // always run for test
+        if (completedReportsCount === 6 ) {
+          allReportsCompleted = true;
+          
           // Check if review entry already exists for this application+location
           const existingReview = await queryRunner.manager.findOne(ReviewEntity, {
             where: {
@@ -778,9 +783,57 @@ export class InspectionReportsService {
             const review = queryRunner.manager.create(ReviewEntity, reviewData);
             await queryRunner.manager.save(ReviewEntity, review);
           }
+
+          // Find users with both REVIEW_ASSESSMENT and IS_HOD permissions
+          // Fetch all users with their roles and permissions
+          const allUsers = await queryRunner.manager
+            .getRepository(User)
+            .createQueryBuilder('user')
+            .leftJoinAndSelect('user.userRoles', 'ur')
+            .leftJoinAndSelect('ur.role', 'role')
+            .leftJoinAndSelect('role.rolePermissions', 'rp')
+            .leftJoinAndSelect('rp.permission', 'permission')
+            .getMany();
+
+          // Filter users who have both REVIEW_ASSESSMENT and IS_HOD permissions
+          finalHodUsers = allUsers.filter(user => {
+            const permissionNames = new Set<string>();
+            user.userRoles?.forEach(userRole => {
+              userRole.role?.rolePermissions?.forEach(rolePermission => {
+                if (rolePermission.permission?.name) {
+                  permissionNames.add(rolePermission.permission.name);
+                }
+              });
+            });
+            return permissionNames.has(Permissions.REVIEW_ASSESSMENT) && 
+                   permissionNames.has(Permissions.IS_HOD);
+          });
         }
 
         await queryRunner.commitTransaction();
+        
+        // Return response with information for email if all reports completed
+        if (allReportsCompleted) {
+          const response: any = savedReport;
+          response.allReportsCompleted = true;
+          response.finalHodUsers = finalHodUsers.map(u => ({
+            id: u.id,
+            email: u.email,
+            firstName: u.firstName,
+            lastName: u.lastName,
+          }));
+          response.expert = report.createdByUser ? {
+            id: report.createdByUser.id,
+            email: report.createdByUser.email,
+            firstName: report.createdByUser.firstName,
+            lastName: report.createdByUser.lastName,
+          } : null;
+          response.applicationId = isLocationReport ? report.warehouseLocationId : report.warehouseOperatorApplicationId;
+          response.isLocationApplication = isLocationReport;
+          response.applicationType = isLocationReport ? 'location-request-approval' : 'applicant-request-approval';
+          return response;
+        }
+        
         return savedReport; // Return saved report
       }
     } catch (error) {
