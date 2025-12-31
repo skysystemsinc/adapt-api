@@ -59,6 +59,21 @@ export class AuditReportDto {
   @IsString()
   @MaxLength(100)
   remarks?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  documents?: string[]; // Array of base64 strings or document IDs
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  documentFileNames?: string[]; // Array of filenames (required if documents contains base64)
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  documentMimeTypes?: string[]; // Array of MIME types (required if documents contains base64)
 }
 
 export class TaxReturnDto {
@@ -86,6 +101,21 @@ export class TaxReturnDto {
   @IsString()
   @MaxLength(200)
   remarks?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  documents?: string[]; // Array of base64 strings or document IDs
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  documentFileNames?: string[]; // Array of filenames (required if documents contains base64)
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  documentMimeTypes?: string[]; // Array of MIME types (required if documents contains base64)
 }
 
 export class BankStatementDto {
@@ -113,6 +143,18 @@ export class BankStatementDto {
   @IsString()
   @MaxLength(200)
   remarks?: string;
+
+  @IsOptional()
+  @IsString()
+  document?: string; // Base64 string or document ID
+
+  @IsOptional()
+  @IsString()
+  documentFileName?: string; // Filename (required if document is base64)
+
+  @IsOptional()
+  @IsString()
+  documentMimeType?: string; // MIME type (required if document is base64)
 }
 
 export class OthersDto {
@@ -140,6 +182,18 @@ export class OthersDto {
   @IsString()
   @MaxLength(200)
   remarks?: string;
+
+  @IsOptional()
+  @IsString()
+  document?: string; // Base64 string or document ID
+
+  @IsOptional()
+  @IsString()
+  documentFileName?: string; // Filename (required if document is base64)
+
+  @IsOptional()
+  @IsString()
+  documentMimeType?: string; // MIME type (required if document is base64)
 }
 
 export class CreateFinancialInformationDto {

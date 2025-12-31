@@ -4,6 +4,7 @@ import {
   IsBoolean,
   IsNotEmpty,
   IsOptional,
+  IsString,
   IsUUID,
   ValidateIf,
   ValidateNested,
@@ -21,14 +22,29 @@ export class HumanResourcesChecklistDto {
 
   @ApiPropertyOptional({
     type: String,
-    format: 'uuid',
-    description: 'Document ID for QC personnel certificate (required if qcPersonnel is true)',
-    example: '123e4567-e89b-12d3-a456-426614174000',
+    description: 'QC personnel certificate as base64 encoded string or document ID (required if qcPersonnel is true)',
+    example: 'data:application/pdf;base64,JVBERi0xLjQKJeLjz9MKMy...',
   })
   @ValidateIf((o) => o.qcPersonnel === true)
   @IsNotEmpty({ message: 'qcPersonnelFile is required when qcPersonnel is true' })
-  @IsUUID(undefined, { message: 'qcPersonnelFile must be a valid UUID' })
+  @IsString()
   qcPersonnelFile?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'Original filename for QC personnel certificate (required if qcPersonnelFile is base64)',
+  })
+  @IsOptional()
+  @IsString()
+  qcPersonnelFileName?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'MIME type for QC personnel certificate (required if qcPersonnelFile is base64)',
+  })
+  @IsOptional()
+  @IsString()
+  qcPersonnelFileMimeType?: string;
 
   @ApiProperty({
     type: Boolean,
@@ -41,14 +57,28 @@ export class HumanResourcesChecklistDto {
 
   @ApiPropertyOptional({
     type: String,
-    format: 'uuid',
-    description: 'Document ID for warehouse supervisor certificate (required if warehouseSupervisor is true)',
-    example: '123e4567-e89b-12d3-a456-426614174000',
+    description: 'Warehouse supervisor certificate as base64 encoded string or document ID (required if warehouseSupervisor is true)',
   })
   @ValidateIf((o) => o.warehouseSupervisor === true)
   @IsNotEmpty({ message: 'warehouseSupervisorFile is required when warehouseSupervisor is true' })
-  @IsUUID(undefined, { message: 'warehouseSupervisorFile must be a valid UUID' })
+  @IsString()
   warehouseSupervisorFile?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'Original filename for warehouse supervisor certificate (required if warehouseSupervisorFile is base64)',
+  })
+  @IsOptional()
+  @IsString()
+  warehouseSupervisorFileName?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'MIME type for warehouse supervisor certificate (required if warehouseSupervisorFile is base64)',
+  })
+  @IsOptional()
+  @IsString()
+  warehouseSupervisorFileMimeType?: string;
 
   @ApiProperty({
     type: Boolean,
@@ -61,14 +91,28 @@ export class HumanResourcesChecklistDto {
 
   @ApiPropertyOptional({
     type: String,
-    format: 'uuid',
-    description: 'Document ID for data entry operator certificate (required if dataEntryOperator is true)',
-    example: '123e4567-e89b-12d3-a456-426614174000',
+    description: 'Data entry operator certificate as base64 encoded string or document ID (required if dataEntryOperator is true)',
   })
   @ValidateIf((o) => o.dataEntryOperator === true)
   @IsNotEmpty({ message: 'dataEntryOperatorFile is required when dataEntryOperator is true' })
-  @IsUUID(undefined, { message: 'dataEntryOperatorFile must be a valid UUID' })
+  @IsString()
   dataEntryOperatorFile?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'Original filename for data entry operator certificate (required if dataEntryOperatorFile is base64)',
+  })
+  @IsOptional()
+  @IsString()
+  dataEntryOperatorFileName?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'MIME type for data entry operator certificate (required if dataEntryOperatorFile is base64)',
+  })
+  @IsOptional()
+  @IsString()
+  dataEntryOperatorFileMimeType?: string;
 }
 
 export class FinancialSoundnessChecklistDto {
@@ -83,14 +127,28 @@ export class FinancialSoundnessChecklistDto {
 
   @ApiPropertyOptional({
     type: String,
-    format: 'uuid',
-    description: 'Document ID for audited financial statements (required if auditedFinancialStatements is true)',
-    example: '123e4567-e89b-12d3-a456-426614174000',
+    description: 'Audited financial statements as base64 encoded string or document ID (required if auditedFinancialStatements is true)',
   })
   @ValidateIf((o) => o.auditedFinancialStatements === true)
   @IsNotEmpty({ message: 'auditedFinancialStatementsFile is required when auditedFinancialStatements is true' })
-  @IsUUID(undefined, { message: 'auditedFinancialStatementsFile must be a valid UUID' })
+  @IsString()
   auditedFinancialStatementsFile?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'Original filename for audited financial statements (required if auditedFinancialStatementsFile is base64)',
+  })
+  @IsOptional()
+  @IsString()
+  auditedFinancialStatementsFileName?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'MIME type for audited financial statements (required if auditedFinancialStatementsFile is base64)',
+  })
+  @IsOptional()
+  @IsString()
+  auditedFinancialStatementsFileMimeType?: string;
 
   @ApiProperty({
     type: Boolean,
@@ -103,14 +161,28 @@ export class FinancialSoundnessChecklistDto {
 
   @ApiPropertyOptional({
     type: String,
-    format: 'uuid',
-    description: 'Document ID for positive net worth proof (required if positiveNetWorth is true)',
-    example: '123e4567-e89b-12d3-a456-426614174000',
+    description: 'Positive net worth proof as base64 encoded string or document ID (required if positiveNetWorth is true)',
   })
   @ValidateIf((o) => o.positiveNetWorth === true)
   @IsNotEmpty({ message: 'positiveNetWorthFile is required when positiveNetWorth is true' })
-  @IsUUID(undefined, { message: 'positiveNetWorthFile must be a valid UUID' })
+  @IsString()
   positiveNetWorthFile?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'Original filename for positive net worth proof (required if positiveNetWorthFile is base64)',
+  })
+  @IsOptional()
+  @IsString()
+  positiveNetWorthFileName?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'MIME type for positive net worth proof (required if positiveNetWorthFile is base64)',
+  })
+  @IsOptional()
+  @IsString()
+  positiveNetWorthFileMimeType?: string;
 
   @ApiProperty({
     type: Boolean,
@@ -123,14 +195,28 @@ export class FinancialSoundnessChecklistDto {
 
   @ApiPropertyOptional({
     type: String,
-    format: 'uuid',
-    description: 'Document ID for no loan defaults certificate (required if noLoanDefaults is true)',
-    example: '123e4567-e89b-12d3-a456-426614174000',
+    description: 'No loan defaults certificate as base64 encoded string or document ID (required if noLoanDefaults is true)',
   })
   @ValidateIf((o) => o.noLoanDefaults === true)
   @IsNotEmpty({ message: 'noLoanDefaultsFile is required when noLoanDefaults is true' })
-  @IsUUID(undefined, { message: 'noLoanDefaultsFile must be a valid UUID' })
+  @IsString()
   noLoanDefaultsFile?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'Original filename for no loan defaults certificate (required if noLoanDefaultsFile is base64)',
+  })
+  @IsOptional()
+  @IsString()
+  noLoanDefaultsFileName?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'MIME type for no loan defaults certificate (required if noLoanDefaultsFile is base64)',
+  })
+  @IsOptional()
+  @IsString()
+  noLoanDefaultsFileMimeType?: string;
 
   @ApiProperty({
     type: Boolean,
@@ -143,14 +229,28 @@ export class FinancialSoundnessChecklistDto {
 
   @ApiPropertyOptional({
     type: String,
-    format: 'uuid',
-    description: 'Document ID for CIB report (required if cleanCreditHistory is true)',
-    example: '123e4567-e89b-12d3-a456-426614174000',
+    description: 'CIB report as base64 encoded string or document ID (required if cleanCreditHistory is true)',
   })
   @ValidateIf((o) => o.cleanCreditHistory === true)
   @IsNotEmpty({ message: 'cleanCreditHistoryFile is required when cleanCreditHistory is true' })
-  @IsUUID(undefined, { message: 'cleanCreditHistoryFile must be a valid UUID' })
+  @IsString()
   cleanCreditHistoryFile?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'Original filename for CIB report (required if cleanCreditHistoryFile is base64)',
+  })
+  @IsOptional()
+  @IsString()
+  cleanCreditHistoryFileName?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'MIME type for CIB report (required if cleanCreditHistoryFile is base64)',
+  })
+  @IsOptional()
+  @IsString()
+  cleanCreditHistoryFileMimeType?: string;
 
   @ApiProperty({
     type: Boolean,
@@ -163,14 +263,28 @@ export class FinancialSoundnessChecklistDto {
 
   @ApiPropertyOptional({
     type: String,
-    format: 'uuid',
-    description: 'Document ID for adequate working capital proof (required if adequateWorkingCapital is true)',
-    example: '123e4567-e89b-12d3-a456-426614174000',
+    description: 'Adequate working capital proof as base64 encoded string or document ID (required if adequateWorkingCapital is true)',
   })
   @ValidateIf((o) => o.adequateWorkingCapital === true)
   @IsNotEmpty({ message: 'adequateWorkingCapitalFile is required when adequateWorkingCapital is true' })
-  @IsUUID(undefined, { message: 'adequateWorkingCapitalFile must be a valid UUID' })
+  @IsString()
   adequateWorkingCapitalFile?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'Original filename for adequate working capital proof (required if adequateWorkingCapitalFile is base64)',
+  })
+  @IsOptional()
+  @IsString()
+  adequateWorkingCapitalFileName?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'MIME type for adequate working capital proof (required if adequateWorkingCapitalFile is base64)',
+  })
+  @IsOptional()
+  @IsString()
+  adequateWorkingCapitalFileMimeType?: string;
 
   @ApiProperty({
     type: Boolean,
@@ -183,14 +297,28 @@ export class FinancialSoundnessChecklistDto {
 
   @ApiPropertyOptional({
     type: String,
-    format: 'uuid',
-    description: 'Document ID for insurance policies (required if validInsuranceCoverage is true)',
-    example: '123e4567-e89b-12d3-a456-426614174000',
+    description: 'Insurance policies as base64 encoded string or document ID (required if validInsuranceCoverage is true)',
   })
   @ValidateIf((o) => o.validInsuranceCoverage === true)
   @IsNotEmpty({ message: 'validInsuranceCoverageFile is required when validInsuranceCoverage is true' })
-  @IsUUID(undefined, { message: 'validInsuranceCoverageFile must be a valid UUID' })
+  @IsString()
   validInsuranceCoverageFile?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'Original filename for insurance policies (required if validInsuranceCoverageFile is base64)',
+  })
+  @IsOptional()
+  @IsString()
+  validInsuranceCoverageFileName?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'MIME type for insurance policies (required if validInsuranceCoverageFile is base64)',
+  })
+  @IsOptional()
+  @IsString()
+  validInsuranceCoverageFileMimeType?: string;
 
   @ApiProperty({
     type: Boolean,
@@ -203,26 +331,55 @@ export class FinancialSoundnessChecklistDto {
 
   @ApiPropertyOptional({
     type: String,
-    format: 'uuid',
-    description: 'Document ID for no financial fraud declaration (required if noFinancialFraud is true)',
-    example: '123e4567-e89b-12d3-a456-426614174000',
+    description: 'No financial fraud declaration as base64 encoded string or document ID (required if noFinancialFraud is true)',
   })
   @ValidateIf((o) => o.noFinancialFraud === true)
   @IsNotEmpty({ message: 'noFinancialFraudFile is required when noFinancialFraud is true' })
-  @IsUUID(undefined, { message: 'noFinancialFraudFile must be a valid UUID' })
+  @IsString()
   noFinancialFraudFile?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'Original filename for no financial fraud declaration (required if noFinancialFraudFile is base64)',
+  })
+  @IsOptional()
+  @IsString()
+  noFinancialFraudFileName?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'MIME type for no financial fraud declaration (required if noFinancialFraudFile is base64)',
+  })
+  @IsOptional()
+  @IsString()
+  noFinancialFraudFileMimeType?: string;
 }
 
 export class RegistrationFeeChecklistDto {
   @ApiProperty({
     type: String,
-    format: 'uuid',
-    description: 'Document ID for bank payment slip (required)',
-    example: '123e4567-e89b-12d3-a456-426614174000',
+    description: 'Bank payment slip as base64 encoded string or document ID (required)',
+    example: 'data:application/pdf;base64,JVBERi0xLjQKJeLjz9MKMy...',
   })
   @IsNotEmpty({ message: 'bankPaymentSlip is required' })
-  @IsUUID(undefined, { message: 'bankPaymentSlip must be a valid UUID' })
+  @IsString()
   bankPaymentSlip!: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'Original filename for bank payment slip (required if bankPaymentSlip is base64)',
+  })
+  @IsOptional()
+  @IsString()
+  bankPaymentSlipFileName?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'MIME type for bank payment slip (required if bankPaymentSlip is base64)',
+  })
+  @IsOptional()
+  @IsString()
+  bankPaymentSlipMimeType?: string;
 }
 
 export class DeclarationChecklistDto {

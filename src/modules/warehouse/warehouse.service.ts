@@ -761,8 +761,7 @@ export class WarehouseService {
   async createCompanyInformation(
     createCompanyInformationDto: CreateCompanyInformationRequestDto,
     userId: string,
-    applicationId: string,
-    ntcCertificateFile?: any
+    applicationId: string
   ) {
     // Find existing warehouse operator application for this user
     const existingApplication = await this.warehouseOperatorRepository.findOne({
@@ -799,9 +798,19 @@ export class WarehouseService {
 
     const savedCompanyInformation = await this.companyInformationRepository.save(newCompanyInformation);
 
-    // If ntcCertificate file is provided, upload it and link to company information
+    // If ntcCertificate base64 is provided, convert it to file and upload it
     let ntcCertificateDocumentId: string | undefined;
-    if (ntcCertificateFile) {
+    if (createCompanyInformationDto.ntcCertificate) {
+      if (!createCompanyInformationDto.ntcCertificateFileName) {
+        throw new BadRequestException('ntcCertificateFileName is required when ntcCertificate is provided');
+      }
+
+      const ntcCertificateFile = this.convertBase64ToFile(
+        createCompanyInformationDto.ntcCertificate,
+        createCompanyInformationDto.ntcCertificateFileName,
+        createCompanyInformationDto.ntcCertificateMimeType
+      );
+
       const documentResult = await this.uploadWarehouseDocument(
         ntcCertificateFile,
         userId,
@@ -835,8 +844,7 @@ export class WarehouseService {
     createCompanyInformationDto: CreateCompanyInformationRequestDto,
     userId: string,
     applicationId: string,
-    companyInformationId: string,
-    ntcCertificateFile?: any
+    companyInformationId: string
   ) {
     // First, validate the record exists and user has access (outside transaction for early validation)
     const existingApplication = await this.warehouseOperatorRepository.findOne({
@@ -935,7 +943,17 @@ export class WarehouseService {
 
     // Handle file upload outside transaction (file operations are not transactional)
     let ntcCertificateDocumentId: string | undefined;
-    if (ntcCertificateFile) {
+    if (createCompanyInformationDto.ntcCertificate) {
+      if (!createCompanyInformationDto.ntcCertificateFileName) {
+        throw new BadRequestException('ntcCertificateFileName is required when ntcCertificate is provided');
+      }
+
+      const ntcCertificateFile = this.convertBase64ToFile(
+        createCompanyInformationDto.ntcCertificate,
+        createCompanyInformationDto.ntcCertificateFileName,
+        createCompanyInformationDto.ntcCertificateMimeType
+      );
+
       const documentResult = await this.uploadWarehouseDocument(
         ntcCertificateFile,
         userId,
@@ -2013,7 +2031,6 @@ export class WarehouseService {
     dto: HrPersonalDetailsDto,
     userId: string,
     hrInformationId?: string,
-    photographFile?: any,
   ) {
     const application = await this.warehouseOperatorRepository.findOne({
       where: { id: applicationId, userId },
@@ -2127,17 +2144,30 @@ export class WarehouseService {
         (await resolveDesignationId(dto.designationName)) ??
         null;
 
-      // Upload photograph if provided
-      let photographDocumentId = dto.photograph;
-      if (photographFile) {
-        const photoDoc = await this.uploadWarehouseDocument(
-          photographFile,
-          userId,
-          'HrPersonalDetails',
-          applicationId, // Temporary ID, will be updated
-          'photograph',
-        );
-        photographDocumentId = photoDoc.id;
+      // Handle photograph: if base64 is provided, convert and upload; if string (documentId), use it
+      // Note: We'll handle the upload outside the transaction since file operations are not transactional
+      let photographDocumentId: string | undefined = undefined;
+      let photographNeedsUpload = false;
+      let photographFileForUpload: any = undefined;
+      
+      if (dto.photograph) {
+        // Check if it's base64 (contains data URL prefix) or document ID
+        if (dto.photograph.includes('base64') || dto.photograph.includes(',')) {
+          // It's base64 - will convert to file and upload outside transaction
+          if (!dto.photographFileName) {
+            throw new BadRequestException('photographFileName is required when photograph is provided as base64');
+          }
+          
+          photographFileForUpload = this.convertBase64ToFile(
+            dto.photograph,
+            dto.photographFileName,
+            dto.photographMimeType
+          );
+          photographNeedsUpload = true;
+        } else {
+          // It's a document ID string - use it directly
+          photographDocumentId = dto.photograph;
+        }
       }
 
       const currentHr = await hrRepo.findOne({
@@ -2201,7 +2231,12 @@ export class WarehouseService {
         currentHr.personalDetailsId = currentHr.personalDetails.id;
         await hrRepo.save(currentHr);
 
-        return currentHr.personalDetails;
+        return {
+          personalDetails: currentHr.personalDetails,
+          photographDocumentId: photographDocumentId,
+          photographNeedsUpload: photographNeedsUpload,
+          photographFileForUpload: photographFileForUpload,
+        };
       } else {
         // Create new personal details
         const personalDetails = personalRepo.create({
@@ -2222,9 +2257,41 @@ export class WarehouseService {
         currentHr!.personalDetailsId = personalDetails.id;
         await hrRepo.save(currentHr!);
 
-        return personalDetails;
+        return {
+          personalDetails: personalDetails,
+          photographDocumentId: photographDocumentId,
+          photographNeedsUpload: photographNeedsUpload,
+          photographFileForUpload: photographFileForUpload,
+        };
       }
     });
+
+    // Handle photograph upload outside transaction (file operations are not transactional)
+    let photographDocumentId: string | undefined = undefined;
+    if (savedResult.photographNeedsUpload && savedResult.photographFileForUpload) {
+      const photoDoc = await this.uploadWarehouseDocument(
+        savedResult.photographFileForUpload,
+        userId,
+        'HrPersonalDetails',
+        savedResult.personalDetails.id,
+        'photograph',
+      );
+      photographDocumentId = photoDoc.id;
+
+      // Update personal details with the photograph foreign key
+      const photographDocument = await this.warehouseDocumentRepository.findOne({
+        where: { id: photographDocumentId }
+      });
+
+      if (photographDocument) {
+        savedResult.personalDetails.photograph = photographDocumentId;
+        // Get repository for personal details
+        const personalDetailsRepo = this.dataSource.getRepository(PersonalDetailsEntity);
+        await personalDetailsRepo.save(savedResult.personalDetails);
+      }
+    } else if (savedResult.photographDocumentId) {
+      photographDocumentId = savedResult.photographDocumentId;
+    }
 
     const hydratedHr = await this.hrRepository.findOne({
       where: { id: hr.id },
@@ -2259,7 +2326,7 @@ export class WarehouseService {
           where: {
             assignmentId: In(assignments.map((a) => a.id)),
             sectionType: '4-hr-information',
-            resourceId: savedResult.id, // Use personal details ID, not hrInformationId
+            resourceId: savedResult.personalDetails.id, // Use personal details ID, not hrInformationId
           },
         });
 
@@ -2269,11 +2336,11 @@ export class WarehouseService {
       }
 
       // Call helper function to track resubmission and update status
-      // Use the personal details ID (savedResult.id) to match assignment section resourceId
+      // Use the personal details ID (savedResult.personalDetails.id) to match assignment section resourceId
       await this.trackResubmissionAndUpdateStatus(
         applicationId,
         '4-hr-information',
-        savedResult.id, // Use personal details ID, not hrInformationId
+        savedResult.personalDetails.id, // Use personal details ID, not hrInformationId
         assignmentSectionId ?? undefined,
       );
     }
@@ -2281,24 +2348,24 @@ export class WarehouseService {
     return {
       message: 'Personal details saved successfully',
       data: {
-        id: savedResult.id,
+        id: savedResult.personalDetails.id,
         hrId: hr.id,
-        designationId: savedResult.designationId ?? null,
+        designationId: savedResult.personalDetails.designationId ?? null,
         designationName: hydratedHr?.personalDetails?.designation?.name ?? null,
-        name: savedResult.name,
-        fathersHusbandName: savedResult.fathersHusbandName,
-        cnicPassport: savedResult.cnicPassport,
-        nationality: savedResult.nationality,
-        dateOfBirth: savedResult.dateOfBirth ? savedResult.dateOfBirth.toISOString().split('T')[0] : null,
-        residentialAddress: savedResult.residentialAddress,
-        businessAddress: savedResult.businessAddress ?? null,
-        telephone: savedResult.telephone ?? null,
-        mobileNumber: savedResult.mobileNumber,
-        email: savedResult.email,
-        nationalTaxNumber: savedResult.nationalTaxNumber ?? null,
-        photograph: savedResult.photograph ?? null,
-        createdAt: savedResult.createdAt.toISOString(),
-        updatedAt: savedResult.updatedAt.toISOString(),
+        name: savedResult.personalDetails.name,
+        fathersHusbandName: savedResult.personalDetails.fathersHusbandName,
+        cnicPassport: savedResult.personalDetails.cnicPassport,
+        nationality: savedResult.personalDetails.nationality,
+        dateOfBirth: savedResult.personalDetails.dateOfBirth ? savedResult.personalDetails.dateOfBirth.toISOString().split('T')[0] : null,
+        residentialAddress: savedResult.personalDetails.residentialAddress,
+        businessAddress: savedResult.personalDetails.businessAddress ?? null,
+        telephone: savedResult.personalDetails.telephone ?? null,
+        mobileNumber: savedResult.personalDetails.mobileNumber,
+        email: savedResult.personalDetails.email,
+        nationalTaxNumber: savedResult.personalDetails.nationalTaxNumber ?? null,
+        photograph: hydratedHr?.personalDetails?.photographDocument?.id ?? photographDocumentId ?? null,
+        createdAt: savedResult.personalDetails.createdAt.toISOString(),
+        updatedAt: savedResult.personalDetails.updatedAt.toISOString(),
       },
     };
   }
@@ -2458,7 +2525,6 @@ export class WarehouseService {
     dto: HrAcademicQualificationDto,
     userId: string,
     id?: string,
-    certificateFile?: any,
     hrInformationId?: string,
   ) {
     const application = await this.warehouseOperatorRepository.findOne({
@@ -2529,17 +2595,30 @@ export class WarehouseService {
         await documentRepo.save(document);
       };
 
-      // Upload certificate if provided
-      let certificateDocumentId = dto.academicCertificate;
-      if (certificateFile) {
-        const certDoc = await this.uploadWarehouseDocument(
-          certificateFile,
-          userId,
-          'HrAcademicQualification',
-          applicationId, // Temporary ID, will be updated
-          'academicCertificate',
-        );
-        certificateDocumentId = certDoc.id;
+      // Handle certificate: if base64 is provided, convert and upload; if string (documentId), use it
+      // Note: We'll handle the upload outside the transaction since file operations are not transactional
+      let certificateDocumentId: string | undefined = undefined;
+      let certificateNeedsUpload = false;
+      let certificateFileForUpload: any = undefined;
+      
+      if (dto.academicCertificate) {
+        // Check if it's base64 (contains data URL prefix) or document ID
+        if (dto.academicCertificate.includes('base64') || dto.academicCertificate.includes(',')) {
+          // It's base64 - will convert to file and upload outside transaction
+          if (!dto.academicCertificateFileName) {
+            throw new BadRequestException('academicCertificateFileName is required when academicCertificate is provided as base64');
+          }
+          
+          certificateFileForUpload = this.convertBase64ToFile(
+            dto.academicCertificate,
+            dto.academicCertificateFileName,
+            dto.academicCertificateMimeType
+          );
+          certificateNeedsUpload = true;
+        } else {
+          // It's a document ID string - use it directly
+          certificateDocumentId = dto.academicCertificate;
+        }
       }
 
       if (id) {
@@ -2584,7 +2663,12 @@ export class WarehouseService {
           existing.id,
         );
 
-        return existing;
+        return {
+          academic: existing,
+          certificateDocumentId: certificateDocumentId,
+          certificateNeedsUpload: certificateNeedsUpload,
+          certificateFileForUpload: certificateFileForUpload,
+        };
       } else {
         // Create new
         const academic = academicRepo.create({
@@ -2601,9 +2685,40 @@ export class WarehouseService {
           academic.id,
         );
 
-        return academic;
+        return {
+          academic: academic,
+          certificateDocumentId: certificateDocumentId,
+          certificateNeedsUpload: certificateNeedsUpload,
+          certificateFileForUpload: certificateFileForUpload,
+        };
       }
     });
+
+    // Handle certificate upload outside transaction (file operations are not transactional)
+    let certificateDocumentId: string | undefined = undefined;
+    if (savedResult.certificateNeedsUpload && savedResult.certificateFileForUpload) {
+      const certDoc = await this.uploadWarehouseDocument(
+        savedResult.certificateFileForUpload,
+        userId,
+        'HrAcademicQualification',
+        savedResult.academic.id,
+        'academicCertificate',
+      );
+      certificateDocumentId = certDoc.id;
+
+      // Update academic qualification with the certificate foreign key
+      const certificateDocument = await this.warehouseDocumentRepository.findOne({
+        where: { id: certificateDocumentId }
+      });
+
+      if (certificateDocument) {
+        savedResult.academic.academicCertificate = certificateDocumentId;
+        const academicRepo = this.dataSource.getRepository(AcademicQualificationsEntity);
+        await academicRepo.save(savedResult.academic);
+      }
+    } else if (savedResult.certificateDocumentId) {
+      certificateDocumentId = savedResult.certificateDocumentId;
+    }
 
     // Reload application to get latest status after transaction
     const updatedApplication = await this.warehouseOperatorRepository.findOne({
@@ -2629,7 +2744,7 @@ export class WarehouseService {
           where: {
             assignmentId: In(assignments.map((a) => a.id)),
             sectionType: '4-hr-information',
-            resourceId: savedResult.id, // Use academic qualification ID, not hrInformationId
+            resourceId: savedResult.academic.id, // Use academic qualification ID, not hrInformationId
           },
         });
 
@@ -2643,7 +2758,7 @@ export class WarehouseService {
       await this.trackResubmissionAndUpdateStatus(
         applicationId,
         '4-hr-information',
-        savedResult.id, // Use academic qualification ID, not hrInformationId
+        savedResult.academic.id, // Use academic qualification ID, not hrInformationId
         assignmentSectionId ?? undefined,
       );
     }
@@ -2651,16 +2766,16 @@ export class WarehouseService {
     return {
       message: id ? 'Academic qualification updated successfully' : 'Academic qualification saved successfully',
       data: {
-        id: savedResult.id,
-        degree: savedResult.degree,
-        major: savedResult.major,
-        institute: savedResult.institute,
-        country: savedResult.country,
-        yearOfPassing: savedResult.yearOfPassing,
-        grade: savedResult.grade ?? null,
-        academicCertificate: savedResult.academicCertificate ?? null,
-        createdAt: savedResult.createdAt.toISOString(),
-        updatedAt: savedResult.updatedAt.toISOString(),
+        id: savedResult.academic.id,
+        degree: savedResult.academic.degree,
+        major: savedResult.academic.major,
+        institute: savedResult.academic.institute,
+        country: savedResult.academic.country,
+        yearOfPassing: savedResult.academic.yearOfPassing,
+        grade: savedResult.academic.grade ?? null,
+        academicCertificate: certificateDocumentId ?? savedResult.academic.academicCertificate ?? null,
+        createdAt: savedResult.academic.createdAt.toISOString(),
+        updatedAt: savedResult.academic.updatedAt.toISOString(),
       },
     };
   }
@@ -2703,7 +2818,6 @@ export class WarehouseService {
     dto: HrProfessionalQualificationDto,
     userId: string,
     id?: string,
-    certificateFile?: any,
     hrInformationId?: string,
   ) {
     const application = await this.warehouseOperatorRepository.findOne({
@@ -2773,17 +2887,30 @@ export class WarehouseService {
         await documentRepo.save(document);
       };
 
-      // Upload certificate if provided
-      let certificateDocumentId = dto.professionalCertificate;
-      if (certificateFile) {
-        const certDoc = await this.uploadWarehouseDocument(
-          certificateFile,
-          userId,
-          'HrProfessionalQualification',
-          applicationId, // Temporary ID, will be updated
-          'professionalCertificate',
-        );
-        certificateDocumentId = certDoc.id;
+      // Handle certificate: if base64 is provided, convert and upload; if string (documentId), use it
+      // Note: We'll handle the upload outside the transaction since file operations are not transactional
+      let certificateDocumentId: string | undefined = undefined;
+      let certificateNeedsUpload = false;
+      let certificateFileForUpload: any = undefined;
+      
+      if (dto.professionalCertificate) {
+        // Check if it's base64 (contains data URL prefix) or document ID
+        if (dto.professionalCertificate.includes('base64') || dto.professionalCertificate.includes(',')) {
+          // It's base64 - will convert to file and upload outside transaction
+          if (!dto.professionalCertificateFileName) {
+            throw new BadRequestException('professionalCertificateFileName is required when professionalCertificate is provided as base64');
+          }
+          
+          certificateFileForUpload = this.convertBase64ToFile(
+            dto.professionalCertificate,
+            dto.professionalCertificateFileName,
+            dto.professionalCertificateMimeType
+          );
+          certificateNeedsUpload = true;
+        } else {
+          // It's a document ID string - use it directly
+          certificateDocumentId = dto.professionalCertificate;
+        }
       }
 
       if (id) {
@@ -2829,7 +2956,12 @@ export class WarehouseService {
           existing.id,
         );
 
-        return existing;
+        return {
+          professional: existing,
+          certificateDocumentId: certificateDocumentId,
+          certificateNeedsUpload: certificateNeedsUpload,
+          certificateFileForUpload: certificateFileForUpload,
+        };
       } else {
         // Create new
         const professional = professionalRepo.create({
@@ -2846,9 +2978,40 @@ export class WarehouseService {
           professional.id,
         );
 
-        return professional;
+        return {
+          professional: professional,
+          certificateDocumentId: certificateDocumentId,
+          certificateNeedsUpload: certificateNeedsUpload,
+          certificateFileForUpload: certificateFileForUpload,
+        };
       }
     });
+
+    // Handle certificate upload outside transaction (file operations are not transactional)
+    let certificateDocumentId: string | undefined = undefined;
+    if (savedResult.certificateNeedsUpload && savedResult.certificateFileForUpload) {
+      const certDoc = await this.uploadWarehouseDocument(
+        savedResult.certificateFileForUpload,
+        userId,
+        'HrProfessionalQualification',
+        savedResult.professional.id,
+        'professionalCertificate',
+      );
+      certificateDocumentId = certDoc.id;
+
+      // Update professional qualification with the certificate foreign key
+      const certificateDocument = await this.warehouseDocumentRepository.findOne({
+        where: { id: certificateDocumentId }
+      });
+
+      if (certificateDocument) {
+        savedResult.professional.professionalCertificate = certificateDocumentId;
+        const professionalRepo = this.dataSource.getRepository(ProfessionalQualificationsEntity);
+        await professionalRepo.save(savedResult.professional);
+      }
+    } else if (savedResult.certificateDocumentId) {
+      certificateDocumentId = savedResult.certificateDocumentId;
+    }
 
     // Reload application to get latest status after transaction
     const updatedApplication = await this.warehouseOperatorRepository.findOne({
@@ -2874,7 +3037,7 @@ export class WarehouseService {
           where: {
             assignmentId: In(assignments.map((a) => a.id)),
             sectionType: '4-hr-information',
-            resourceId: savedResult.id, // Use professional qualification ID, not hrInformationId
+            resourceId: savedResult.professional.id, // Use professional qualification ID, not hrInformationId
           },
         });
 
@@ -2888,7 +3051,7 @@ export class WarehouseService {
       await this.trackResubmissionAndUpdateStatus(
         applicationId,
         '4-hr-information',
-        savedResult.id, // Use professional qualification ID, not hrInformationId
+        savedResult.professional.id, // Use professional qualification ID, not hrInformationId
         assignmentSectionId ?? undefined,
       );
     }
@@ -2896,16 +3059,16 @@ export class WarehouseService {
     return {
       message: id ? 'Professional qualification updated successfully' : 'Professional qualification saved successfully',
       data: {
-        id: savedResult.id,
-        certificationTitle: savedResult.certificationTitle,
-        issuingBody: savedResult.issuingBody,
-        country: savedResult.country,
-        dateOfAward: savedResult.dateOfAward,
-        validity: savedResult.validity ?? null,
-        membershipNumber: savedResult.membershipNumber ?? null,
-        professionalCertificate: savedResult.professionalCertificate ?? null,
-        createdAt: savedResult.createdAt.toISOString(),
-        updatedAt: savedResult.updatedAt.toISOString(),
+        id: savedResult.professional.id,
+        certificationTitle: savedResult.professional.certificationTitle,
+        issuingBody: savedResult.professional.issuingBody,
+        country: savedResult.professional.country,
+        dateOfAward: savedResult.professional.dateOfAward,
+        validity: savedResult.professional.validity ?? null,
+        membershipNumber: savedResult.professional.membershipNumber ?? null,
+        professionalCertificate: certificateDocumentId ?? savedResult.professional.professionalCertificate ?? null,
+        createdAt: savedResult.professional.createdAt.toISOString(),
+        updatedAt: savedResult.professional.updatedAt.toISOString(),
       },
     };
   }
@@ -2948,7 +3111,6 @@ export class WarehouseService {
     dto: HrTrainingDto,
     userId: string,
     id?: string,
-    certificateFile?: any,
     hrInformationId?: string,
   ) {
     const application = await this.warehouseOperatorRepository.findOne({
@@ -3017,17 +3179,30 @@ export class WarehouseService {
         await documentRepo.save(document);
       };
 
-      // Upload certificate if provided
-      let certificateDocumentId = dto.trainingCertificate;
-      if (certificateFile) {
-        const certDoc = await this.uploadWarehouseDocument(
-          certificateFile,
-          userId,
-          'HrTraining',
-          applicationId, // Temporary ID, will be updated
-          'trainingCertificate',
-        );
-        certificateDocumentId = certDoc.id;
+      // Handle certificate: if base64 is provided, convert and upload; if string (documentId), use it
+      // Note: We'll handle the upload outside the transaction since file operations are not transactional
+      let certificateDocumentId: string | undefined = undefined;
+      let certificateNeedsUpload = false;
+      let certificateFileForUpload: any = undefined;
+      
+      if (dto.trainingCertificate) {
+        // Check if it's base64 (contains data URL prefix) or document ID
+        if (dto.trainingCertificate.includes('base64') || dto.trainingCertificate.includes(',')) {
+          // It's base64 - will convert to file and upload outside transaction
+          if (!dto.trainingCertificateFileName) {
+            throw new BadRequestException('trainingCertificateFileName is required when trainingCertificate is provided as base64');
+          }
+          
+          certificateFileForUpload = this.convertBase64ToFile(
+            dto.trainingCertificate,
+            dto.trainingCertificateFileName,
+            dto.trainingCertificateMimeType
+          );
+          certificateNeedsUpload = true;
+        } else {
+          // It's a document ID string - use it directly
+          certificateDocumentId = dto.trainingCertificate;
+        }
       }
 
       if (id) {
@@ -3071,7 +3246,12 @@ export class WarehouseService {
           existing.id,
         );
 
-        return existing;
+        return {
+          training: existing,
+          certificateDocumentId: certificateDocumentId,
+          certificateNeedsUpload: certificateNeedsUpload,
+          certificateFileForUpload: certificateFileForUpload,
+        };
       } else {
         // Create new
         const training = trainingsRepo.create({
@@ -3088,9 +3268,40 @@ export class WarehouseService {
           training.id,
         );
 
-        return training;
+        return {
+          training: training,
+          certificateDocumentId: certificateDocumentId,
+          certificateNeedsUpload: certificateNeedsUpload,
+          certificateFileForUpload: certificateFileForUpload,
+        };
       }
     });
+
+    // Handle certificate upload outside transaction (file operations are not transactional)
+    let certificateDocumentId: string | undefined = undefined;
+    if (savedResult.certificateNeedsUpload && savedResult.certificateFileForUpload) {
+      const certDoc = await this.uploadWarehouseDocument(
+        savedResult.certificateFileForUpload,
+        userId,
+        'HrTraining',
+        savedResult.training.id,
+        'trainingCertificate',
+      );
+      certificateDocumentId = certDoc.id;
+
+      // Update training with the certificate foreign key
+      const certificateDocument = await this.warehouseDocumentRepository.findOne({
+        where: { id: certificateDocumentId }
+      });
+
+      if (certificateDocument) {
+        savedResult.training.trainingCertificate = certificateDocumentId;
+        const trainingsRepo = this.dataSource.getRepository(TrainingsEntity);
+        await trainingsRepo.save(savedResult.training);
+      }
+    } else if (savedResult.certificateDocumentId) {
+      certificateDocumentId = savedResult.certificateDocumentId;
+    }
 
     // Reload application to get latest status after transaction
     const updatedApplication = await this.warehouseOperatorRepository.findOne({
@@ -3116,7 +3327,7 @@ export class WarehouseService {
           where: {
             assignmentId: In(assignments.map((a) => a.id)),
             sectionType: '4-hr-information',
-            resourceId: savedResult.id, // Use training ID, not hrInformationId
+            resourceId: savedResult.training.id, // Use training ID, not hrInformationId
           },
         });
 
@@ -3130,7 +3341,7 @@ export class WarehouseService {
       await this.trackResubmissionAndUpdateStatus(
         applicationId,
         '4-hr-information',
-        savedResult.id, // Use training ID, not hrInformationId
+        savedResult.training.id, // Use training ID, not hrInformationId
         assignmentSectionId ?? undefined,
       );
     }
@@ -3138,16 +3349,16 @@ export class WarehouseService {
     return {
       message: id ? 'Training updated successfully' : 'Training saved successfully',
       data: {
-        id: savedResult.id,
-        trainingTitle: savedResult.trainingTitle,
-        conductedBy: savedResult.conductedBy,
-        trainingType: savedResult.trainingType,
-        durationStart: savedResult.durationStart,
-        durationEnd: savedResult.durationEnd,
-        dateOfCompletion: savedResult.dateOfCompletion,
-        trainingCertificate: savedResult.trainingCertificate ?? null,
-        createdAt: savedResult.createdAt.toISOString(),
-        updatedAt: savedResult.updatedAt.toISOString(),
+        id: savedResult.training.id,
+        trainingTitle: savedResult.training.trainingTitle,
+        conductedBy: savedResult.training.conductedBy,
+        trainingType: savedResult.training.trainingType,
+        durationStart: savedResult.training.durationStart,
+        durationEnd: savedResult.training.durationEnd,
+        dateOfCompletion: savedResult.training.dateOfCompletion,
+        trainingCertificate: certificateDocumentId ?? savedResult.training.trainingCertificate ?? null,
+        createdAt: savedResult.training.createdAt.toISOString(),
+        updatedAt: savedResult.training.updatedAt.toISOString(),
       },
     };
   }
@@ -3190,7 +3401,6 @@ export class WarehouseService {
     dto: HrExperienceDto,
     userId: string,
     id?: string,
-    experienceLetterFile?: any,
     hrInformationId?: string,
   ) {
     const application = await this.warehouseOperatorRepository.findOne({
@@ -3261,17 +3471,30 @@ export class WarehouseService {
         await documentRepo.save(document);
       };
 
-      // Upload experience letter if provided
-      let letterDocumentId = dto.experienceLetter;
-      if (experienceLetterFile) {
-        const letterDoc = await this.uploadWarehouseDocument(
-          experienceLetterFile,
-          userId,
-          'HrExperience',
-          applicationId, // Temporary ID, will be updated
-          'experienceLetter',
-        );
-        letterDocumentId = letterDoc.id;
+      // Handle experience letter: if base64 is provided, convert and upload; if string (documentId), use it
+      // Note: We'll handle the upload outside the transaction since file operations are not transactional
+      let letterDocumentId: string | undefined = undefined;
+      let letterNeedsUpload = false;
+      let letterFileForUpload: any = undefined;
+      
+      if (dto.experienceLetter) {
+        // Check if it's base64 (contains data URL prefix) or document ID
+        if (dto.experienceLetter.includes('base64') || dto.experienceLetter.includes(',')) {
+          // It's base64 - will convert to file and upload outside transaction
+          if (!dto.experienceLetterFileName) {
+            throw new BadRequestException('experienceLetterFileName is required when experienceLetter is provided as base64');
+          }
+          
+          letterFileForUpload = this.convertBase64ToFile(
+            dto.experienceLetter,
+            dto.experienceLetterFileName,
+            dto.experienceLetterMimeType
+          );
+          letterNeedsUpload = true;
+        } else {
+          // It's a document ID string - use it directly
+          letterDocumentId = dto.experienceLetter;
+        }
       }
 
       if (id) {
@@ -3319,7 +3542,12 @@ export class WarehouseService {
           existing.id,
         );
 
-        return existing;
+        return {
+          experience: existing,
+          letterDocumentId: letterDocumentId,
+          letterNeedsUpload: letterNeedsUpload,
+          letterFileForUpload: letterFileForUpload,
+        };
       } else {
         // Create new
         const experience = experienceRepo.create({
@@ -3336,9 +3564,40 @@ export class WarehouseService {
           experience.id,
         );
 
-        return experience;
+        return {
+          experience: experience,
+          letterDocumentId: letterDocumentId,
+          letterNeedsUpload: letterNeedsUpload,
+          letterFileForUpload: letterFileForUpload,
+        };
       }
     });
+
+    // Handle letter upload outside transaction (file operations are not transactional)
+    let letterDocumentId: string | undefined = undefined;
+    if (savedResult.letterNeedsUpload && savedResult.letterFileForUpload) {
+      const letterDoc = await this.uploadWarehouseDocument(
+        savedResult.letterFileForUpload,
+        userId,
+        'HrExperience',
+        savedResult.experience.id,
+        'experienceLetter',
+      );
+      letterDocumentId = letterDoc.id;
+
+      // Update experience with the letter foreign key
+      const letterDocument = await this.warehouseDocumentRepository.findOne({
+        where: { id: letterDocumentId }
+      });
+
+      if (letterDocument) {
+        savedResult.experience.experienceLetter = letterDocumentId;
+        const experienceRepo = this.dataSource.getRepository(ExperienceEntity);
+        await experienceRepo.save(savedResult.experience);
+      }
+    } else if (savedResult.letterDocumentId) {
+      letterDocumentId = savedResult.letterDocumentId;
+    }
 
     // Reload application to get latest status after transaction
     const updatedApplication = await this.warehouseOperatorRepository.findOne({
@@ -3364,7 +3623,7 @@ export class WarehouseService {
           where: {
             assignmentId: In(assignments.map((a) => a.id)),
             sectionType: '4-hr-information',
-            resourceId: savedResult.id, // Use experience ID, not hrInformationId
+            resourceId: savedResult.experience.id, // Use experience ID, not hrInformationId
           },
         });
 
@@ -3378,7 +3637,7 @@ export class WarehouseService {
       await this.trackResubmissionAndUpdateStatus(
         applicationId,
         '4-hr-information',
-        savedResult.id, // Use experience ID, not hrInformationId
+        savedResult.experience.id, // Use experience ID, not hrInformationId
         assignmentSectionId ?? undefined,
       );
     }
@@ -3386,18 +3645,18 @@ export class WarehouseService {
     return {
       message: id ? 'Experience updated successfully' : 'Experience saved successfully',
       data: {
-        id: savedResult.id,
-        positionHeld: savedResult.positionHeld,
-        organizationName: savedResult.organizationName,
-        organizationAddress: savedResult.organizationAddress,
-        natureOfOrganization: savedResult.natureOfOrganization,
-        dateOfAppointment: savedResult.dateOfAppointment,
-        dateOfLeaving: savedResult.dateOfLeaving ?? null,
-        duration: savedResult.duration ?? null,
-        responsibilities: savedResult.responsibilities ?? null,
-        experienceLetter: savedResult.experienceLetter ?? null,
-        createdAt: savedResult.createdAt.toISOString(),
-        updatedAt: savedResult.updatedAt.toISOString(),
+        id: savedResult.experience.id,
+        positionHeld: savedResult.experience.positionHeld,
+        organizationName: savedResult.experience.organizationName,
+        organizationAddress: savedResult.experience.organizationAddress,
+        natureOfOrganization: savedResult.experience.natureOfOrganization,
+        dateOfAppointment: savedResult.experience.dateOfAppointment,
+        dateOfLeaving: savedResult.experience.dateOfLeaving ?? null,
+        duration: savedResult.experience.duration ?? null,
+        responsibilities: savedResult.experience.responsibilities ?? null,
+        experienceLetter: letterDocumentId ?? savedResult.experience.experienceLetter ?? null,
+        createdAt: savedResult.experience.createdAt.toISOString(),
+        updatedAt: savedResult.experience.updatedAt.toISOString(),
       },
     };
   }
@@ -3601,18 +3860,20 @@ export class WarehouseService {
           }),
         );
 
-        // Create new bank statement
+        // Create new bank statement (exclude base64 fields)
+        const { document: bankDoc, documentFileName: bankDocFileName, documentMimeType: bankDocMimeType, ...bankStatementData } = dto.bankStatement;
         const bankStatement = await bankStatementRepo.save(
           bankStatementRepo.create({
-            ...dto.bankStatement,
+            ...bankStatementData,
             financialInformationId: existingFinancialInfo.id,
           }),
         );
 
-        // Create new others
+        // Create new others (exclude base64 fields)
+        const { document: otherDoc, documentFileName: otherDocFileName, documentMimeType: otherDocMimeType, ...otherData } = dto.other;
         const others = await othersRepo.save(
           othersRepo.create({
-            ...dto.other,
+            ...otherData,
             financialInformationId: existingFinancialInfo.id,
           }),
         );
@@ -3643,18 +3904,20 @@ export class WarehouseService {
         }),
       );
 
-      // Create bank statement
+      // Create bank statement (exclude base64 fields)
+      const { document: bankDoc, documentFileName: bankDocFileName, documentMimeType: bankDocMimeType, ...bankStatementData } = dto.bankStatement;
       const bankStatement = await bankStatementRepo.save(
         bankStatementRepo.create({
-          ...dto.bankStatement,
+          ...bankStatementData,
           financialInformationId: financialInfo.id,
         }),
       );
 
-      // Create others
+      // Create others (exclude base64 fields)
+      const { document: otherDoc, documentFileName: otherDocFileName, documentMimeType: otherDocMimeType, ...otherData } = dto.other;
       const others = await othersRepo.save(
         othersRepo.create({
-          ...dto.other,
+          ...otherData,
           financialInformationId: financialInfo.id,
         }),
       );
@@ -3732,9 +3995,8 @@ export class WarehouseService {
     dto: OthersDto,
     userId: string,
     id?: string,
-    documentFile?: any,
   ) {
-    return this.financialInformationService.saveOther(applicationId, dto, userId, id, documentFile);
+    return this.financialInformationService.saveOther(applicationId, dto, userId, id);
   }
 
   /**
@@ -3755,7 +4017,6 @@ export class WarehouseService {
     dto: any,
     userId: string,
     id?: string,
-    documentFile?: any,
   ) {
     return this.financialInformationService.saveFinancialSubsection(
       sectionType,
@@ -3763,7 +4024,6 @@ export class WarehouseService {
       dto,
       userId,
       id,
-      documentFile,
     );
   }
 
@@ -4093,122 +4353,198 @@ export class WarehouseService {
         return savedDocument.id;
       };
 
-      // 🔧 FIX: Upload files and update DTO with document IDs
-      if (files) {
-        // Upload HR files
-        if (files.qcPersonnelFile?.[0] && !dto.humanResources.qcPersonnelFile) {
-          const tempId = uuidv4();
-          const documentId = await uploadFileInTransaction(
-            files.qcPersonnelFile[0],
-            'HumanResourcesChecklist',
-            tempId,
-            'qcPersonnelFile',
-          );
-          dto.humanResources.qcPersonnelFile = documentId;
-        }
-        if (files.warehouseSupervisorFile?.[0] && !dto.humanResources.warehouseSupervisorFile) {
-          const tempId = uuidv4();
-          const documentId = await uploadFileInTransaction(
-            files.warehouseSupervisorFile[0],
-            'HumanResourcesChecklist',
-            tempId,
-            'warehouseSupervisorFile',
-          );
-          dto.humanResources.warehouseSupervisorFile = documentId;
-        }
-        if (files.dataEntryOperatorFile?.[0] && !dto.humanResources.dataEntryOperatorFile) {
-          const tempId = uuidv4();
-          const documentId = await uploadFileInTransaction(
-            files.dataEntryOperatorFile[0],
-            'HumanResourcesChecklist',
-            tempId,
-            'dataEntryOperatorFile',
-          );
-          dto.humanResources.dataEntryOperatorFile = documentId;
+      // 🔧 FIX: Handle base64 files from DTO and convert to file-like objects for upload
+      // Helper function to process a file field (base64 or document ID)
+      const processFileField = async (
+        fileValue: string | undefined,
+        fileName: string | undefined,
+        mimeType: string | undefined,
+        documentableType: string,
+        documentType: string,
+      ): Promise<string | undefined> => {
+        if (!fileValue) {
+          return undefined;
         }
 
-        // Upload Financial Soundness files
-        if (files.auditedFinancialStatementsFile?.[0] && !dto.financialSoundness.auditedFinancialStatementsFile) {
-          const tempId = uuidv4();
-          const documentId = await uploadFileInTransaction(
-            files.auditedFinancialStatementsFile[0],
-            'FinancialSoundnessChecklist',
-            tempId,
-            'auditedFinancialStatementsFile',
-          );
-          dto.financialSoundness.auditedFinancialStatementsFile = documentId;
-        }
-        if (files.positiveNetWorthFile?.[0] && !dto.financialSoundness.positiveNetWorthFile) {
-          const tempId = uuidv4();
-          const documentId = await uploadFileInTransaction(
-            files.positiveNetWorthFile[0],
-            'FinancialSoundnessChecklist',
-            tempId,
-            'positiveNetWorthFile',
-          );
-          dto.financialSoundness.positiveNetWorthFile = documentId;
-        }
-        if (files.noLoanDefaultsFile?.[0] && !dto.financialSoundness.noLoanDefaultsFile) {
-          const tempId = uuidv4();
-          const documentId = await uploadFileInTransaction(
-            files.noLoanDefaultsFile[0],
-            'FinancialSoundnessChecklist',
-            tempId,
-            'noLoanDefaultsFile',
-          );
-          dto.financialSoundness.noLoanDefaultsFile = documentId;
-        }
-        if (files.cleanCreditHistoryFile?.[0] && !dto.financialSoundness.cleanCreditHistoryFile) {
-          const tempId = uuidv4();
-          const documentId = await uploadFileInTransaction(
-            files.cleanCreditHistoryFile[0],
-            'FinancialSoundnessChecklist',
-            tempId,
-            'cleanCreditHistoryFile',
-          );
-          dto.financialSoundness.cleanCreditHistoryFile = documentId;
-        }
-        if (files.adequateWorkingCapitalFile?.[0] && !dto.financialSoundness.adequateWorkingCapitalFile) {
-          const tempId = uuidv4();
-          const documentId = await uploadFileInTransaction(
-            files.adequateWorkingCapitalFile[0],
-            'FinancialSoundnessChecklist',
-            tempId,
-            'adequateWorkingCapitalFile',
-          );
-          dto.financialSoundness.adequateWorkingCapitalFile = documentId;
-        }
-        if (files.validInsuranceCoverageFile?.[0] && !dto.financialSoundness.validInsuranceCoverageFile) {
-          const tempId = uuidv4();
-          const documentId = await uploadFileInTransaction(
-            files.validInsuranceCoverageFile[0],
-            'FinancialSoundnessChecklist',
-            tempId,
-            'validInsuranceCoverageFile',
-          );
-          dto.financialSoundness.validInsuranceCoverageFile = documentId;
-        }
-        if (files.noFinancialFraudFile?.[0] && !dto.financialSoundness.noFinancialFraudFile) {
-          const tempId = uuidv4();
-          const documentId = await uploadFileInTransaction(
-            files.noFinancialFraudFile[0],
-            'FinancialSoundnessChecklist',
-            tempId,
-            'noFinancialFraudFile',
-          );
-          dto.financialSoundness.noFinancialFraudFile = documentId;
-        }
+        // Check if it's base64 (contains data URL prefix) or document ID
+        if (fileValue.includes('base64') || fileValue.includes(',')) {
+          // It's base64 - convert to file-like object and upload
+          if (!fileName) {
+            throw new BadRequestException(`${documentType}FileName is required when ${documentType} is provided as base64`);
+          }
 
-        // Upload Registration Fee bank slip
-        if (files.bankPaymentSlip?.[0] && !dto.registrationFee.bankPaymentSlip) {
+          const fileForUpload = this.convertBase64ToFile(fileValue, fileName, mimeType);
           const tempId = uuidv4();
           const documentId = await uploadFileInTransaction(
-            files.bankPaymentSlip[0],
-            'RegistrationFeeChecklist',
+            fileForUpload,
+            documentableType,
             tempId,
-            'bankPaymentSlip',
+            documentType,
           );
-          dto.registrationFee.bankPaymentSlip = documentId;
+          return documentId;
+        } else {
+          // It's a document ID string - return it directly
+          return fileValue;
+        }
+      };
+
+      // Process HR files
+      if (dto.humanResources.qcPersonnelFile) {
+        const processed = await processFileField(
+          dto.humanResources.qcPersonnelFile,
+          dto.humanResources.qcPersonnelFileName,
+          dto.humanResources.qcPersonnelFileMimeType,
+          'HumanResourcesChecklist',
+          'qcPersonnelFile',
+        );
+        if (processed) {
+          dto.humanResources.qcPersonnelFile = processed;
+        }
+      }
+
+      // Process HR files
+      if (dto.humanResources.qcPersonnelFile) {
+        const processed = await processFileField(
+          dto.humanResources.qcPersonnelFile,
+          dto.humanResources.qcPersonnelFileName,
+          dto.humanResources.qcPersonnelFileMimeType,
+          'HumanResourcesChecklist',
+          'qcPersonnelFile',
+        );
+        if (processed) {
+          dto.humanResources.qcPersonnelFile = processed;
+        }
+      }
+
+      if (dto.humanResources.warehouseSupervisorFile) {
+        const processed = await processFileField(
+          dto.humanResources.warehouseSupervisorFile,
+          dto.humanResources.warehouseSupervisorFileName,
+          dto.humanResources.warehouseSupervisorFileMimeType,
+          'HumanResourcesChecklist',
+          'warehouseSupervisorFile',
+        );
+        if (processed) {
+          dto.humanResources.warehouseSupervisorFile = processed;
+        }
+      }
+
+      if (dto.humanResources.dataEntryOperatorFile) {
+        const processed = await processFileField(
+          dto.humanResources.dataEntryOperatorFile,
+          dto.humanResources.dataEntryOperatorFileName,
+          dto.humanResources.dataEntryOperatorFileMimeType,
+          'HumanResourcesChecklist',
+          'dataEntryOperatorFile',
+        );
+        if (processed) {
+          dto.humanResources.dataEntryOperatorFile = processed;
+        }
+      }
+
+      // Process Financial Soundness files
+      if (dto.financialSoundness.auditedFinancialStatementsFile) {
+        const processed = await processFileField(
+          dto.financialSoundness.auditedFinancialStatementsFile,
+          dto.financialSoundness.auditedFinancialStatementsFileName,
+          dto.financialSoundness.auditedFinancialStatementsFileMimeType,
+          'FinancialSoundnessChecklist',
+          'auditedFinancialStatementsFile',
+        );
+        if (processed) {
+          dto.financialSoundness.auditedFinancialStatementsFile = processed;
+        }
+      }
+
+      if (dto.financialSoundness.positiveNetWorthFile) {
+        const processed = await processFileField(
+          dto.financialSoundness.positiveNetWorthFile,
+          dto.financialSoundness.positiveNetWorthFileName,
+          dto.financialSoundness.positiveNetWorthFileMimeType,
+          'FinancialSoundnessChecklist',
+          'positiveNetWorthFile',
+        );
+        if (processed) {
+          dto.financialSoundness.positiveNetWorthFile = processed;
+        }
+      }
+
+      if (dto.financialSoundness.noLoanDefaultsFile) {
+        const processed = await processFileField(
+          dto.financialSoundness.noLoanDefaultsFile,
+          dto.financialSoundness.noLoanDefaultsFileName,
+          dto.financialSoundness.noLoanDefaultsFileMimeType,
+          'FinancialSoundnessChecklist',
+          'noLoanDefaultsFile',
+        );
+        if (processed) {
+          dto.financialSoundness.noLoanDefaultsFile = processed;
+        }
+      }
+
+      if (dto.financialSoundness.cleanCreditHistoryFile) {
+        const processed = await processFileField(
+          dto.financialSoundness.cleanCreditHistoryFile,
+          dto.financialSoundness.cleanCreditHistoryFileName,
+          dto.financialSoundness.cleanCreditHistoryFileMimeType,
+          'FinancialSoundnessChecklist',
+          'cleanCreditHistoryFile',
+        );
+        if (processed) {
+          dto.financialSoundness.cleanCreditHistoryFile = processed;
+        }
+      }
+
+      if (dto.financialSoundness.adequateWorkingCapitalFile) {
+        const processed = await processFileField(
+          dto.financialSoundness.adequateWorkingCapitalFile,
+          dto.financialSoundness.adequateWorkingCapitalFileName,
+          dto.financialSoundness.adequateWorkingCapitalFileMimeType,
+          'FinancialSoundnessChecklist',
+          'adequateWorkingCapitalFile',
+        );
+        if (processed) {
+          dto.financialSoundness.adequateWorkingCapitalFile = processed;
+        }
+      }
+
+      if (dto.financialSoundness.validInsuranceCoverageFile) {
+        const processed = await processFileField(
+          dto.financialSoundness.validInsuranceCoverageFile,
+          dto.financialSoundness.validInsuranceCoverageFileName,
+          dto.financialSoundness.validInsuranceCoverageFileMimeType,
+          'FinancialSoundnessChecklist',
+          'validInsuranceCoverageFile',
+        );
+        if (processed) {
+          dto.financialSoundness.validInsuranceCoverageFile = processed;
+        }
+      }
+
+      if (dto.financialSoundness.noFinancialFraudFile) {
+        const processed = await processFileField(
+          dto.financialSoundness.noFinancialFraudFile,
+          dto.financialSoundness.noFinancialFraudFileName,
+          dto.financialSoundness.noFinancialFraudFileMimeType,
+          'FinancialSoundnessChecklist',
+          'noFinancialFraudFile',
+        );
+        if (processed) {
+          dto.financialSoundness.noFinancialFraudFile = processed;
+        }
+      }
+
+      // Process Registration Fee bank slip
+      if (dto.registrationFee.bankPaymentSlip) {
+        const processed = await processFileField(
+          dto.registrationFee.bankPaymentSlip,
+          dto.registrationFee.bankPaymentSlipFileName,
+          dto.registrationFee.bankPaymentSlipMimeType,
+          'RegistrationFeeChecklist',
+          'bankPaymentSlip',
+        );
+        if (processed) {
+          dto.registrationFee.bankPaymentSlip = processed;
         }
       }
 
@@ -5005,6 +5341,53 @@ export class WarehouseService {
    * Upload and create a warehouse document
    * Documents are linked to entities via polymorphic relationship (documentableType, documentableId)
    */
+  /**
+   * Convert base64 string to file-like object for uploadWarehouseDocument
+   */
+  convertBase64ToFile(
+    base64String: string,
+    fileName: string,
+    mimeType?: string
+  ): any {
+    // Remove data URL prefix if present (e.g., "data:application/pdf;base64,")
+    let base64Data = base64String;
+    if (base64String.includes(',')) {
+      const parts = base64String.split(',');
+      base64Data = parts[1];
+      // Extract mime type from data URL if not provided
+      if (!mimeType && parts[0].includes(';')) {
+        const mimeMatch = parts[0].match(/data:([^;]+)/);
+        if (mimeMatch) {
+          mimeType = mimeMatch[1];
+        }
+      }
+    }
+
+    // Decode base64 to buffer
+    let fileBuffer: Buffer;
+    try {
+      fileBuffer = Buffer.from(base64Data, 'base64');
+    } catch (error) {
+      throw new BadRequestException('Invalid base64 file data');
+    }
+
+    // Validate file size (100MB max)
+    const maxSizeBytes = 100 * 1024 * 1024;
+    if (fileBuffer.length > maxSizeBytes) {
+      throw new BadRequestException(
+        `File size ${(fileBuffer.length / 1024 / 1024).toFixed(2)}MB exceeds maximum allowed size of 100MB`,
+      );
+    }
+
+    // Create file-like object that matches Multer file structure
+    return {
+      buffer: fileBuffer,
+      originalname: fileName,
+      size: fileBuffer.length,
+      mimetype: mimeType || 'application/octet-stream',
+    };
+  }
+
   async uploadWarehouseDocument(
     file: any,
     userId: string,
