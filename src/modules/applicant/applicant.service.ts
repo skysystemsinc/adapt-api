@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository } from 'typeorm';
 import {
   WarehouseLocation,
   WarehouseLocationStatus,
@@ -12,6 +12,11 @@ import {
 import { Facility } from '../warehouse-location/facility/entities/facility.entity';
 import { CompanyInformation } from '../warehouse/entities/company-information.entity';
 import { WarehouseOperator } from '../warehouse/entities/warehouse-operator.entity';
+import {
+  WarehouseDocument,
+  DocumentableType,
+  CertificateDocumentType,
+} from '../warehouse/entities/warehouse-document.entity';
 
 @Injectable()
 export class ApplicantService {
@@ -26,6 +31,8 @@ export class ApplicantService {
     private readonly facilityRepository: Repository<Facility>,
     @InjectRepository(CompanyInformation)
     private readonly companyInformationRepository: Repository<CompanyInformation>,
+    @InjectRepository(WarehouseDocument)
+    private readonly warehouseDocumentRepository: Repository<WarehouseDocument>,
   ) {}
 
   async getStats(userId: string) {
@@ -110,27 +117,84 @@ export class ApplicantService {
   }
 
   async getCertificate(userId: string) {
-    const warehouseOperator = await this.warehouseOperatorRepository.find({
-       where: {
-         userId,
-       },
-       order: {
-         createdAt: 'DESC',
-       },
-       select: {
-         applicationId: true,
-         application: {
-           id: true,
-     
-           applicationId: true,
-         }
-       },
-       relations: [ 'application'],
-     })
-     
-     
-     return warehouseOperator;
-   }
+    const operatorCertificate = await this.warehouseOperatorRepository
+      .createQueryBuilder('operator')
+      .leftJoinAndMapOne(
+        'operator.certificate',
+        WarehouseDocument,
+        'certificate',
+        'certificate.documentableType = :docType AND certificate.documentableId = operator.id AND certificate.documentType = :certType',
+        {
+          docType: DocumentableType.WAREHOUSE_OPERATOR,
+          certType: CertificateDocumentType.OPERATOR_CERTIFICATE,
+        },
+      )
+      .leftJoinAndSelect('operator.application', 'application')
+      .where('operator.userId = :userId', { userId })
+      .orderBy('operator.createdAt', 'DESC')
+      .select([
+        'operator.id',
+        'operator.applicationId',
+        'application.id',
+        'application.applicationId',
+        'certificate',
+      ])
+      .getMany();
+
+      const locationCertificate = await this.warehouseLocationRepository
+      .createQueryBuilder('location')
+      .leftJoinAndMapOne(
+        'location.certificate',
+        WarehouseDocument,
+        'certificate',
+        'certificate.documentableType = :docType AND certificate.documentableId = location.id AND certificate.documentType = :certType',
+        {
+          docType: DocumentableType.WAREHOUSE_LOCATION,
+          certType: CertificateDocumentType.LOCATION_CERTIFICATE,
+        },
+      )
+      .leftJoinAndSelect('location.facility', 'facility')
+      .where('location.userId = :userId', { userId })
+      .orderBy('location.createdAt', 'DESC')
+      .select([
+        'location.id',
+        'location.applicationId',
+        'location.status',
+        'facility.id',
+        'facility.facilityName',
+        'certificate',
+      ])
+      .getMany();
+      
+      return  [...operatorCertificate, ...locationCertificate]
+  }
+
+  async getLocationCertificate(userId: string) {
+    return this.warehouseLocationRepository
+      .createQueryBuilder('location')
+      .leftJoinAndMapOne(
+        'location.certificate',
+        WarehouseDocument,
+        'certificate',
+        'certificate.documentableType = :docType AND certificate.documentableId = location.id AND certificate.documentType = :certType',
+        {
+          docType: DocumentableType.WAREHOUSE_LOCATION,
+          certType: CertificateDocumentType.LOCATION_CERTIFICATE,
+        },
+      )
+      .leftJoinAndSelect('location.facility', 'facility')
+      .where('location.userId = :userId', { userId })
+      .orderBy('location.createdAt', 'DESC')
+      .select([
+        'location.id',
+        'location.applicationId',
+        'location.status',
+        'facility.id',
+        'facility.facilityName',
+        'certificate',
+      ])
+      .getMany();
+  }
  
 
   async getApplications(

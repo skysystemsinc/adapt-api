@@ -9,6 +9,7 @@ import { WarehouseOperatorApplicationRequest } from '../warehouse/entities/wareh
 import { Facility } from '../warehouse-location/facility/entities/facility.entity';
 import { CompanyInformation } from '../warehouse/entities/company-information.entity';
 import { WarehouseOperator } from '../warehouse/entities/warehouse-operator.entity';
+import { WarehouseDocument } from '../warehouse/entities/warehouse-document.entity';
 import { AuthModule } from '../auth/auth.module';
 
 @Module({
@@ -19,6 +20,7 @@ import { AuthModule } from '../auth/auth.module';
       WarehouseLocation,
       WarehouseOperatorApplicationRequest,
       WarehouseOperator,
+      WarehouseDocument,
       Facility,
       CompanyInformation,
     ]),
