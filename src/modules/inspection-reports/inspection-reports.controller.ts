@@ -1,11 +1,9 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, UploadedFiles, UseInterceptors, BadRequestException, Query, Res } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, BadRequestException, Query, Res } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { InspectionReportsService } from './inspection-reports.service';
 import { CreateInspectionReportDto } from './dto/create-inspection-report.dto';
 import { UpdateInspectionReportDto } from './dto/update-inspection-report.dto';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
-import { FileFieldsInterceptor } from '@nestjs/platform-express';
-import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { AssessmentCategory } from '../expert-assessment/entities/expert-assessment.entity';
 import { ApproveOrRejectInspectionReportDto } from './dto/approve-reject-inspection';
@@ -23,62 +21,16 @@ export class InspectionReportsController {
 
   @Post()
   @ApiOperation({ summary: 'Create a new inspection report with all assessments and documents' })
-  @ApiConsumes('multipart/form-data')
+  @ApiBody({ type: CreateInspectionReportDto, description: 'Inspection report data with base64-encoded files' })
   @ApiResponse({ status: 201, description: 'Inspection report created successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @UseInterceptors(
-    FileFieldsInterceptor([
-      { name: 'files', maxCount: 100 },
-      { name: 'globalDocument', maxCount: 1 },
-    ], {
-      limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB per file
-      },
-    }),
-  )
   async create(
-    @Body() body: any,
-    @UploadedFiles() files: { files?: any[]; globalDocument?: any[] },
+    @Body() createInspectionReportDto: CreateInspectionReportDto,
     @Request() req: any,
   ) {
     const userId = req.user?.sub || req.user?.id;
 
-    // Parse FormData
-    const parsedData: any = {
-      assessmentType: body.assessmentType,
-      maximumScore: body.maximumScore,
-      obtainedScore: body.obtainedScore,
-      percentage: body.percentage,
-      grade: body.grade,
-      selectedGrade: body.selectedGrade,
-      assessmentGradingRemarks: body.assessmentGradingRemarks,
-      overallComments: body.overallComments,
-      warehouseOperatorApplicationId: body.warehouseOperatorApplicationId,
-      warehouseLocationId: body.warehouseLocationId,
-    };
-
-    if (body.assessments) {
-      try {
-        parsedData.assessments = typeof body.assessments === 'string' 
-          ? JSON.parse(body.assessments) 
-          : body.assessments;
-        
-        // Transform score in each assessment from string to number
-        if (Array.isArray(parsedData.assessments)) {
-          parsedData.assessments = parsedData.assessments.map((assessment: any) => ({
-            ...assessment,
-            score: typeof assessment.score === 'string' 
-              ? parseFloat(assessment.score) 
-              : assessment.score,
-          }));
-        }
-      } catch (error) {
-        throw new BadRequestException('Invalid assessments JSON format');
-      }
-    }
-
     // Transform and validate the DTO
-    const createInspectionReportDto = plainToInstance(CreateInspectionReportDto, parsedData);
     const errors = await validate(createInspectionReportDto);
 
     if (errors.length > 0) {
@@ -88,14 +40,7 @@ export class InspectionReportsController {
       throw new BadRequestException(errorMessages);
     }
 
-    const assessmentFiles = files?.files || [];
-    const globalDocumentFile = files?.globalDocument?.[0];
-    
-    if (!globalDocumentFile) {
-      throw new BadRequestException('Global document is required');
-    }
-
-    return this.inspectionReportsService.create(createInspectionReportDto, assessmentFiles, globalDocumentFile, userId);
+    return this.inspectionReportsService.create(createInspectionReportDto, userId);
   }
 
   @Get()

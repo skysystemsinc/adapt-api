@@ -101,4 +101,55 @@ export class CreateInspectionReportDto {
   @IsUUID()
   @IsOptional()
   warehouseLocationId?: string;
+
+  // Files as base64 strings
+  @ApiPropertyOptional({
+    description: 'Array of base64-encoded files for assessments (one per assessment)',
+    type: [String],
+    example: ['data:application/pdf;base64,JVBERi0xLjQK...']
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  files?: string[];
+
+  @ApiPropertyOptional({
+    description: 'Array of filenames for assessment files (required if files contains base64)',
+    type: [String],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  fileNames?: string[];
+
+  @ApiPropertyOptional({
+    description: 'Array of MIME types for assessment files (required if files contains base64)',
+    type: [String],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  fileMimeTypes?: string[];
+
+  @ApiProperty({
+    description: 'Global document as base64-encoded string (required)',
+    example: 'data:application/pdf;base64,JVBERi0xLjQK...'
+  })
+  @IsNotEmpty()
+  @IsString()
+  globalDocument: string;
+
+  @ApiProperty({
+    description: 'Original filename for global document (required if globalDocument is base64)',
+  })
+  @IsNotEmpty()
+  @IsString()
+  globalDocumentFileName: string;
+
+  @ApiPropertyOptional({
+    description: 'MIME type for global document (required if globalDocument is base64)',
+  })
+  @IsOptional()
+  @IsString()
+  globalDocumentMimeType?: string;
 }
