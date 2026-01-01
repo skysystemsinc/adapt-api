@@ -70,10 +70,47 @@ export class InspectionReportsService {
     }
   }
 
+  /**
+   * Convert base64 string to file-like object (Multer-compatible)
+   */
+  private convertBase64ToFile(
+    base64String: string,
+    fileName: string,
+    mimeType?: string
+  ): any {
+    // Remove data URL prefix if present (e.g., "data:application/pdf;base64,")
+    let base64Data = base64String;
+    if (base64String.includes(',')) {
+      base64Data = base64String.split(',')[1];
+    }
+
+    // Decode base64 to buffer
+    let buffer: Buffer;
+    try {
+      buffer = Buffer.from(base64Data, 'base64');
+    } catch (error) {
+      throw new BadRequestException('Invalid base64 file data');
+    }
+
+    // Validate file size (10MB max)
+    const maxSizeBytes = 10 * 1024 * 1024;
+    if (buffer.length > maxSizeBytes) {
+      throw new BadRequestException(
+        `File size ${(buffer.length / 1024 / 1024).toFixed(2)}MB exceeds maximum allowed size of ${(maxSizeBytes / 1024 / 1024).toFixed(0)}MB`
+      );
+    }
+
+    // Create file-like object that matches Multer file structure
+    return {
+      buffer,
+      originalname: fileName,
+      size: buffer.length,
+      mimetype: mimeType || 'application/octet-stream',
+    };
+  }
+
   async create(
     createInspectionReportDto: CreateInspectionReportDto,
-    files: any[],
-    globalDocumentFile: any,
     userId?: string
   ): Promise<InspectionReport> {
     const queryRunner = this.dataSource.createQueryRunner();
@@ -85,9 +122,59 @@ export class InspectionReportsService {
       await this.ensureUploadDirectory();
       await this.ensureInspectionReportsUploadDirectory();
 
-      // Step 1: Handle Global Document Upload (required)
-      if (!globalDocumentFile) {
+      // Step 1: Convert base64 files to file-like objects
+      let assessmentFiles: any[] = [];
+      if (createInspectionReportDto.files && createInspectionReportDto.files.length > 0) {
+        const fileNames = createInspectionReportDto.fileNames || [];
+        const fileMimeTypes = createInspectionReportDto.fileMimeTypes || [];
+
+        for (let i = 0; i < createInspectionReportDto.files.length; i++) {
+          const base64String = createInspectionReportDto.files[i];
+          
+          // Check if it's a base64 string or document ID
+          if (base64String.startsWith('data:') || (!base64String.includes('-') && base64String.length > 50)) {
+            // It's a base64 string
+            if (!fileNames[i]) {
+              throw new BadRequestException(`fileNames[${i}] is required when files[${i}] is base64`);
+            }
+            
+            const file = this.convertBase64ToFile(
+              base64String,
+              fileNames[i],
+              fileMimeTypes[i]
+            );
+            assessmentFiles.push(file);
+          } else {
+            // It's a document ID - skip (will be handled differently if needed)
+            // For now, we'll only handle base64 files
+            throw new BadRequestException('Document IDs are not supported in files array. Please provide base64 strings.');
+          }
+        }
+      }
+
+      // Step 2: Handle Global Document Upload (required)
+      if (!createInspectionReportDto.globalDocument) {
         throw new BadRequestException('Global document is required');
+      }
+
+      let globalDocumentFile: any;
+      
+      // Check if globalDocument is base64 or document ID
+      if (createInspectionReportDto.globalDocument.startsWith('data:') || 
+          (!createInspectionReportDto.globalDocument.includes('-') && createInspectionReportDto.globalDocument.length > 50)) {
+        // It's a base64 string
+        if (!createInspectionReportDto.globalDocumentFileName) {
+          throw new BadRequestException('globalDocumentFileName is required when globalDocument is base64');
+        }
+        
+        globalDocumentFile = this.convertBase64ToFile(
+          createInspectionReportDto.globalDocument,
+          createInspectionReportDto.globalDocumentFileName,
+          createInspectionReportDto.globalDocumentMimeType
+        );
+      } else {
+        // It's a document ID - not supported for global document (must be new file)
+        throw new BadRequestException('Global document must be provided as base64 string, not document ID');
       }
 
       // Validate global document file type
@@ -236,9 +323,9 @@ export class InspectionReportsService {
 
       // Step 4: Upload Files and Create Documents
       // Files are sent in order matching assessments array
-      if (files && files.length > 0) {
-        for (let i = 0; i < files.length && i < assessments.length; i++) {
-          const file = files[i];
+      if (assessmentFiles && assessmentFiles.length > 0) {
+        for (let i = 0; i < assessmentFiles.length && i < assessments.length; i++) {
+          const file = assessmentFiles[i];
           const assessmentData = assessments[i];
           const submission = submissionMap.get(assessmentData.assessmentId);
 

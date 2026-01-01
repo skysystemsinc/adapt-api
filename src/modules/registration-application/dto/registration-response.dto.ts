@@ -31,6 +31,9 @@ export class RegistrationResponseDto {
   id: string;
 
   @Expose()
+  applicationId: string;
+
+  @Expose()
   formId: string;
 
   @Expose()
