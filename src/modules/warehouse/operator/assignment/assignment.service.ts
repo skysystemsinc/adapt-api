@@ -906,4 +906,67 @@ export class AssignmentService {
 
     return assignment;
   }
+
+
+  async getAllAssignmentsForApplication(applicationId: string, userId: string) {
+    // Get user with permissions
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: [
+        'userRoles',
+        'userRoles.role',
+        'userRoles.role.rolePermissions',
+        'userRoles.role.rolePermissions.permission',
+      ],
+    });
+  
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+  
+    if (!user.isActive) {
+      throw new ConflictException('User is not active. Please contact the administrator.');
+    }
+  
+    // Check user permissions
+    const isOfficer = hasPermission(user, Permissions.IS_OFFICER);
+    const isHOD = hasPermission(user, Permissions.IS_HOD);
+    const isExpert = hasPermission(user, Permissions.IS_EXPERT);
+    const isFinalHOD = hasPermission(user, Permissions.REVIEW_ASSESSMENT);
+    const isCEO = hasPermission(user, Permissions.REVIEW_FINAL_APPLICATION);
+  
+    if (!isOfficer && !isHOD && !isExpert && !isFinalHOD && !isCEO) {
+      throw new ForbiddenException('You are not authorized to view assignments.');
+    }
+
+    // Base query for assignments - only user relations, no sections or fields
+    const assignmentRepository = this.dataSource.getRepository(Assignment);
+    let queryBuilder = assignmentRepository
+      .createQueryBuilder('assignment')
+      .where('assignment.applicationId = :applicationId', { applicationId })
+      .leftJoinAndSelect('assignment.assignedToUser', 'assignedToUser')
+      .leftJoinAndSelect('assignment.assignedByUser', 'assignedByUser');
+  
+      if (isHOD || isExpert) {
+        queryBuilder.andWhere(
+          `(
+            (assignment.level IN (:...levelsToUser) AND assignment.assignedTo = :userId) OR
+            assignment.level = :hodToExpertLevel OR
+            assignment.level = :expertToHodLevel
+          )`,
+          {
+            levelsToUser: [AssignmentLevel.OFFICER_TO_HOD, AssignmentLevel.EXPERT_TO_HOD],
+            userId: userId,
+            hodToExpertLevel: AssignmentLevel.HOD_TO_EXPERT,
+            expertToHodLevel: AssignmentLevel.EXPERT_TO_HOD,
+          }
+        );
+      }
+  
+    const assignments = await queryBuilder
+      .orderBy('assignment.createdAt', 'ASC')
+      .getMany();
+  
+    return assignments;
+  }
 }
