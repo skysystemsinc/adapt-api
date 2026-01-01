@@ -534,6 +534,14 @@ export class AssignmentService {
       return {
         message: 'Application rejected successfully',
         assignment: assignment.id,
+        applicant: {
+          id: assignedTo.id,
+          email: assignedTo.email,
+          firstName: assignedTo.firstName,
+          lastName: assignedTo.lastName,
+        },
+        applicationId: applicationId,
+        isLocationApplication: isLocationApplication,
       };
     } catch (error) {
       console.error('Error rejecting application:', error);
@@ -596,6 +604,8 @@ export class AssignmentService {
         assignedTo: userId
       },
       relations: [
+        'assignedByUser',
+        'assignedToUser',
         'sections',
         'sections.fields',
       ],
@@ -719,6 +729,8 @@ export class AssignmentService {
         assignedTo: userId
       },
       relations: [
+        'assignedByUser',
+        'assignedToUser',
         'sections',
         'sections.fields',
       ],
@@ -738,7 +750,7 @@ export class AssignmentService {
 
     const assignments = await this.dataSource.getRepository(Assignment).find({
       where: whereClause,
-      relations: ['assignedToUser', 'sections', 'sections.fields'],
+      relations: ['assignedToUser', 'assignedByUser', 'sections', 'sections.fields'],
     });
     return assignments;
   }
@@ -754,7 +766,7 @@ export class AssignmentService {
     }
     const assignments = await this.dataSource.getRepository(Assignment).find({
       where: whereClause,
-      relations: ['assignedToUser', 'sections', 'sections.fields'],
+      relations: ['assignedToUser', 'assignedByUser', 'sections', 'sections.fields'],
     });
     return assignments;
   }
@@ -888,7 +900,7 @@ export class AssignmentService {
 
     const assignment = await this.dataSource.getRepository(Assignment).findOne({
       where: whereClause,
-      relations: ['assignedToUser', 'sections', 'sections.fields'],
+      relations: ['assignedToUser', 'assignedByUser', 'sections', 'sections.fields'],
       order: { createdAt: 'DESC' },
     });
 
