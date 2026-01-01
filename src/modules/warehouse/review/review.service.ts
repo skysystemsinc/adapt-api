@@ -331,7 +331,19 @@ export class ReviewService {
     if (!assessment) {
       throw new NotFoundException('Assessment not found');
     }
-    return assessment;
+
+    const hasCeoReview = await this.reviewRepository.findOne({
+      where: [
+        { applicationId, type: 'CEO' },
+        { applicationLocationId: applicationId, type: 'CEO' },
+      ],
+      relations: ['application', 'applicationLocation', 'user', 'details'],
+    });
+
+    return {
+      ...assessment,
+      CEO: hasCeoReview ? hasCeoReview : null,
+    };
   }
 
   update(id: number, updateReviewDto: UpdateReviewDto) {
