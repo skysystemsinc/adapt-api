@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Req, UseGuards, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Req, UseGuards, Query, BadRequestException } from '@nestjs/common';
 import { AssignmentService } from './assignment.service';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { UpdateAssignmentDto } from './dto/update-assignment.dto';
@@ -136,4 +136,19 @@ export class AssignmentController {
     const userId = req.user?.sub || req.user?.id;
     return await this.assignmentService.getLatestAssignmentByUserType(applicationId, userId as string);
   }
+
+
+  @ApiOperation({ summary: 'Get all assignments for an application filtered by user role' })
+  @Get('/application/:applicationId/all-assignments')
+  async getAllAssignmentsForApplication(
+    @Req() req: any,
+    @Param('applicationId') applicationId: string,
+  ) {
+    const userId = req.user?.sub || req.user?.id;
+    if (!userId) {
+      throw new BadRequestException('User ID not found in request. Authentication may have failed.');
+    }
+    return await this.assignmentService.getAllAssignmentsForApplication(applicationId, userId as string);
+  }
+
 }
