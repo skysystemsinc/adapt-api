@@ -62,3 +62,5 @@ export function decryptBuffer(
   return decrypted;
 }
 
+export const ASSIGNMENT_COUNT = 6;
+

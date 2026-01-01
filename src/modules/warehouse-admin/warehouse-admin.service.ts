@@ -576,10 +576,10 @@ export class WarehouseAdminService {
       throw new NotFoundException('Warehouse operator application not found');
     }
 
-    if (user && 
-      (!hasPermission(user, Permissions.IS_OFFICER) && 
-      !hasPermission(user, Permissions.REVIEW_ASSESSMENT) && 
-      !hasPermission(user, Permissions.REVIEW_FINAL_APPLICATION))) {
+    if (user &&
+      (!hasPermission(user, Permissions.IS_OFFICER) &&
+        !hasPermission(user, Permissions.REVIEW_ASSESSMENT) &&
+        !hasPermission(user, Permissions.REVIEW_FINAL_APPLICATION))) {
       // Fetch assignment for this user and application
       const assignment = await this.dataSource.getRepository(Assignment).findOne({
         where: {
@@ -589,8 +589,8 @@ export class WarehouseAdminService {
         relations: ['sections', 'sections.fields'],
       });
 
-      if (assignment && assignment.sections 
-        && !hasPermission(user, Permissions.REVIEW_ASSESSMENT) 
+      if (assignment && assignment.sections
+        && !hasPermission(user, Permissions.REVIEW_ASSESSMENT)
         && !hasPermission(user, Permissions.REVIEW_FINAL_APPLICATION)) {
         this.filterApplicationByAssignment(warehouseOperatorApplication, assignment);
       } else {
@@ -736,7 +736,7 @@ export class WarehouseAdminService {
    * 
    * @returns All users grouped by role
    */
-  async findAllWareHouseRoles(userId: string, applicationId?: string) {
+  async findAllWareHouseRoles(userId: string, applicationId?: string, type?: string | null) {
 
     const user = await this.usersRepository.findOne({
       where: { id: userId },
@@ -788,7 +788,37 @@ export class WarehouseAdminService {
     ) AS users
   `);
 
-    if (isKycVerification || hasPermission(user, Permissions.REVIEW_ASSESSMENT) || hasPermission(user, Permissions.REVIEW_FINAL_APPLICATION)) {
+
+
+    if (isKycVerification || hasPermission(user, Permissions.REVIEW_FINAL_APPLICATION)) {
+      if (type) {
+        switch (type) {
+          case 'hr':
+            usersQuery.where(`permission.name = :hrPermission`, { hrPermission: Permissions.IS_HR });
+            break;
+          case 'finance':
+            usersQuery.where(`permission.name = :financePermission`, { financePermission: Permissions.IS_FINANCE });
+            break;
+          case 'legal':
+            usersQuery.where(`permission.name = :legalPermission`, { legalPermission: Permissions.IS_LEGAL });
+            break;
+          case 'ecg':
+            usersQuery.where(`permission.name = :ecgPermission`, { ecgPermission: Permissions.IS_ESG });
+            break;
+          case 'security':
+            usersQuery.where(`permission.name = :securityPermission`, { securityPermission: Permissions.IS_SECURITY });
+            break;
+          case 'technical':
+            usersQuery.where(`permission.name = :technicalPermission`, { technicalPermission: Permissions.IS_TECHNICAL });
+            break;
+          case 'esg':
+            usersQuery.where(`permission.name = :esgPermission`, { esgPermission: Permissions.IS_ESG });
+            break;
+          default:
+            break;
+        }
+      }
+    } else if(isKycVerification || hasPermission(user, Permissions.REVIEW_ASSESSMENT)) {
       // exlucde applicant role & include HOD role only
       usersQuery.where(`role.name != :applicantRole AND permission.name = :hodRole`, { applicantRole: 'Applicant', hodRole: Permissions.IS_HOD })
     } else if (hasPermission(user, Permissions.IS_HOD)) {
@@ -910,7 +940,7 @@ export class WarehouseAdminService {
 
   async findAllOperators(userId: string, query: QueryOperatorApplicationDto) {
     const { page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'ASC', search } = query;
-    
+
     // find all warehouse operators with pagination
     // if search is provided, search by user name or email
     const whereCondition: any = {};
@@ -918,7 +948,7 @@ export class WarehouseAdminService {
       whereCondition.user.firstName = ILike(`%${search}%`);
       whereCondition.user.lastName = ILike(`%${search}%`);
       whereCondition.user.email = ILike(`%${search}%`);
-    } 
+    }
     const operators = await this.warehouseOperatorRepository.findAndCount({
       where: whereCondition,
       skip: (page - 1) * limit,
@@ -1167,16 +1197,16 @@ export class WarehouseAdminService {
       relations: ['userRoles', 'userRoles.role', 'userRoles.role.rolePermissions', 'userRoles.role.rolePermissions.permission'],
     });
 
-    if(!user) {
+    if (!user) {
       throw new NotFoundException('User not found');
     }
 
-    if(hasPermission(user, Permissions.MANAGE_RBAC)) {
+    if (hasPermission(user, Permissions.MANAGE_RBAC)) {
       whereCondition.status = UnlockRequestStatus.PENDING;
     } else {
       whereCondition.status = Not(UnlockRequestStatus.PENDING);
     }
-    
+
     if (search) {
       whereCondition.user = {
         firstName: ILike(`%${search}%`),
@@ -1184,11 +1214,11 @@ export class WarehouseAdminService {
         email: ILike(`%${search}%`),
       };
     }
-    
+
     if (status) {
       whereCondition.status = status;
     }
-    
+
     const [unlockRequests, total] = await this.unlockRequestRepository.findAndCount({
       where: whereCondition,
       skip: (page - 1) * limit,
@@ -1245,7 +1275,7 @@ export class WarehouseAdminService {
     // Get encryption metadata - try from unlockRequest first, then from WarehouseDocument
     let iv: string | null = unlockRequest.iv || null;
     let authTag: string | null = unlockRequest.authTag || null;
-    
+
     // If not stored in unlockRequest, try to get from WarehouseDocument
     if (!iv || !authTag) {
       const document = await this.warehouseDocumentRepository.findOne({
@@ -1254,7 +1284,7 @@ export class WarehouseAdminService {
           { filePath: unlockRequest.bankPaymentSlip },
         ],
       });
-      
+
       if (document) {
         iv = iv || document.iv || null;
         authTag = authTag || document.authTag || null;
@@ -1277,7 +1307,7 @@ export class WarehouseAdminService {
     // Use stored mimeType if available, otherwise detect from buffer
     let mimeType = unlockRequest.mimeType?.trim() || 'application/octet-stream';
     let fileExtension = '.pdf'; // Default extension
-    
+
     // Map MIME type to file extension
     const mimeToExtMap: Record<string, string> = {
       'application/pdf': '.pdf',
@@ -1291,10 +1321,10 @@ export class WarehouseAdminService {
       'application/vnd.ms-excel': '.xls',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
     };
-    
+
     // Normalize mimeType to lowercase for consistent matching
     const normalizedMimeType = mimeType.toLowerCase();
-    
+
     if (normalizedMimeType && mimeToExtMap[normalizedMimeType]) {
       fileExtension = mimeToExtMap[normalizedMimeType];
       mimeType = normalizedMimeType; // Use normalized version
@@ -1377,7 +1407,7 @@ export class WarehouseAdminService {
         id: true,
         operatorId: true,
         locationId: true,
-        operator:  true,
+        operator: true,
         location: {
           warehouseOperatorId: true,
         },
@@ -1388,7 +1418,7 @@ export class WarehouseAdminService {
       }
     });
 
-    if(!unlockRequest) {
+    if (!unlockRequest) {
       throw new NotFoundException('Warehouse operator unlock request not found');
     }
 
@@ -1473,10 +1503,10 @@ export class WarehouseAdminService {
       throw new NotFoundException('Warehouse operator application not found');
     }
 
-    if (user && 
-      (!hasPermission(user, Permissions.IS_OFFICER) && 
-      !hasPermission(user, Permissions.REVIEW_ASSESSMENT) && 
-      !hasPermission(user, Permissions.REVIEW_FINAL_APPLICATION))) {
+    if (user &&
+      (!hasPermission(user, Permissions.IS_OFFICER) &&
+        !hasPermission(user, Permissions.REVIEW_ASSESSMENT) &&
+        !hasPermission(user, Permissions.REVIEW_FINAL_APPLICATION))) {
       // Fetch assignment for this user and application
       const assignment = await this.dataSource.getRepository(Assignment).findOne({
         where: {
@@ -1486,8 +1516,8 @@ export class WarehouseAdminService {
         relations: ['sections', 'sections.fields'],
       });
 
-      if (assignment && assignment.sections 
-        && !hasPermission(user, Permissions.REVIEW_ASSESSMENT) 
+      if (assignment && assignment.sections
+        && !hasPermission(user, Permissions.REVIEW_ASSESSMENT)
         && !hasPermission(user, Permissions.REVIEW_FINAL_APPLICATION)) {
         this.filterApplicationByAssignment(warehouseOperatorApplication, assignment);
       } else {

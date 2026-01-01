@@ -8,7 +8,7 @@ import { Assignment, AssignmentLevel, AssignmentProcessType } from './entities/a
 import { AssignmentSection } from './entities/assignment-section.entity';
 import { AssignmentSectionField } from './entities/assignment-section-field.entity';
 import { Permissions } from 'src/modules/rbac/constants/permissions.constants';
-import { hasPermission } from 'src/common/utils/helper.utils';
+import { ASSIGNMENT_COUNT, hasPermission } from 'src/common/utils/helper.utils';
 import { RejectApplicationDto } from './dto/reject-application.dto';
 import { WarehouseOperatorApplicationRequest, WarehouseOperatorApplicationStatus } from '../../entities/warehouse-operator-application-request.entity';
 import { ApplicationRejectionEntity } from '../../entities/application-rejection.entity';
@@ -183,12 +183,12 @@ export class AssignmentService {
 
               try {
                 const savedAssignmentHistory = await transactionalEntityManager.save(AssignmentHistory, assignmentHistoryEntity);
-                
+
                 // Verify the save succeeded
                 if (!savedAssignmentHistory || !savedAssignmentHistory.id) {
                   throw new Error(`Failed to save assignment history - no ID returned`);
                 }
-                
+
                 this.logger.log(`[CEO Reassignment] Created assignment history ${savedAssignmentHistory.id} for assignment ${assignment.id}`);
 
                 // Create and save section histories (if sections exist)
@@ -276,14 +276,14 @@ export class AssignmentService {
                 }
 
                 await transactionalEntityManager.delete(Assignment, assignment.id);
-                
+
                 // Verify history records still exist after deletion (migration must be run for this to work)
                 const historyAfterDelete = await transactionalEntityManager
                   .getRepository(AssignmentHistory)
                   .findOne({
                     where: { id: savedAssignmentHistory.id }
                   });
-                
+
                 if (!historyAfterDelete) {
                   this.logger.error(`[CEO Reassignment] WARNING: Assignment history ${savedAssignmentHistory.id} was deleted! Migration 1778000000000 may not have been run.`);
                 } else {
@@ -374,6 +374,7 @@ export class AssignmentService {
 
 
   async rejectApplication(applicationId: string, rejectApplicationDto: RejectApplicationDto, assignedById: string) {
+    let previousAssginee;
     // GET USER WHO IS REJECTING THE APPLICATION
     const user = await this.userRepository.findOne({
       where: { id: assignedById },
@@ -390,12 +391,7 @@ export class AssignmentService {
     if (!user.isActive) {
       throw new ConflictException('User is not active. Please contact the administrator.');
     }
-    const isHOD = hasPermission(user, Permissions.IS_HOD);
 
-    // ONLY HOD CAN REJECT THE APPLICATION
-    if (!isHOD) {
-      throw new ForbiddenException('You are not authorized to perform this action.');
-    }
 
     let application: WarehouseOperatorApplicationRequest | WarehouseLocation | null = null;
     let isLocationApplication = false;
@@ -414,6 +410,17 @@ export class AssignmentService {
     // IF THE APPLICATION IS NOT FOUND, THROW AN ERROR
     if (!application) {
       throw new NotFoundException('Application not found');
+    }
+    if (!application.userId) {
+      throw new NotFoundException('Application user ID not found');
+    }
+
+    const isHOD = hasPermission(user, Permissions.IS_HOD);
+    const isCEO = hasPermission(user, Permissions.REVIEW_FINAL_APPLICATION);
+
+    // ONLY HOD CAN REJECT THE APPLICATION
+    if (!isHOD && !isCEO) {
+      throw new ForbiddenException('You are not authorized to perform this action.');
     }
 
     // GET USER WHO IS THE APPLICANT
@@ -434,9 +441,65 @@ export class AssignmentService {
       throw new ConflictException('User is not active. Please contact the administrator.');
     }
 
+    if (!rejectApplicationDto.sections || rejectApplicationDto.sections.length === 0) {
+      throw new BadRequestException('At least one section must be provided for rejection');
+    }
+
     try {
       // TRANSACTION START
       const assignment = await this.dataSource.transaction(async (transactionalEntityManager) => {
+        this.logger.log(`Starting rejection for application ${applicationId} by user ${assignedById}`);
+
+        const baseCondition = isLocationApplication
+          ? { applicationLocationId: applicationId }
+          : { applicationId: applicationId };
+
+        // IF THE APPLICATION IS REJECTED BY CEO, DELETE THE PREVIOUS ASSIGNMENTS
+        if (isCEO && rejectApplicationDto.previousAssignmentId) {
+          const previousAssignment = await transactionalEntityManager.getRepository(Assignment).findOne({
+            where: {
+              id: rejectApplicationDto.previousAssignmentId,
+              ...baseCondition,
+            },
+          });
+          if (!previousAssignment) {
+            throw new NotFoundException('Previous assignment not found');
+          }
+          previousAssginee = previousAssignment.assignedTo;
+
+          const hodAssignments = await transactionalEntityManager.getRepository(Assignment).find({
+            where: [
+              {
+                ...baseCondition,
+                assignedBy: previousAssginee,
+                level: In([AssignmentLevel.HOD_TO_EXPERT, AssignmentLevel.HOD_TO_APPLICANT]),
+              },
+              {
+                ...baseCondition,
+                assignedTo: previousAssginee,
+                level: AssignmentLevel.EXPERT_TO_HOD,
+              },
+            ],
+            relations: ['sections', 'sections.fields']
+          });
+
+          if (hodAssignments.length > 0) {
+            // Explicit deletion to ensure fields are deleted
+            const sectionIds = hodAssignments.flatMap(a => a.sections?.map(s => s.id) || []);
+            if (sectionIds.length > 0) {
+              await transactionalEntityManager.delete(AssignmentSectionField, {
+                assignmentSectionId: In(sectionIds)
+              });
+            }
+            await transactionalEntityManager.delete(AssignmentSection, {
+              assignmentId: In(hodAssignments.map(a => a.id))
+            });
+            await transactionalEntityManager.delete(Assignment, hodAssignments.map(a => a.id));
+            assignedById = previousAssginee;
+            this.logger.log(`Deleted ${hodAssignments.length} HOD assignments for CEO rejection`);
+          }
+        }
+
         // Create assignment entity
         const assignmentEntity = transactionalEntityManager.create(Assignment, {
           ...(isLocationApplication ?
@@ -454,6 +517,9 @@ export class AssignmentService {
 
         // Create and save sections with their fields
         for (const section of rejectApplicationDto.sections) {
+          if (!section.fields || section.fields.length === 0) {
+            throw new BadRequestException(`Section '${section.sectionType}' must have at least one field`);
+          }
           const sectionEntity = transactionalEntityManager.create(AssignmentSection, {
             assignmentId: savedAssignment.id,
             sectionType: section.sectionType,
@@ -509,23 +575,30 @@ export class AssignmentService {
         let totalAssignmentCount = assignmentHodToExpertCount + assignmentHodToApplicantCount;
 
         let updateResult: UpdateResult | null = null;
-        if (totalAssignmentCount >= 6 && assignmentHodToApplicantCount > 0) {
+        if (totalAssignmentCount >= ASSIGNMENT_COUNT && assignmentHodToApplicantCount > 0) {
           if (isLocationApplication) {
             updateResult = await transactionalEntityManager.getRepository(WarehouseLocation).update(applicationId, {
               status: WarehouseLocationStatus.REJECTED,
               metadata: {
-                rejectionReason: rejectApplicationDto.remarks || null,
+                rejectionReason: rejectApplicationDto.remarks || null as any,
+                rejectedBy: assignedById as any,
               } as any,
             });
           } else {
             updateResult = await transactionalEntityManager.getRepository(WarehouseOperatorApplicationRequest).update(applicationId, {
               status: WarehouseOperatorApplicationStatus.REJECTED,
+              metadata: {
+                rejectionReason: rejectApplicationDto.remarks || null as any,
+                rejectedBy: assignedById as any,
+              } as any,
             });
           }
 
           if (updateResult.affected === 0) {
             throw new ConflictException('Failed to update application status');
           }
+          this.logger.log(`Application ${applicationId} status updated to REJECTED`);
+
         }
 
         return savedAssignment;
@@ -544,7 +617,10 @@ export class AssignmentService {
         isLocationApplication: isLocationApplication,
       };
     } catch (error) {
-      console.error('Error rejecting application:', error);
+      this.logger.error(`Error rejecting application ${applicationId}: ${error.message}`, error.stack);
+      if (error instanceof NotFoundException || error instanceof BadRequestException || error instanceof ConflictException) {
+        throw error;
+      }
       throw new ConflictException('Failed to reject application', error);
     }
   }

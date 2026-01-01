@@ -74,6 +74,7 @@ export class AssignmentController {
     if (!userId) {
       throw new Error('User ID not found in request. Authentication may have failed.');
     }
+
     return await this.assignmentService.rejectApplication(applicationId, rejectApplicationDto, userId as string);
   }
 

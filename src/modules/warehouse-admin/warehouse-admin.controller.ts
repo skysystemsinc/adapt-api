@@ -61,9 +61,10 @@ export class WarehouseAdminController {
   findAllWareHouseRoles(
     @Req() req: any,
     @Query('applicationId') applicationId?: string,
+    @Query('type') type?: string,
   ) {
     const userId = req.user.id;
-    return this.warehouseAdminService.findAllWareHouseRoles(userId, applicationId);
+    return this.warehouseAdminService.findAllWareHouseRoles(userId, applicationId, type || null);
   }
 
   @Patch(':id')
