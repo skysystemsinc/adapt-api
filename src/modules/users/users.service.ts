@@ -77,7 +77,7 @@ export class UsersService {
 
   async findAllInternal(): Promise<any> {
     const users = await this.userRepository.find({
-      relations: ['userRoles', 'userRoles.role', 'organization'],
+      relations: ['userRoles', 'userRoles.role', 'userRoles.role.rolePermissions', 'userRoles.role.rolePermissions.permission', 'organization'],
       where: {
         userRoles: {
           role: {
@@ -99,7 +99,15 @@ export class UsersService {
         userRoles: {
           id: true,
           role: {
+            id: true,
             name: true,
+            rolePermissions: {
+              id: true,
+              permission: {
+                id: true,
+                name: true,
+              },
+            },
           },
         },
       }
@@ -362,6 +370,39 @@ export class UsersService {
         },
       },
       relations: ['userRoles', 'userRoles.role', 'userRoles.role.rolePermissions', 'userRoles.role.rolePermissions.permission'],
+    });
+  }
+
+  /**
+   * Get all HOD users (users with is_hod permission and HOD role)
+   * This method doesn't require VIEW_USERS permission and can be used by any authenticated user
+   */
+  async findHodUsers(): Promise<User[]> {
+    const users = await this.userRepository.find({
+      relations: ['userRoles', 'userRoles.role', 'userRoles.role.rolePermissions', 'userRoles.role.rolePermissions.permission'],
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+      },
+    });
+
+    // Filter users with is_hod permission and HOD role
+    return users.filter((user) => {
+      // Check if user has is_hod permission
+      const hasHodPermission = user.userRoles?.some((userRole) =>
+        userRole.role?.rolePermissions?.some(
+          (rp) => rp.permission?.name === Permissions.IS_HOD
+        )
+      );
+
+      // Check if user has HOD role (role name contains "HOD")
+      const hasHodRole = user.userRoles?.some((userRole) =>
+        userRole.role?.name?.toUpperCase().includes("HOD")
+      );
+
+      return (hasHodPermission || hasHodRole) && user.email;
     });
   }
 }
