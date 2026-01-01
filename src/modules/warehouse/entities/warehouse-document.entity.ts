@@ -10,6 +10,20 @@ import {
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 
+export enum DocumentableType {
+  WAREHOUSE_OPERATOR = 'WarehouseOperator',
+  WAREHOUSE_LOCATION = 'WarehouseLocation',
+  COMPANY_INFORMATION = 'CompanyInformation',
+  BANK_DETAILS = 'BankDetails',
+  FINANCIAL_INFORMATION = 'FinancialInformation',
+  HR_INFORMATION = 'HRInformation',
+}
+
+export enum CertificateDocumentType {
+  OPERATOR_CERTIFICATE = 'operator-certificate',
+  LOCATION_CERTIFICATE = 'location-certificate',
+}
+
 /**
  * WarehouseDocument - Polymorphic document entity for warehouse-related documents
  * 
