@@ -120,10 +120,9 @@ export class ApplicantService {
   }
 
   async getCertificate(userId: string) {
-    const operatorCertificate = await this.warehouseOperatorRepository
+    const operatorCertificates = await this.warehouseOperatorRepository
       .createQueryBuilder('operator')
-      .leftJoinAndMapOne(
-        'operator.certificate',
+      .leftJoin(
         WarehouseDocument,
         'certificate',
         'certificate.documentableType = :docType AND certificate.documentableId = operator.id AND certificate.documentType = :certType',
@@ -132,22 +131,25 @@ export class ApplicantService {
           certType: CertificateDocumentType.OPERATOR_CERTIFICATE,
         },
       )
-      .leftJoinAndSelect('operator.application', 'application')
+      .leftJoin('operator.application', 'application')
       .where('operator.userId = :userId', { userId })
       .orderBy('operator.createdAt', 'DESC')
-      .select([
-        'operator.id',
-        'operator.applicationId',
-        'application.id',
-        'application.applicationId',
-        'certificate',
-      ])
-      .getMany();
+      .select('operator.id', 'id')
+      .addSelect('operator.applicationId', 'applicationId')
+      .addSelect('application.id', 'application_id')
+      .addSelect('application.applicationId', 'application_applicationId')
+      .addSelect('certificate.id', 'certificate_id')
+      .addSelect('certificate.originalFileName', 'certificate_originalFileName')
+      .addSelect('certificate.filePath', 'certificate_filePath')
+      .addSelect('certificate.mimeType', 'certificate_mimeType')
+      .addSelect('certificate.documentType', 'certificate_documentType')
+      .addSelect('certificate.createdAt', 'certificate_createdAt')
+      .addSelect("'operator'", 'type')
+      .getRawMany();
 
-      const locationCertificate = await this.warehouseLocationRepository
+    const locationCertificates = await this.warehouseLocationRepository
       .createQueryBuilder('location')
-      .leftJoinAndMapOne(
-        'location.certificate',
+      .leftJoin(
         WarehouseDocument,
         'certificate',
         'certificate.documentableType = :docType AND certificate.documentableId = location.id AND certificate.documentType = :certType',
@@ -156,20 +158,24 @@ export class ApplicantService {
           certType: CertificateDocumentType.LOCATION_CERTIFICATE,
         },
       )
-      .leftJoinAndSelect('location.facility', 'facility')
+      .leftJoin('location.facility', 'facility')
       .where('location.userId = :userId', { userId })
       .orderBy('location.createdAt', 'DESC')
-      .select([
-        'location.id',
-        'location.applicationId',
-        'location.status',
-        'facility.id',
-        'facility.facilityName',
-        'certificate',
-      ])
-      .getMany();
-      
-      return  [...operatorCertificate, ...locationCertificate]
+      .select('location.id', 'id')
+      .addSelect('location.applicationId', 'applicationId')
+      .addSelect('location.status', 'status')
+      .addSelect('facility.id', 'facility_id')
+      .addSelect('facility.facilityName', 'facility_facilityName')
+      .addSelect('certificate.id', 'certificate_id')
+      .addSelect('certificate.originalFileName', 'certificate_originalFileName')
+      .addSelect('certificate.filePath', 'certificate_filePath')
+      .addSelect('certificate.mimeType', 'certificate_mimeType')
+      .addSelect('certificate.documentType', 'certificate_documentType')
+      .addSelect('certificate.createdAt', 'certificate_createdAt')
+      .addSelect("'location'", 'type')
+      .getRawMany();
+
+    return [...operatorCertificates, ...locationCertificates];
   }
 
   async getLocationCertificate(userId: string) {
