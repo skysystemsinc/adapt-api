@@ -18,6 +18,7 @@ import {
   CertificateDocumentType,
 } from '../warehouse/entities/warehouse-document.entity';
 import { Assignment } from '../warehouse/operator/assignment/entities/assignment.entity';
+import { WarehouseOperatorLocation } from '../warehouse-operator-location/entities/warehouse-operator-location.entity';
 
 @Injectable()
 export class ApplicantService {
@@ -36,6 +37,8 @@ export class ApplicantService {
     private readonly warehouseDocumentRepository: Repository<WarehouseDocument>,
     @InjectRepository(Assignment)
     private readonly assignmentRepository: Repository<Assignment>,
+    @InjectRepository(WarehouseOperatorLocation)
+    private readonly warehouseOperatorLocationRepository: Repository<WarehouseOperatorLocation>,
   ) {}
 
   async getStats(userId: string) {
@@ -147,25 +150,24 @@ export class ApplicantService {
       .addSelect("'operator'", 'type')
       .getRawMany();
 
-    const locationCertificates = await this.warehouseLocationRepository
+    const locationCertificates = await this.warehouseOperatorLocationRepository
       .createQueryBuilder('location')
       .leftJoin(
         WarehouseDocument,
         'certificate',
         'certificate.documentableType = :docType AND certificate.documentableId = location.id AND certificate.documentType = :certType',
+
         {
-          docType: DocumentableType.WAREHOUSE_LOCATION,
-          certType: CertificateDocumentType.LOCATION_CERTIFICATE,
+          docType: DocumentableType.WAREHOUSE_OPERATOR_LOCATION,
+          certType: CertificateDocumentType.OPERATOR_LOCATION_CERTIFICATE,
         },
       )
-      .leftJoin('location.facility', 'facility')
       .where('location.userId = :userId', { userId })
       .orderBy('location.createdAt', 'DESC')
       .select('location.id', 'id')
-      .addSelect('location.applicationId', 'applicationId')
+      .select('location.warehouseLocationId', 'warehouseLocationId')
+      .addSelect('location.locationCode', 'applicationId')
       .addSelect('location.status', 'status')
-      .addSelect('facility.id', 'facility_id')
-      .addSelect('facility.facilityName', 'facility_facilityName')
       .addSelect('certificate.id', 'certificate_id')
       .addSelect('certificate.originalFileName', 'certificate_originalFileName')
       .addSelect('certificate.filePath', 'certificate_filePath')
@@ -178,33 +180,6 @@ export class ApplicantService {
     return [...operatorCertificates, ...locationCertificates];
   }
 
-  async getLocationCertificate(userId: string) {
-    return this.warehouseLocationRepository
-      .createQueryBuilder('location')
-      .leftJoinAndMapOne(
-        'location.certificate',
-        WarehouseDocument,
-        'certificate',
-        'certificate.documentableType = :docType AND certificate.documentableId = location.id AND certificate.documentType = :certType',
-        {
-          docType: DocumentableType.WAREHOUSE_LOCATION,
-          certType: CertificateDocumentType.LOCATION_CERTIFICATE,
-        },
-      )
-      .leftJoinAndSelect('location.facility', 'facility')
-      .where('location.userId = :userId', { userId })
-      .orderBy('location.createdAt', 'DESC')
-      .select([
-        'location.id',
-        'location.applicationId',
-        'location.status',
-        'facility.id',
-        'facility.facilityName',
-        'certificate',
-      ])
-      .getMany();
-  }
- 
 
   async getApplications(
     userId: string,

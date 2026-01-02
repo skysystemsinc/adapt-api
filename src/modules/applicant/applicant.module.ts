@@ -12,6 +12,7 @@ import { WarehouseOperator } from '../warehouse/entities/warehouse-operator.enti
 import { WarehouseDocument } from '../warehouse/entities/warehouse-document.entity';
 import { Assignment } from '../warehouse/operator/assignment/entities/assignment.entity';
 import { AuthModule } from '../auth/auth.module';
+import { WarehouseOperatorLocation } from '../warehouse-operator-location/entities/warehouse-operator-location.entity';
 
 @Module({
   controllers: [ApplicantController],
@@ -25,6 +26,7 @@ import { AuthModule } from '../auth/auth.module';
       Facility,
       CompanyInformation,
       Assignment,
+      WarehouseOperatorLocation,
     ]),
     forwardRef(() => AuthModule),
     JwtModule.registerAsync({
