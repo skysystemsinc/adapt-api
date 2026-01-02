@@ -12,8 +12,6 @@ import {
   ParseUUIDPipe,
   Request,
   UseGuards,
-  UseInterceptors,
-  UploadedFile,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -21,9 +19,7 @@ import {
   ApiResponse,
   ApiParam,
   ApiBody,
-  ApiConsumes,
 } from '@nestjs/swagger';
-import { FileInterceptor } from '@nestjs/platform-express';
 import { SettingRequestsService } from '../services/setting-requests.service';
 import { CreateSettingRequestDto } from '../dto/create-setting-request.dto';
 import { ReviewSettingRequestDto } from '../dto/review-setting-request.dto';
@@ -60,38 +56,8 @@ export class SettingRequestsController {
   }
 
   @Post('with-file')
-  @UseInterceptors(
-    FileInterceptor('file', {
-      limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB max
-      },
-    }),
-  )
-  @ApiConsumes('multipart/form-data')
-  @ApiOperation({ summary: 'Create a setting request with file upload' })
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        file: {
-          type: 'string',
-          format: 'binary',
-        },
-        settingId: {
-          type: 'string',
-          format: 'uuid',
-        },
-        key: {
-          type: 'string',
-        },
-        action: {
-          type: 'string',
-          enum: ['create', 'update', 'delete'],
-        },
-      },
-      required: ['file'],
-    },
-  })
+  @ApiOperation({ summary: 'Create a setting request with file upload (base64 encoded)' })
+  @ApiBody({ type: CreateSettingRequestDto })
   @ApiResponse({
     status: 201,
     description: 'Setting request with file created successfully',
@@ -100,19 +66,11 @@ export class SettingRequestsController {
   @ApiResponse({ status: 404, description: 'Setting not found' })
   @ApiResponse({ status: 400, description: 'Bad request' })
   async createWithFile(
-    @UploadedFile() file: any,
-    @Body() body: any,
+    @Body() createDto: CreateSettingRequestDto,
     @Request() req: any,
   ): Promise<SettingRequestResponseDto> {
     const requestedBy = req.user?.id;
-    const createDto: CreateSettingRequestDto = {
-      settingId: body.settingId,
-      key: body.key,
-      action: body.action as any,
-      mimeType: file?.mimetype,
-      originalName: file?.originalname,
-    };
-    return this.settingRequestsService.createWithFile(createDto, file, requestedBy);
+    return this.settingRequestsService.createWithFile(createDto, requestedBy);
   }
 
   @Get()

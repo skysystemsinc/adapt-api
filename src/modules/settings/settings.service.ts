@@ -331,14 +331,17 @@ export class SettingsService {
       throw new BadRequestException(`Setting '${key}' is not a file setting`);
     }
 
-    // Normalize path for file system access
-    const filePath = path.normalize(setting.value);
+    // Resolve path relative to project root (process.cwd())
+    // setting.value is stored as relative path like "uploads/settings/request-xxx.pdf"
+    const filePath = path.isAbsolute(setting.value) 
+      ? path.normalize(setting.value)
+      : path.join(process.cwd(), setting.value);
 
     // Verify file exists
     try {
       await fs.access(filePath);
     } catch {
-      throw new NotFoundException(`File for setting '${key}' not found on server`);
+      throw new NotFoundException(`File for setting '${key}' not found on server at path: ${filePath}`);
     }
 
     // Read encrypted file from disk
