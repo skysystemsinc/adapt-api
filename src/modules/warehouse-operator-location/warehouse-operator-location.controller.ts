@@ -1,10 +1,9 @@
-import { Controller, Get, Post, Param, Delete, Query, UseGuards, Req, UploadedFile, UseInterceptors, BadRequestException, Res } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Query, UseGuards, Req } from '@nestjs/common';
 import { WarehouseOperatorLocationService } from './warehouse-operator-location.service';
 import { QueryOperatorLocationDto } from './dto/query-operator-location.dto';
+import { UploadOperatorLocationCertificateDto } from './dto/upload-operator-location-certificate.dto';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
-import { ApiBearerAuth, ApiOperation, ApiConsumes, ApiTags } from '@nestjs/swagger';
-import { FileInterceptor } from '@nestjs/platform-express';
-import type { Response as ExpressResponse } from 'express';
+import { ApiBearerAuth, ApiOperation, ApiBody, ApiTags } from '@nestjs/swagger';
 
 @ApiTags('Warehouse Operator Location')
 @Controller('warehouse-operator-location')
@@ -33,42 +32,23 @@ export class WarehouseOperatorLocationController {
   }
 
   @Post('/locations/:id/certificate')
-  @ApiOperation({ summary: 'Upload operator location certificate' })
-  @ApiConsumes('multipart/form-data')
-  @UseInterceptors(
-    FileInterceptor('file', {
-      limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB max
-      },
-    }),
-  )
+  @ApiOperation({ summary: 'Upload operator location certificate (base64)' })
+  @ApiBody({ type: UploadOperatorLocationCertificateDto })
   async uploadOperatorLocationCertificate(
     @Param('id') id: string,
-    @UploadedFile() file: any,
+    @Body() dto: UploadOperatorLocationCertificateDto,
     @Req() req: any,
   ) {
-    if (!file) {
-      throw new BadRequestException('No file provided');
-    }
     const userId = req.user.id;
-    return this.warehouseOperatorLocationService.uploadOperatorLocationCertificate(id, userId, file);
+    return this.warehouseOperatorLocationService.uploadOperatorLocationCertificate(id, userId, dto);
   }
 
   @Get('/locations/:id/certificate/download')
-  @ApiOperation({ summary: 'Download operator location certificate' })
+  @ApiOperation({ summary: 'Download operator location certificate (base64)' })
   async downloadOperatorLocationCertificate(
     @Param('id') id: string,
-    @Res() res: ExpressResponse,
   ) {
-    const { buffer, mimeType, filename } = await this.warehouseOperatorLocationService.downloadOperatorLocationCertificate(id);
-
-    res.setHeader('Content-Type', mimeType);
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('Content-Security-Policy', "default-src 'none'");
-    res.setHeader('X-Frame-Options', 'DENY');
-
-    res.send(buffer);
+    return this.warehouseOperatorLocationService.downloadOperatorLocationCertificate(id);
   }
 
   @Delete('/locations/:id/certificate')
