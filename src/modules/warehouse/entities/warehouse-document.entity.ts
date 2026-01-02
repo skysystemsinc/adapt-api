@@ -17,11 +17,13 @@ export enum DocumentableType {
   BANK_DETAILS = 'BankDetails',
   FINANCIAL_INFORMATION = 'FinancialInformation',
   HR_INFORMATION = 'HRInformation',
+  WAREHOUSE_OPERATOR_LOCATION = 'WarehouseOperatorLocation',
 }
 
 export enum CertificateDocumentType {
   OPERATOR_CERTIFICATE = 'operator-certificate',
   LOCATION_CERTIFICATE = 'location-certificate',
+  OPERATOR_LOCATION_CERTIFICATE = 'operator-location-certificate',
 }
 
 /**

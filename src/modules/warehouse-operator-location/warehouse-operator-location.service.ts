@@ -2,7 +2,7 @@ import { Injectable, Logger, NotFoundException, BadRequestException } from '@nes
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, ILike } from 'typeorm';
 import { WarehouseOperatorLocation } from './entities/warehouse-operator-location.entity';
-import { WarehouseDocument } from '../warehouse/entities/warehouse-document.entity';
+import { CertificateDocumentType, DocumentableType, WarehouseDocument } from '../warehouse/entities/warehouse-document.entity';
 import { QueryOperatorLocationDto } from './dto/query-operator-location.dto';
 import { UploadOperatorLocationCertificateDto } from './dto/upload-operator-location-certificate.dto';
 import { ClamAVService } from '../clamav/clamav.service';
@@ -138,9 +138,9 @@ export class WarehouseOperatorLocationService {
 
     const existingCertificate = await this.warehouseDocumentRepository.findOne({
       where: {
-        documentableType: 'WarehouseOperatorLocation',
+        documentableType: DocumentableType.WAREHOUSE_OPERATOR_LOCATION,
         documentableId: locationId,
-        documentType: 'operator-location-certificate',
+        documentType: CertificateDocumentType.OPERATOR_LOCATION_CERTIFICATE,
       },
     });
 
@@ -222,9 +222,9 @@ export class WarehouseOperatorLocationService {
 
     const document = this.warehouseDocumentRepository.create({
       userId,
-      documentableType: 'WarehouseOperatorLocation',
+      documentableType:  DocumentableType.WAREHOUSE_OPERATOR_LOCATION ,
       documentableId: locationId,
-      documentType: 'operator-location-certificate',
+      documentType: CertificateDocumentType.OPERATOR_LOCATION_CERTIFICATE,
       originalFileName: file.originalname,
       filePath: documentPath,
       mimeType,

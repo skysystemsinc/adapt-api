@@ -18,6 +18,7 @@ import {
   CertificateDocumentType,
 } from '../warehouse/entities/warehouse-document.entity';
 import { Assignment } from '../warehouse/operator/assignment/entities/assignment.entity';
+import { WarehouseOperatorLocation } from '../warehouse-operator-location/entities/warehouse-operator-location.entity';
 
 @Injectable()
 export class AdminDashboardService {
@@ -36,6 +37,8 @@ export class AdminDashboardService {
     private readonly warehouseDocumentRepository: Repository<WarehouseDocument>,
     @InjectRepository(Assignment)
     private readonly assignmentRepository: Repository<Assignment>,
+    @InjectRepository(WarehouseOperatorLocation)
+    private readonly warehouseOperatorLocationRepository: Repository<WarehouseOperatorLocation>,
   ) {}
 
   async findAll() {
@@ -130,24 +133,22 @@ export class AdminDashboardService {
       .addSelect("'operator'", 'type')
       .getRawMany();
 
-    const locationCertificates = await this.warehouseLocationRepository
+    const locationCertificates = await this.warehouseOperatorLocationRepository
       .createQueryBuilder('location')
       .leftJoin(
         WarehouseDocument,
         'certificate',
         'certificate.documentableType = :docType AND certificate.documentableId = location.id AND certificate.documentType = :certType',
         {
-          docType: DocumentableType.WAREHOUSE_LOCATION,
-          certType: CertificateDocumentType.LOCATION_CERTIFICATE,
+          docType: DocumentableType.WAREHOUSE_OPERATOR_LOCATION,
+          certType: CertificateDocumentType.OPERATOR_LOCATION_CERTIFICATE,
         },
       )
-      .leftJoin('location.facility', 'facility')
       .orderBy('location.createdAt', 'DESC')
       .select('location.id', 'id')
-      .addSelect('location.applicationId', 'applicationId')
+      
+      .addSelect('location.locationCode', 'applicationId')
       .addSelect('location.status', 'status')
-      .addSelect('facility.id', 'facility_id')
-      .addSelect('facility.facilityName', 'facility_facilityName')
       .addSelect('certificate.id', 'certificate_id')
       .addSelect('certificate.originalFileName', 'certificate_originalFileName')
       .addSelect('certificate.filePath', 'certificate_filePath')
