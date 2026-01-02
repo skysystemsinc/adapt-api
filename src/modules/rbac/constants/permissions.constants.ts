@@ -112,5 +112,7 @@ export enum Permissions {
 
   // Warehouse Admin permissions
   IS_OFFICER = 'is_officer',
+
+  IS_ADMIN = 'is_admin',
 }
 
