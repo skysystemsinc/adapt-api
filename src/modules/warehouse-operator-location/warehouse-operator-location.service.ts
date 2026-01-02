@@ -2,8 +2,9 @@ import { Injectable, Logger, NotFoundException, BadRequestException } from '@nes
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, ILike } from 'typeorm';
 import { WarehouseOperatorLocation } from './entities/warehouse-operator-location.entity';
-import { WarehouseDocument } from '../warehouse/entities/warehouse-document.entity';
+import { CertificateDocumentType, DocumentableType, WarehouseDocument } from '../warehouse/entities/warehouse-document.entity';
 import { QueryOperatorLocationDto } from './dto/query-operator-location.dto';
+import { UploadOperatorLocationCertificateDto } from './dto/upload-operator-location-certificate.dto';
 import { ClamAVService } from '../clamav/clamav.service';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -90,8 +91,41 @@ export class WarehouseOperatorLocationService {
     };
   }
 
-  async uploadOperatorLocationCertificate(locationId: string, userId: string, file: any) {
-    // Check if location exists
+  private convertBase64ToFile(
+    base64String: string,
+    fileName: string,
+    mimeType?: string
+  ): any {
+    let base64Data = base64String;
+    if (base64String.includes(',')) {
+      base64Data = base64String.split(',')[1];
+    }
+
+    let buffer: Buffer;
+    try {
+      buffer = Buffer.from(base64Data, 'base64');
+    } catch (error) {
+      throw new BadRequestException('Invalid base64 file data');
+    }
+
+    const maxSizeBytes = 10 * 1024 * 1024;
+    if (buffer.length > maxSizeBytes) {
+      throw new BadRequestException(
+        `File size ${(buffer.length / 1024 / 1024).toFixed(2)}MB exceeds maximum allowed size of 10MB`
+      );
+    }
+
+    return {
+      buffer,
+      originalname: fileName,
+      size: buffer.length,
+      mimetype: mimeType || 'application/octet-stream',
+    };
+  }
+
+  async uploadOperatorLocationCertificate(locationId: string, userId: string, dto: UploadOperatorLocationCertificateDto) {
+    const { certificate, certificateFileName, certificateMimeType } = dto;
+
     const location = await this.warehouseOperatorLocationRepository.findOne({
       where: { id: locationId },
     });
@@ -100,16 +134,16 @@ export class WarehouseOperatorLocationService {
       throw new NotFoundException('Operator location not found');
     }
 
-    // Check if certificate already exists
+    const file = this.convertBase64ToFile(certificate, certificateFileName, certificateMimeType);
+
     const existingCertificate = await this.warehouseDocumentRepository.findOne({
       where: {
-        documentableType: 'WarehouseOperatorLocation',
+        documentableType: DocumentableType.WAREHOUSE_OPERATOR_LOCATION,
         documentableId: locationId,
-        documentType: 'operator-location-certificate',
+        documentType: CertificateDocumentType.OPERATOR_LOCATION_CERTIFICATE,
       },
     });
 
-    // Delete old certificate file if exists
     if (existingCertificate) {
       try {
         const fullPath = path.join(process.cwd(), 'uploads', path.basename(existingCertificate.filePath));
@@ -122,13 +156,11 @@ export class WarehouseOperatorLocationService {
       await this.warehouseDocumentRepository.remove(existingCertificate);
     }
 
-    // Upload directory
     const uploadDir = 'uploads';
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
     }
 
-    // Validate file type
     const allowedExtensions = ['.pdf', '.png', '.jpg', '.jpeg', '.doc', '.docx'];
     const fileExtension = path.extname(file.originalname).toLowerCase();
     if (!allowedExtensions.includes(fileExtension)) {
@@ -137,17 +169,8 @@ export class WarehouseOperatorLocationService {
       );
     }
 
-    // Validate file size (max 10MB)
-    const maxSizeBytes = 10 * 1024 * 1024;
-    if (file.size > maxSizeBytes) {
-      throw new BadRequestException(
-        `File size ${(file.size / 1024 / 1024).toFixed(2)}MB exceeds maximum allowed size of 10MB`,
-      );
-    }
-
     const isMandatory = this.clamAVService.getScanMandatory();
     if(isMandatory) {
-      // Scan file with ClamAV before processing
       try {
         this.logger.log(`🔍 Scanning file with ClamAV: ${file.originalname}`);
         const scanResult = await this.clamAVService.scanBuffer(
@@ -167,14 +190,10 @@ export class WarehouseOperatorLocationService {
         this.logger.log(`✅ File passed ClamAV scan: ${file.originalname}`);
       } catch (error) {
         if (error instanceof BadRequestException) {
-          // Always reject infected files, regardless of CLAMAV_SCAN setting
           throw error;
         }
         
-        // Handle ClamAV service failures (unavailable, timeout, etc.)
-        
         if (isMandatory) {
-          // CLAMAV_SCAN=true: Block upload if scan fails
           this.logger.error(
             `ClamAV scan failed for ${file.originalname}: ${error.message}`,
             error.stack,
@@ -183,7 +202,6 @@ export class WarehouseOperatorLocationService {
             `Virus scanning unavailable: ${error.message}. Upload blocked due to mandatory scanning.`,
           );
         } else {
-          // CLAMAV_SCAN=false: Log warning but allow upload (bypass on failure)
           this.logger.warn(
             `ClamAV scan failed for ${file.originalname}: ${error.message}. Bypassing scan and allowing upload.`,
             error.stack,
@@ -192,26 +210,21 @@ export class WarehouseOperatorLocationService {
       }
     }
 
-    // Generate unique filename
     const sanitizedFilename = `${uuidv4()}${fileExtension}`;
     const filePath = path.join(uploadDir, sanitizedFilename);
     const documentPath = `/uploads/${sanitizedFilename}`;
 
-    // Encrypt file before saving
     const { encrypted, iv, authTag } = encryptBuffer(file.buffer);
 
-    // Save encrypted file to disk
     await fs.promises.writeFile(filePath, encrypted);
 
-    // Detect MIME type
     const mimeType = file.mimetype || 'application/octet-stream';
 
-    // Create document record
     const document = this.warehouseDocumentRepository.create({
       userId,
-      documentableType: 'WarehouseOperatorLocation',
+      documentableType:  DocumentableType.WAREHOUSE_OPERATOR_LOCATION ,
       documentableId: locationId,
-      documentType: 'operator-location-certificate',
+      documentType: CertificateDocumentType.OPERATOR_LOCATION_CERTIFICATE,
       originalFileName: file.originalname,
       filePath: documentPath,
       mimeType,
@@ -252,7 +265,6 @@ export class WarehouseOperatorLocationService {
       throw new NotFoundException('Certificate not found');
     }
 
-    // Read encrypted file
     const fullPath = path.join(process.cwd(), 'uploads', path.basename(certificate.filePath));
     if (!fs.existsSync(fullPath)) {
       throw new NotFoundException('Certificate file not found on disk');
@@ -260,7 +272,6 @@ export class WarehouseOperatorLocationService {
 
     const encrypted = fs.readFileSync(fullPath);
 
-    // Decrypt file - decryptBuffer expects iv and authTag as strings (hex) or Buffers
     let decryptedBuffer: Buffer;
     if (certificate.iv && certificate.authTag) {
       try {
@@ -269,13 +280,16 @@ export class WarehouseOperatorLocationService {
         throw new BadRequestException(`Failed to decrypt certificate: ${error.message}`);
       }
     } else {
-      // If no encryption metadata, assume file is not encrypted (backward compatibility)
       decryptedBuffer = encrypted;
     }
 
+    const mimeType = certificate.mimeType || 'application/octet-stream';
+    const base64Data = decryptedBuffer.toString('base64');
+    const base64WithPrefix = `data:${mimeType};base64,${base64Data}`;
+
     return {
-      buffer: decryptedBuffer,
-      mimeType: certificate.mimeType || 'application/octet-stream',
+      certificate: base64WithPrefix,
+      mimeType,
       filename: certificate.originalFileName,
     };
   }

@@ -1019,7 +1019,10 @@ export class AssignmentService {
     const assignmentRepository = this.dataSource.getRepository(Assignment);
     let queryBuilder = assignmentRepository
       .createQueryBuilder('assignment')
-      .where('assignment.applicationId = :applicationId', { applicationId })
+      .where(
+        '(assignment.applicationId = :applicationId OR assignment.applicationLocationId = :applicationId)',
+        { applicationId }
+      )
       .leftJoinAndSelect('assignment.assignedToUser', 'assignedToUser')
       .leftJoinAndSelect('assignment.assignedByUser', 'assignedByUser');
   

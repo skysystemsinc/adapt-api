@@ -9,6 +9,7 @@ import { WarehouseOperatorApplicationRequest } from '../warehouse/entities/wareh
 import { WarehouseOperator } from '../warehouse/entities/warehouse-operator.entity';
 import { WarehouseDocument } from '../warehouse/entities/warehouse-document.entity';
 import { Assignment } from '../warehouse/operator/assignment/entities/assignment.entity';
+import { WarehouseOperatorLocation } from '../warehouse-operator-location/entities/warehouse-operator-location.entity';
 
 @Module({
   controllers: [AdminDashboardController],
@@ -23,6 +24,7 @@ import { Assignment } from '../warehouse/operator/assignment/entities/assignment
       WarehouseOperator,
       WarehouseDocument,
       Assignment,
+      WarehouseOperatorLocation,
     ]),
   ],
 })

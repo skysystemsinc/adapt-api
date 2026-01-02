@@ -16,6 +16,7 @@ import { WarehouseOperator } from '../warehouse/entities/warehouse-operator.enti
 import { UnlockRequest, UnlockRequestStatus } from '../warehouse/entities/unlock-request.entity';
 import { fileTypeFromBuffer } from 'file-type';
 import { UnlockRequestApprovalDto } from './dto/unlock-request-approval.dto';
+import { UploadOperatorCertificateDto } from './dto/upload-operator-certificate.dto';
 
 @Injectable()
 export class WarehouseAdminService {
@@ -991,8 +992,41 @@ export class WarehouseAdminService {
     };
   }
 
-  async uploadOperatorCertificate(operatorId: string, userId: string, file: any) {
-    // Check if operator exists
+  private convertBase64ToFile(
+    base64String: string,
+    fileName: string,
+    mimeType?: string
+  ): any {
+    let base64Data = base64String;
+    if (base64String.includes(',')) {
+      base64Data = base64String.split(',')[1];
+    }
+
+    let buffer: Buffer;
+    try {
+      buffer = Buffer.from(base64Data, 'base64');
+    } catch (error) {
+      throw new BadRequestException('Invalid base64 file data');
+    }
+
+    const maxSizeBytes = 10 * 1024 * 1024;
+    if (buffer.length > maxSizeBytes) {
+      throw new BadRequestException(
+        `File size ${(buffer.length / 1024 / 1024).toFixed(2)}MB exceeds maximum allowed size of 10MB`
+      );
+    }
+
+    return {
+      buffer,
+      originalname: fileName,
+      size: buffer.length,
+      mimetype: mimeType || 'application/octet-stream',
+    };
+  }
+
+  async uploadOperatorCertificate(operatorId: string, userId: string, dto: UploadOperatorCertificateDto) {
+    const { certificate, certificateFileName, certificateMimeType } = dto;
+
     const operator = await this.warehouseOperatorRepository.findOne({
       where: { id: operatorId },
     });
@@ -1001,7 +1035,8 @@ export class WarehouseAdminService {
       throw new NotFoundException('Operator not found');
     }
 
-    // Check if certificate already exists
+    const file = this.convertBase64ToFile(certificate, certificateFileName, certificateMimeType);
+
     const existingCertificate = await this.warehouseDocumentRepository.findOne({
       where: {
         documentableType: 'WarehouseOperator',
@@ -1010,7 +1045,6 @@ export class WarehouseAdminService {
       },
     });
 
-    // Delete old certificate file if exists
     if (existingCertificate) {
       const fs = require('fs');
       const path = require('path');
@@ -1025,7 +1059,6 @@ export class WarehouseAdminService {
       await this.warehouseDocumentRepository.remove(existingCertificate);
     }
 
-    // Use the same upload logic as warehouse service
     const uploadDir = 'uploads';
     const fs = require('fs');
     const path = require('path');
@@ -1035,7 +1068,6 @@ export class WarehouseAdminService {
       fs.mkdirSync(uploadDir, { recursive: true });
     }
 
-    // Validate file type
     const allowedExtensions = ['.pdf', '.png', '.jpg', '.jpeg', '.doc', '.docx'];
     const fileExtension = path.extname(file.originalname).toLowerCase();
 
@@ -1045,29 +1077,16 @@ export class WarehouseAdminService {
       );
     }
 
-    // Validate file size (max 10MB)
-    const maxSizeBytes = 10 * 1024 * 1024;
-    if (file.size > maxSizeBytes) {
-      throw new BadRequestException(
-        `File size ${(file.size / 1024 / 1024).toFixed(2)}MB exceeds maximum allowed size of 10MB`,
-      );
-    }
-
-    // Generate unique filename
     const sanitizedFilename = `${uuidv4()}${fileExtension}`;
     const filePath = path.join(uploadDir, sanitizedFilename);
     const documentPath = `/uploads/${sanitizedFilename}`;
 
-    // Encrypt file before saving
     const { encrypted, iv, authTag } = encryptBuffer(file.buffer);
 
-    // Save encrypted file to disk
     await fs.promises.writeFile(filePath, encrypted);
 
-    // Detect MIME type
     const mimeType = file.mimetype || 'application/octet-stream';
 
-    // Create document record
     const document = this.warehouseDocumentRepository.create({
       userId,
       documentableType: 'WarehouseOperator',
@@ -1092,7 +1111,6 @@ export class WarehouseAdminService {
   }
 
   async downloadOperatorCertificate(operatorId: string) {
-    // Find the operator certificate
     const certificate = await this.warehouseDocumentRepository.findOne({
       where: {
         documentableType: 'WarehouseOperator',
@@ -1105,21 +1123,17 @@ export class WarehouseAdminService {
       throw new NotFoundException('Certificate not found');
     }
 
-    // Get file path
     const fs = require('fs');
     const path = require('path');
     const filename = path.basename(certificate.filePath);
     const filePath = path.join(process.cwd(), 'uploads', filename);
 
-    // Check if file exists
     if (!fs.existsSync(filePath)) {
       throw new NotFoundException('Certificate file not found on disk');
     }
 
-    // Read encrypted file
     const encryptedBuffer = await fs.promises.readFile(filePath);
 
-    // Decrypt if iv and authTag are present
     let decryptedBuffer: Buffer;
     if (certificate.iv && certificate.authTag) {
       try {
@@ -1128,16 +1142,16 @@ export class WarehouseAdminService {
         throw new BadRequestException(`Failed to decrypt certificate: ${error.message}`);
       }
     } else {
-      // If no encryption metadata, assume file is not encrypted (backward compatibility)
       decryptedBuffer = encryptedBuffer;
     }
 
-    // Determine MIME type and filename
     const mimeType = certificate.mimeType || 'application/octet-stream';
     const displayFilename = certificate.originalFileName || filename;
+    const base64Data = decryptedBuffer.toString('base64');
+    const base64WithPrefix = `data:${mimeType};base64,${base64Data}`;
 
     return {
-      buffer: decryptedBuffer,
+      certificate: base64WithPrefix,
       mimeType,
       filename: displayFilename,
     };
