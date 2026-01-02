@@ -177,22 +177,25 @@ export class ReviewService {
       await reviewRepository.save(review);
 
       // Prepare email data for response (CEO and finalHod info)
-      let ceoEmail: string | null = null;
-      let ceoName: string | null = null;
+      let ceoUsers: Array<{ email: string; name: string | null }> = [];
       let finalHodEmail: string | null = null;
       let finalHodName: string | null = null;
 
       // If LogedIn User is not CEO
       if (!hasPermission(user, Permissions.REVIEW_FINAL_APPLICATION)) {
         // user with permission "REVIEW_FINAL_APPLICATION"
-        const ceoUser = await this.usersService.findByPermission(Permissions.REVIEW_FINAL_APPLICATION);
+        const ceoUserList = await this.usersService.findByPermission(Permissions.REVIEW_FINAL_APPLICATION);
 
-        // Get CEO email and name for response
-        if (ceoUser && ceoUser.length > 0 && ceoUser[0]?.email) {
-          ceoEmail = ceoUser[0].email;
-          ceoName = ceoUser[0].firstName && ceoUser[0].lastName
-            ? `${ceoUser[0].firstName} ${ceoUser[0].lastName}`
-            : null;
+        // Get all CEO emails and names for response
+        if (ceoUserList && ceoUserList.length > 0) {
+          ceoUsers = ceoUserList
+            .filter(ceo => ceo.email)
+            .map(ceo => ({
+              email: ceo.email,
+              name: ceo.firstName && ceo.lastName
+                ? `${ceo.firstName} ${ceo.lastName}`
+                : null
+            }));
         }
 
         // Get finalHod email and name for response
@@ -209,18 +212,22 @@ export class ReviewService {
           finalHodName = user.email || null;
         }
 
-        // Only create CEO review if a CEO user exists
-        if (ceoUser && ceoUser.length > 0 && ceoUser[0]?.id) {
-          const ceoReview = reviewRepository.create({
-            applicationId: review.applicationId,
-            applicationLocationId: review.applicationLocationId,
-            type: 'CEO',
-            isSubmitted: true,
-            userId: ceoUser[0].id,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          });
-          await reviewRepository.save(ceoReview);
+        // Create CEO review for all CEO users
+        if (ceoUserList && ceoUserList.length > 0) {
+          for (const ceoUser of ceoUserList) {
+            if (ceoUser?.id) {
+              const ceoReview = reviewRepository.create({
+                applicationId: review.applicationId,
+                applicationLocationId: review.applicationLocationId,
+                type: 'CEO',
+                isSubmitted: true,
+                userId: ceoUser.id,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              });
+              await reviewRepository.save(ceoReview);
+            }
+          }
         }
       }
 
@@ -301,8 +308,7 @@ export class ReviewService {
       return {
         ...review,
         emailData: {
-          ceoEmail,
-          ceoName,
+          ceoUsers,
           finalHodEmail,
           finalHodName,
         },
