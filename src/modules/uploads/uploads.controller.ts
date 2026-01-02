@@ -125,17 +125,19 @@ export class UploadsController {
     @Response() res: ExpressResponse,
   ): Promise<void> {
     // Extract the path from the request URL
-    // The URL will be like /uploads/assessment-documents/filename.jpeg
+    // The URL will be like /api/uploads/filename.jpeg or /gateway/uploads/filename.jpeg
     // We need to extract everything after /uploads/
     const fullUrl = req.url;
-    const uploadsPrefix = '/uploads/';
     
-    if (!fullUrl.startsWith(uploadsPrefix)) {
+    // Find /uploads/ in the URL (handles both /api/uploads/ and /gateway/uploads/)
+    const uploadsIndex = fullUrl.indexOf('/uploads/');
+    
+    if (uploadsIndex === -1) {
       throw new BadRequestException('Invalid file path');
     }
 
     // Get the path after /uploads/
-    const filePath = fullUrl.slice(uploadsPrefix.length);
+    const filePath = fullUrl.slice(uploadsIndex + '/uploads/'.length);
 
     // Validate filePath (prevent directory traversal)
     if (!filePath || filePath.includes('..') || filePath.includes('\\')) {
