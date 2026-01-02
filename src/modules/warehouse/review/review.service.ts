@@ -176,10 +176,38 @@ export class ReviewService {
 
       await reviewRepository.save(review);
 
+      // Prepare email data for response (CEO and finalHod info)
+      let ceoEmail: string | null = null;
+      let ceoName: string | null = null;
+      let finalHodEmail: string | null = null;
+      let finalHodName: string | null = null;
+
       // If LogedIn User is not CEO
       if (!hasPermission(user, Permissions.REVIEW_FINAL_APPLICATION)) {
         // user with permission "REVIEW_FINAL_APPLICATION"
         const ceoUser = await this.usersService.findByPermission(Permissions.REVIEW_FINAL_APPLICATION);
+
+        // Get CEO email and name for response
+        if (ceoUser && ceoUser.length > 0 && ceoUser[0]?.email) {
+          ceoEmail = ceoUser[0].email;
+          ceoName = ceoUser[0].firstName && ceoUser[0].lastName
+            ? `${ceoUser[0].firstName} ${ceoUser[0].lastName}`
+            : null;
+        }
+
+        // Get finalHod email and name for response
+        finalHodEmail = user.email || null;
+        // Construct HOD name: priority: review.fullName > user.firstName + user.lastName > user.email
+        if (review.fullName) {
+          finalHodName = review.fullName;
+          if (review.designation) {
+            finalHodName += ` (${review.designation})`;
+          }
+        } else if (user.firstName && user.lastName) {
+          finalHodName = `${user.firstName} ${user.lastName}`;
+        } else {
+          finalHodName = user.email || null;
+        }
 
         // Only create CEO review if a CEO user exists
         if (ceoUser && ceoUser.length > 0 && ceoUser[0]?.id) {
@@ -268,7 +296,17 @@ export class ReviewService {
         }
 
       }
-      return review;
+      
+      // Return review with email information for frontend
+      return {
+        ...review,
+        emailData: {
+          ceoEmail,
+          ceoName,
+          finalHodEmail,
+          finalHodName,
+        },
+      };
     });
   }
 
