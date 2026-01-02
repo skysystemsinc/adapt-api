@@ -53,6 +53,42 @@ export class AcademicQualificationService {
     }
   }
 
+  private convertBase64ToFile(
+    base64String: string,
+    fileName: string,
+    mimeType?: string
+  ): any {
+    // Remove data URL prefix if present (e.g., "data:application/pdf;base64,")
+    let base64Data = base64String;
+    if (base64String.includes(',')) {
+      base64Data = base64String.split(',')[1];
+    }
+
+    // Decode base64 to buffer
+    let buffer: Buffer;
+    try {
+      buffer = Buffer.from(base64Data, 'base64');
+    } catch (error) {
+      throw new BadRequestException('Invalid base64 file data');
+    }
+
+    // Validate file size (10MB max)
+    const maxSizeBytes = 10 * 1024 * 1024;
+    if (buffer.length > maxSizeBytes) {
+      throw new BadRequestException(
+        `File size ${(buffer.length / 1024 / 1024).toFixed(2)}MB exceeds maximum allowed size of ${(maxSizeBytes / 1024 / 1024).toFixed(0)}MB`
+      );
+    }
+
+    // Create file-like object that matches Multer file structure
+    return {
+      buffer,
+      originalname: fileName,
+      size: buffer.length,
+      mimetype: mimeType || 'application/octet-stream',
+    };
+  }
+
   private async uploadWarehouseDocument(
     file: any,
     userId: string,
@@ -178,8 +214,7 @@ export class AcademicQualificationService {
   async create(
     hrId: string,
     createAcademicQualificationDto: CreateAcademicQualificationDto,
-    userId: string,
-    certificateFile?: any
+    userId: string
   ) {
     const humanResource = await this.humanResourceRepository.findOne({
       where: { id: hrId },
@@ -189,7 +224,7 @@ export class AcademicQualificationService {
       throw new NotFoundException('HR entry not found');
     }
 
-    const { academicCertificate, ...qualificationData } = createAcademicQualificationDto;
+    const { academicCertificate, academicCertificateFileName, academicCertificateMimeType, ...qualificationData } = createAcademicQualificationDto;
 
     const qualification = this.academicQualificationRepository.create({
       humanResourceId: hrId,
@@ -197,6 +232,29 @@ export class AcademicQualificationService {
     });
 
     const savedQualification = await this.academicQualificationRepository.save(qualification);
+
+    // Process base64 certificate file if provided
+    let certificateFile: any = null;
+    let isDocumentId = false;
+    
+    if (academicCertificate) {
+      // Check if it's base64 (starts with "data:" or is a very long string without dashes)
+      const isBase64 = academicCertificate.startsWith('data:') || 
+                      (!academicCertificate.includes('-') && academicCertificate.length > 50);
+      
+      if (isBase64) {
+        if (!academicCertificateFileName) {
+          throw new BadRequestException('academicCertificateFileName is required when academicCertificate is base64');
+        }
+        certificateFile = this.convertBase64ToFile(
+          academicCertificate,
+          academicCertificateFileName,
+          academicCertificateMimeType
+        );
+      } else {
+        isDocumentId = true;
+      }
+    }
 
     // Upload and link certificate file if provided
     if (certificateFile) {
@@ -216,6 +274,24 @@ export class AcademicQualificationService {
         savedQualification.academicCertificate = certificateDocument;
         await this.academicQualificationRepository.save(savedQualification);
       }
+    } else if (isDocumentId && academicCertificate) {
+      // Link existing document
+      const existingDocument = await this.warehouseDocumentRepository.findOne({
+        where: { id: academicCertificate }
+      });
+
+      if (!existingDocument) {
+        throw new BadRequestException('Invalid document ID provided');
+      }
+
+      // Update document to link to this qualification
+      existingDocument.documentableType = 'AcademicQualification';
+      existingDocument.documentableId = savedQualification.id;
+      existingDocument.documentType = 'academicCertificate';
+      await this.warehouseDocumentRepository.save(existingDocument);
+
+      savedQualification.academicCertificate = existingDocument;
+      await this.academicQualificationRepository.save(savedQualification);
     }
 
     return savedQualification;
@@ -225,8 +301,7 @@ export class AcademicQualificationService {
     qualId: string,
     hrId: string,
     updateAcademicQualificationDto: CreateAcademicQualificationDto,
-    userId: string,
-    certificateFile?: any
+    userId: string
   ) {
     const qualification = await this.academicQualificationRepository.findOne({
       where: { id: qualId, humanResourceId: hrId },
@@ -249,7 +324,30 @@ export class AcademicQualificationService {
       throw new BadRequestException('Academic qualification can only be updated while application is in draft, rejected, or resubmitted status');
     }
   
-    const { academicCertificate, ...qualificationData } = updateAcademicQualificationDto;
+    const { academicCertificate, academicCertificateFileName, academicCertificateMimeType, ...qualificationData } = updateAcademicQualificationDto;
+    
+    // Process base64 certificate file if provided
+    let certificateFile: any = null;
+    let isDocumentId = false;
+    
+    if (academicCertificate) {
+      // Check if it's base64 (starts with "data:" or is a very long string without dashes)
+      const isBase64 = academicCertificate.startsWith('data:') || 
+                      (!academicCertificate.includes('-') && academicCertificate.length > 50);
+      
+      if (isBase64) {
+        if (!academicCertificateFileName) {
+          throw new BadRequestException('academicCertificateFileName is required when academicCertificate is base64');
+        }
+        certificateFile = this.convertBase64ToFile(
+          academicCertificate,
+          academicCertificateFileName,
+          academicCertificateMimeType
+        );
+      } else {
+        isDocumentId = true;
+      }
+    }
   
     const result = await this.dataSource.transaction(async (manager) => {
       const qualRepo = manager.getRepository(AcademicQualification);
@@ -278,10 +376,11 @@ export class AcademicQualificationService {
   
     // Handle file upload/update (outside transaction)
     if (certificateFile) {
+      // New base64 file - delete old one if exists
       if (qualification.academicCertificate) {
         await this.deleteWarehouseDocument(qualification.academicCertificate.id);
       }
-  
+
       const documentResult = await this.uploadWarehouseDocument(
         certificateFile,
         userId,
@@ -289,36 +388,36 @@ export class AcademicQualificationService {
         result.id,
         'academicCertificate'
       );
-  
+
       const certificateDocument = await this.warehouseDocumentRepository.findOne({
         where: { id: documentResult.id }
       });
-  
+
       if (certificateDocument) {
         result.academicCertificate = certificateDocument;
         await this.academicQualificationRepository.save(result);
       }
-    } else {
-      if (academicCertificate && typeof academicCertificate === 'string') {
-        const existingDocument = await this.warehouseDocumentRepository.findOne({
-          where: { 
-            id: academicCertificate,
-            documentableType: 'AcademicQualification',
-            documentableId: result.id,
-            documentType: 'academicCertificate'
-          }
-        });
-  
-        if (!existingDocument) {
-          throw new BadRequestException('Invalid document ID provided or document does not belong to this qualification');
+    } else if (isDocumentId && academicCertificate) {
+      // Existing document ID - verify and link
+      const existingDocument = await this.warehouseDocumentRepository.findOne({
+        where: { 
+          id: academicCertificate,
+          documentableType: 'AcademicQualification',
+          documentableId: result.id,
+          documentType: 'academicCertificate'
         }
-  
-        result.academicCertificate = existingDocument;
-        await this.academicQualificationRepository.save(result);
-      } else {
-        result.academicCertificate = qualification.academicCertificate;
-        await this.academicQualificationRepository.save(result);
+      });
+
+      if (!existingDocument) {
+        throw new BadRequestException('Invalid document ID provided or document does not belong to this qualification');
       }
+
+      result.academicCertificate = existingDocument;
+      await this.academicQualificationRepository.save(result);
+    } else {
+      // No certificate provided - keep existing
+      result.academicCertificate = qualification.academicCertificate;
+      await this.academicQualificationRepository.save(result);
     }
   
     // Track resubmission if application was REJECTED

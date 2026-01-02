@@ -55,6 +55,42 @@ export class TrainingService {
     }
   }
 
+  private convertBase64ToFile(
+    base64String: string,
+    fileName: string,
+    mimeType?: string
+  ): any {
+    // Remove data URL prefix if present (e.g., "data:application/pdf;base64,")
+    let base64Data = base64String;
+    if (base64String.includes(',')) {
+      base64Data = base64String.split(',')[1];
+    }
+
+    // Decode base64 to buffer
+    let buffer: Buffer;
+    try {
+      buffer = Buffer.from(base64Data, 'base64');
+    } catch (error) {
+      throw new BadRequestException('Invalid base64 file data');
+    }
+
+    // Validate file size (10MB max)
+    const maxSizeBytes = 10 * 1024 * 1024;
+    if (buffer.length > maxSizeBytes) {
+      throw new BadRequestException(
+        `File size ${(buffer.length / 1024 / 1024).toFixed(2)}MB exceeds maximum allowed size of ${(maxSizeBytes / 1024 / 1024).toFixed(0)}MB`
+      );
+    }
+
+    // Create file-like object that matches Multer file structure
+    return {
+      buffer,
+      originalname: fileName,
+      size: buffer.length,
+      mimetype: mimeType || 'application/octet-stream',
+    };
+  }
+
   private async uploadWarehouseDocument(
     file: any,
     userId: string,
@@ -180,8 +216,7 @@ export class TrainingService {
   async create(
     hrId: string,
     createTrainingDto: CreateTrainingDto,
-    userId: string,
-    certificateFile?: any
+    userId: string
   ) {
     const humanResource = await this.humanResourceRepository.findOne({
       where: { id: hrId },
@@ -191,7 +226,7 @@ export class TrainingService {
       throw new NotFoundException('HR entry not found');
     }
 
-    const { trainingCertificate, ...trainingData } = createTrainingDto;
+    const { trainingCertificate, trainingCertificateFileName, trainingCertificateMimeType, ...trainingData } = createTrainingDto;
 
     // Convert null to undefined for dateOfCompletion to satisfy TypeORM's DeepPartial type
     const { dateOfCompletion, ...restTrainingData } = trainingData;
@@ -202,6 +237,29 @@ export class TrainingService {
     });
 
     const savedTraining = await this.trainingRepository.save(training);
+
+    // Process base64 certificate file if provided
+    let certificateFile: any = null;
+    let isDocumentId = false;
+    
+    if (trainingCertificate) {
+      // Check if it's base64 (starts with "data:" or is a very long string without dashes)
+      const isBase64 = trainingCertificate.startsWith('data:') || 
+                      (!trainingCertificate.includes('-') && trainingCertificate.length > 50);
+      
+      if (isBase64) {
+        if (!trainingCertificateFileName) {
+          throw new BadRequestException('trainingCertificateFileName is required when trainingCertificate is base64');
+        }
+        certificateFile = this.convertBase64ToFile(
+          trainingCertificate,
+          trainingCertificateFileName,
+          trainingCertificateMimeType
+        );
+      } else {
+        isDocumentId = true;
+      }
+    }
 
     if (certificateFile) {
       const documentResult = await this.uploadWarehouseDocument(
@@ -220,6 +278,24 @@ export class TrainingService {
         savedTraining.trainingCertificate = certificateDocument;
         await this.trainingRepository.save(savedTraining);
       }
+    } else if (isDocumentId && trainingCertificate) {
+      // Link existing document
+      const existingDocument = await this.warehouseDocumentRepository.findOne({
+        where: { id: trainingCertificate }
+      });
+
+      if (!existingDocument) {
+        throw new BadRequestException('Invalid document ID provided');
+      }
+
+      // Update document to link to this training
+      existingDocument.documentableType = 'Training';
+      existingDocument.documentableId = savedTraining.id;
+      existingDocument.documentType = 'trainingCertificate';
+      await this.warehouseDocumentRepository.save(existingDocument);
+
+      savedTraining.trainingCertificate = existingDocument;
+      await this.trainingRepository.save(savedTraining);
     }
 
     return savedTraining;
@@ -229,8 +305,7 @@ export class TrainingService {
     trainingId: string,
     hrId: string,
     updateTrainingDto: CreateTrainingDto,
-    userId: string,
-    certificateFile?: any
+    userId: string
   ) {
     const training = await this.trainingRepository.findOne({
       where: { id: trainingId, humanResourceId: hrId },
@@ -253,7 +328,30 @@ export class TrainingService {
       throw new BadRequestException('Training can only be updated while application is in draft, rejected, or resubmitted status');
     }
   
-    const { trainingCertificate, ...trainingData } = updateTrainingDto;
+    const { trainingCertificate, trainingCertificateFileName, trainingCertificateMimeType, ...trainingData } = updateTrainingDto;
+    
+    // Process base64 certificate file if provided
+    let certificateFile: any = null;
+    let isDocumentId = false;
+    
+    if (trainingCertificate) {
+      // Check if it's base64 (starts with "data:" or is a very long string without dashes)
+      const isBase64 = trainingCertificate.startsWith('data:') || 
+                      (!trainingCertificate.includes('-') && trainingCertificate.length > 50);
+      
+      if (isBase64) {
+        if (!trainingCertificateFileName) {
+          throw new BadRequestException('trainingCertificateFileName is required when trainingCertificate is base64');
+        }
+        certificateFile = this.convertBase64ToFile(
+          trainingCertificate,
+          trainingCertificateFileName,
+          trainingCertificateMimeType
+        );
+      } else {
+        isDocumentId = true;
+      }
+    }
   
     const result = await this.dataSource.transaction(async (manager) => {
       const trainingRepo = manager.getRepository(Training);
@@ -281,10 +379,11 @@ export class TrainingService {
   
     // Handle file upload/update (outside transaction)
     if (certificateFile) {
+      // New base64 file - delete old one if exists
       if (training.trainingCertificate) {
         await this.deleteWarehouseDocument(training.trainingCertificate.id);
       }
-  
+
       const documentResult = await this.uploadWarehouseDocument(
         certificateFile,
         userId,
@@ -292,36 +391,36 @@ export class TrainingService {
         result.id,
         'trainingCertificate'
       );
-  
+
       const certificateDocument = await this.warehouseDocumentRepository.findOne({
         where: { id: documentResult.id }
       });
-  
+
       if (certificateDocument) {
         result.trainingCertificate = certificateDocument;
         await this.trainingRepository.save(result);
       }
-    } else {
-      if (trainingCertificate && typeof trainingCertificate === 'string') {
-        const existingDocument = await this.warehouseDocumentRepository.findOne({
-          where: { 
-            id: trainingCertificate,
-            documentableType: 'Training',
-            documentableId: result.id,
-            documentType: 'trainingCertificate'
-          }
-        });
-  
-        if (!existingDocument) {
-          throw new BadRequestException('Invalid document ID provided or document does not belong to this training');
+    } else if (isDocumentId && trainingCertificate) {
+      // Existing document ID - verify and link
+      const existingDocument = await this.warehouseDocumentRepository.findOne({
+        where: { 
+          id: trainingCertificate,
+          documentableType: 'Training',
+          documentableId: result.id,
+          documentType: 'trainingCertificate'
         }
-  
-        result.trainingCertificate = existingDocument;
-        await this.trainingRepository.save(result);
-      } else {
-        result.trainingCertificate = training.trainingCertificate;
-        await this.trainingRepository.save(result);
+      });
+
+      if (!existingDocument) {
+        throw new BadRequestException('Invalid document ID provided or document does not belong to this training');
       }
+
+      result.trainingCertificate = existingDocument;
+      await this.trainingRepository.save(result);
+    } else {
+      // No certificate provided - keep existing
+      result.trainingCertificate = training.trainingCertificate;
+      await this.trainingRepository.save(result);
     }
   
     // Track resubmission if application was REJECTED

@@ -1,5 +1,5 @@
 import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsDateString, MaxLength } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Exclude, Transform } from 'class-transformer';
 
 const transformToBoolean = (value: any): boolean => {
@@ -38,17 +38,31 @@ export class CreateProfessionalQualificationDto {
   @IsOptional()
   hasExpiryDate?: boolean;
 
-  @ApiProperty({
-    type: 'string',
-    format: 'binary',
-    description: 'Professional certificate file (PDF, PNG, JPG, JPEG, DOC, DOCX). Max size: 10MB',
+  @ApiPropertyOptional({
+    type: String,
+    description: 'Professional certificate as base64-encoded string or existing document ID (UUID)',
+    example: 'data:application/pdf;base64,JVBERi0xLjQK...',
     required: false,
   })
-  @Transform(({ value }) => {
-    if (value === '' || value === null) return undefined;
-    return value;
+  @IsOptional()
+  @IsString()
+  professionalCertificate?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'Original filename for professional certificate (required if professionalCertificate is base64)',
+    required: false,
   })
   @IsOptional()
-  @Exclude()
-  professionalCertificate?: any;
+  @IsString()
+  professionalCertificateFileName?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'MIME type for professional certificate (required if professionalCertificate is base64)',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  professionalCertificateMimeType?: string;
 }

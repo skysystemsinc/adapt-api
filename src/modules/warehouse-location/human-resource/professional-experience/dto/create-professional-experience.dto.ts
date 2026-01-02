@@ -1,5 +1,5 @@
 import { IsString, IsNotEmpty, IsOptional, IsDateString, MaxLength, ValidateIf, ValidationArguments, ValidatorConstraint, ValidatorConstraintInterface, Validate } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Exclude, Transform } from 'class-transformer';
 
 @ValidatorConstraint({ name: 'isDateOfAppointmentBeforeLeaving', async: false })
@@ -74,19 +74,33 @@ export class CreateProfessionalExperienceDto {
   @IsOptional()
   responsibilities?: string;
 
-  @ApiProperty({
-    type: 'string',
-    format: 'binary',
-    description: 'Experience letter file (PDF, PNG, JPG, JPEG, DOC, DOCX). Max size: 10MB. Required when dateOfLeaving is provided.',
+  @ApiPropertyOptional({
+    type: String,
+    description: 'Experience letter as base64-encoded string or existing document ID (UUID). Required when dateOfLeaving is provided.',
+    example: 'data:application/pdf;base64,JVBERi0xLjQK...',
     required: false,
-  })
-  @Transform(({ value }) => {
-    if (value === '' || value === null) return undefined;
-    return value;
   })
   @ValidateIf((o) => o.dateOfLeaving)
   @Validate(IsExperienceLetterRequiredWhenLeavingConstraint)
   @IsOptional()
-  @Exclude()
-  experienceLetter?: any;
+  @IsString()
+  experienceLetter?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'Original filename for experience letter (required if experienceLetter is base64)',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  experienceLetterFileName?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'MIME type for experience letter (required if experienceLetter is base64)',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  experienceLetterMimeType?: string;
 }

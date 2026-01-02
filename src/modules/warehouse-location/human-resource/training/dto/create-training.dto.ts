@@ -1,5 +1,5 @@
 import { IsString, IsNotEmpty, IsOptional, IsDateString, MaxLength } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Exclude, Transform } from 'class-transformer';
 
 export class CreateTrainingDto {
@@ -27,17 +27,31 @@ export class CreateTrainingDto {
   @IsOptional()
   dateOfCompletion?: Date | null;
 
-  @ApiProperty({
-    type: 'string',
-    format: 'binary',
-    description: 'Training certificate file (PDF, PNG, JPG, JPEG, DOC, DOCX). Max size: 10MB',
+  @ApiPropertyOptional({
+    type: String,
+    description: 'Training certificate as base64-encoded string or existing document ID (UUID)',
+    example: 'data:application/pdf;base64,JVBERi0xLjQK...',
     required: false,
   })
-  @Transform(({ value }) => {
-    if (value === '' || value === null) return undefined;
-    return value;
+  @IsOptional()
+  @IsString()
+  trainingCertificate?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'Original filename for training certificate (required if trainingCertificate is base64)',
+    required: false,
   })
   @IsOptional()
-  @Exclude()
-  trainingCertificate?: any;
+  @IsString()
+  trainingCertificateFileName?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'MIME type for training certificate (required if trainingCertificate is base64)',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  trainingCertificateMimeType?: string;
 }

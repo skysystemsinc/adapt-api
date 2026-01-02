@@ -54,6 +54,42 @@ export class ProfessionalQualificationService {
     }
   }
 
+  private convertBase64ToFile(
+    base64String: string,
+    fileName: string,
+    mimeType?: string
+  ): any {
+    // Remove data URL prefix if present (e.g., "data:application/pdf;base64,")
+    let base64Data = base64String;
+    if (base64String.includes(',')) {
+      base64Data = base64String.split(',')[1];
+    }
+
+    // Decode base64 to buffer
+    let buffer: Buffer;
+    try {
+      buffer = Buffer.from(base64Data, 'base64');
+    } catch (error) {
+      throw new BadRequestException('Invalid base64 file data');
+    }
+
+    // Validate file size (10MB max)
+    const maxSizeBytes = 10 * 1024 * 1024;
+    if (buffer.length > maxSizeBytes) {
+      throw new BadRequestException(
+        `File size ${(buffer.length / 1024 / 1024).toFixed(2)}MB exceeds maximum allowed size of ${(maxSizeBytes / 1024 / 1024).toFixed(0)}MB`
+      );
+    }
+
+    // Create file-like object that matches Multer file structure
+    return {
+      buffer,
+      originalname: fileName,
+      size: buffer.length,
+      mimetype: mimeType || 'application/octet-stream',
+    };
+  }
+
   private async uploadWarehouseDocument(
     file: any,
     userId: string,
@@ -179,8 +215,7 @@ export class ProfessionalQualificationService {
   async create(
     hrId: string,
     createProfessionalQualificationDto: CreateProfessionalQualificationDto,
-    userId: string,
-    certificateFile?: any
+    userId: string
   ) {
     const humanResource = await this.humanResourceRepository.findOne({
       where: { id: hrId },
@@ -190,7 +225,7 @@ export class ProfessionalQualificationService {
       throw new NotFoundException('HR entry not found');
     }
 
-    const { professionalCertificate, ...qualificationData } = createProfessionalQualificationDto;
+    const { professionalCertificate, professionalCertificateFileName, professionalCertificateMimeType, ...qualificationData } = createProfessionalQualificationDto;
 
     // Convert null to undefined for dateOfAward to satisfy TypeORM's DeepPartial type
     const { dateOfAward, ...restQualificationData } = qualificationData;
@@ -201,6 +236,29 @@ export class ProfessionalQualificationService {
     });
 
     const savedQualification = await this.professionalQualificationRepository.save(qualification);
+
+    // Process base64 certificate file if provided
+    let certificateFile: any = null;
+    let isDocumentId = false;
+    
+    if (professionalCertificate) {
+      // Check if it's base64 (starts with "data:" or is a very long string without dashes)
+      const isBase64 = professionalCertificate.startsWith('data:') || 
+                      (!professionalCertificate.includes('-') && professionalCertificate.length > 50);
+      
+      if (isBase64) {
+        if (!professionalCertificateFileName) {
+          throw new BadRequestException('professionalCertificateFileName is required when professionalCertificate is base64');
+        }
+        certificateFile = this.convertBase64ToFile(
+          professionalCertificate,
+          professionalCertificateFileName,
+          professionalCertificateMimeType
+        );
+      } else {
+        isDocumentId = true;
+      }
+    }
 
     if (certificateFile) {
       const documentResult = await this.uploadWarehouseDocument(
@@ -219,6 +277,24 @@ export class ProfessionalQualificationService {
         savedQualification.professionalCertificate = certificateDocument;
         await this.professionalQualificationRepository.save(savedQualification);
       }
+    } else if (isDocumentId && professionalCertificate) {
+      // Link existing document
+      const existingDocument = await this.warehouseDocumentRepository.findOne({
+        where: { id: professionalCertificate }
+      });
+
+      if (!existingDocument) {
+        throw new BadRequestException('Invalid document ID provided');
+      }
+
+      // Update document to link to this qualification
+      existingDocument.documentableType = 'ProfessionalQualification';
+      existingDocument.documentableId = savedQualification.id;
+      existingDocument.documentType = 'professionalCertificate';
+      await this.warehouseDocumentRepository.save(existingDocument);
+
+      savedQualification.professionalCertificate = existingDocument;
+      await this.professionalQualificationRepository.save(savedQualification);
     }
 
     return savedQualification;
@@ -228,8 +304,7 @@ export class ProfessionalQualificationService {
     qualId: string,
     hrId: string,
     updateProfessionalQualificationDto: CreateProfessionalQualificationDto,
-    userId: string,
-    certificateFile?: any
+    userId: string
   ) {
     const qualification = await this.professionalQualificationRepository.findOne({
       where: { id: qualId, humanResourceId: hrId },
@@ -252,7 +327,30 @@ export class ProfessionalQualificationService {
       throw new BadRequestException('Professional qualification can only be updated while application is in draft, rejected, or resubmitted status');
     }
   
-    const { professionalCertificate, ...qualificationData } = updateProfessionalQualificationDto;
+    const { professionalCertificate, professionalCertificateFileName, professionalCertificateMimeType, ...qualificationData } = updateProfessionalQualificationDto;
+    
+    // Process base64 certificate file if provided
+    let certificateFile: any = null;
+    let isDocumentId = false;
+    
+    if (professionalCertificate) {
+      // Check if it's base64 (starts with "data:" or is a very long string without dashes)
+      const isBase64 = professionalCertificate.startsWith('data:') || 
+                      (!professionalCertificate.includes('-') && professionalCertificate.length > 50);
+      
+      if (isBase64) {
+        if (!professionalCertificateFileName) {
+          throw new BadRequestException('professionalCertificateFileName is required when professionalCertificate is base64');
+        }
+        certificateFile = this.convertBase64ToFile(
+          professionalCertificate,
+          professionalCertificateFileName,
+          professionalCertificateMimeType
+        );
+      } else {
+        isDocumentId = true;
+      }
+    }
   
     const result = await this.dataSource.transaction(async (manager) => {
       const qualRepo = manager.getRepository(ProfessionalQualification);
@@ -281,10 +379,11 @@ export class ProfessionalQualificationService {
   
     // Handle file upload/update (outside transaction)
     if (certificateFile) {
+      // New base64 file - delete old one if exists
       if (qualification.professionalCertificate) {
         await this.deleteWarehouseDocument(qualification.professionalCertificate.id);
       }
-  
+
       const documentResult = await this.uploadWarehouseDocument(
         certificateFile,
         userId,
@@ -292,36 +391,36 @@ export class ProfessionalQualificationService {
         result.id,
         'professionalCertificate'
       );
-  
+
       const certificateDocument = await this.warehouseDocumentRepository.findOne({
         where: { id: documentResult.id }
       });
-  
+
       if (certificateDocument) {
         result.professionalCertificate = certificateDocument;
         await this.professionalQualificationRepository.save(result);
       }
-    } else {
-      if (professionalCertificate && typeof professionalCertificate === 'string') {
-        const existingDocument = await this.warehouseDocumentRepository.findOne({
-          where: { 
-            id: professionalCertificate,
-            documentableType: 'ProfessionalQualification',
-            documentableId: result.id,
-            documentType: 'professionalCertificate'
-          }
-        });
-  
-        if (!existingDocument) {
-          throw new BadRequestException('Invalid document ID provided or document does not belong to this qualification');
+    } else if (isDocumentId && professionalCertificate) {
+      // Existing document ID - verify and link
+      const existingDocument = await this.warehouseDocumentRepository.findOne({
+        where: { 
+          id: professionalCertificate,
+          documentableType: 'ProfessionalQualification',
+          documentableId: result.id,
+          documentType: 'professionalCertificate'
         }
-  
-        result.professionalCertificate = existingDocument;
-        await this.professionalQualificationRepository.save(result);
-      } else {
-        result.professionalCertificate = qualification.professionalCertificate;
-        await this.professionalQualificationRepository.save(result);
+      });
+
+      if (!existingDocument) {
+        throw new BadRequestException('Invalid document ID provided or document does not belong to this qualification');
       }
+
+      result.professionalCertificate = existingDocument;
+      await this.professionalQualificationRepository.save(result);
+    } else {
+      // No certificate provided - keep existing
+      result.professionalCertificate = qualification.professionalCertificate;
+      await this.professionalQualificationRepository.save(result);
     }
   
     // Track resubmission if application was REJECTED

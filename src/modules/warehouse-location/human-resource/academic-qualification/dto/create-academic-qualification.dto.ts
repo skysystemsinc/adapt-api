@@ -1,5 +1,5 @@
 import { IsString, IsNotEmpty, IsOptional, MaxLength } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Exclude, Transform } from 'class-transformer';
 
 export class CreateAcademicQualificationDto {
@@ -33,17 +33,31 @@ export class CreateAcademicQualificationDto {
   @MaxLength(50)
   grade?: string;
 
-  @ApiProperty({
-    type: 'string',
-    format: 'binary',
-    description: 'Academic certificate file (PDF, PNG, JPG, JPEG, DOC, DOCX). Max size: 10MB',
+  @ApiPropertyOptional({
+    type: String,
+    description: 'Academic certificate as base64-encoded string or existing document ID (UUID)',
+    example: 'data:application/pdf;base64,JVBERi0xLjQK...',
     required: false,
   })
-  @Transform(({ value }) => {
-    if (value === '' || value === null) return undefined;
-    return value;
+  @IsOptional()
+  @IsString()
+  academicCertificate?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'Original filename for academic certificate (required if academicCertificate is base64)',
+    required: false,
   })
   @IsOptional()
-  @Exclude()
-  academicCertificate?: any; // Made optional in DTO for FileInterceptor
+  @IsString()
+  academicCertificateFileName?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'MIME type for academic certificate (required if academicCertificate is base64)',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  academicCertificateMimeType?: string;
 }

@@ -40,9 +40,7 @@ export class WarehouseLocationService {
 
     const hasActiveApplication = activeApplications.some(
       (app) =>
-        app.status === WarehouseLocationStatus.DRAFT ||
-        app.status === WarehouseLocationStatus.PENDING ||
-        app.status === WarehouseLocationStatus.IN_PROCESS
+        app.status === WarehouseLocationStatus.DRAFT
     );
 
     if (hasActiveApplication) {
