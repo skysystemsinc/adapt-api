@@ -91,6 +91,42 @@ export class WarehouseLocationChecklistService {
     }
   }
 
+  private convertBase64ToFile(
+    base64String: string,
+    fileName: string,
+    mimeType?: string
+  ): any {
+    // Remove data URL prefix if present (e.g., "data:application/pdf;base64,")
+    let base64Data = base64String;
+    if (base64String.includes(',')) {
+      base64Data = base64String.split(',')[1];
+    }
+
+    // Decode base64 to buffer
+    let buffer: Buffer;
+    try {
+      buffer = Buffer.from(base64Data, 'base64');
+    } catch (error) {
+      throw new BadRequestException('Invalid base64 file data');
+    }
+
+    // Validate file size (10MB max)
+    const maxSizeBytes = 10 * 1024 * 1024;
+    if (buffer.length > maxSizeBytes) {
+      throw new BadRequestException(
+        `File size ${(buffer.length / 1024 / 1024).toFixed(2)}MB exceeds maximum allowed size of ${(maxSizeBytes / 1024 / 1024).toFixed(0)}MB`
+      );
+    }
+
+    // Create file-like object that matches Multer file structure
+    return {
+      buffer,
+      originalname: fileName,
+      size: buffer.length,
+      mimetype: mimeType || 'application/octet-stream',
+    };
+  }
+
   async uploadWarehouseDocument(
     file: any,
     userId: string,
@@ -270,6 +306,342 @@ export class WarehouseLocationChecklistService {
     }
 
     return uploadedDocumentIds;
+  }
+
+  /**
+   * Process base64 files in DTO: convert base64 strings to files, upload them, and replace with document IDs
+   */
+  private async processBase64FilesInDto(
+    dto: CreateWarehouseLocationChecklistDto,
+    userId: string,
+    warehouseLocationId: string,
+  ): Promise<void> {
+    // Helper to process a single file field
+    const processFileField = async (
+      fileValue: string | undefined,
+      fileName: string | undefined,
+      mimeType: string | undefined,
+      documentType: string,
+      setter: (docId: string) => void,
+    ): Promise<void> => {
+      if (!fileValue || fileValue.trim() === '') {
+        return;
+      }
+
+      // Check if it's base64 (starts with "data:" or is a very long string without dashes)
+      const isBase64 = fileValue.startsWith('data:') || 
+                      (!fileValue.includes('-') && fileValue.length > 50);
+
+      if (isBase64) {
+        if (!fileName) {
+          throw new BadRequestException(`${documentType} fileName is required when file is base64`);
+        }
+
+        // Convert base64 to file
+        const file = this.convertBase64ToFile(fileValue, fileName, mimeType);
+
+        // Upload the file
+        const doc = await this.uploadWarehouseDocument(
+          file,
+          userId,
+          documentType,
+          warehouseLocationId,
+          documentType,
+        );
+
+        // Replace base64 string with document ID
+        setter(doc.id);
+      }
+      // If it's already a document ID (UUID), keep it as is
+    };
+
+    // Process all file fields
+    // Ownership & Legal Documents
+    await processFileField(
+      dto.ownershipLegalDocuments.ownershipDeedFile,
+      dto.ownershipLegalDocuments.ownershipDeedFileName,
+      dto.ownershipLegalDocuments.ownershipDeedFileMimeType,
+      'OwnershipLegalDocumentsChecklist',
+      (id) => { dto.ownershipLegalDocuments.ownershipDeedFile = id; },
+    );
+    await processFileField(
+      dto.ownershipLegalDocuments.mutationDeedFile,
+      dto.ownershipLegalDocuments.mutationDeedFileName,
+      dto.ownershipLegalDocuments.mutationDeedFileMimeType,
+      'OwnershipLegalDocumentsChecklist',
+      (id) => { dto.ownershipLegalDocuments.mutationDeedFile = id; },
+    );
+    await processFileField(
+      dto.ownershipLegalDocuments.nocNecFile,
+      dto.ownershipLegalDocuments.nocNecFileName,
+      dto.ownershipLegalDocuments.nocNecFileMimeType,
+      'OwnershipLegalDocumentsChecklist',
+      (id) => { dto.ownershipLegalDocuments.nocNecFile = id; },
+    );
+    await processFileField(
+      dto.ownershipLegalDocuments.factoryLayoutFile,
+      dto.ownershipLegalDocuments.factoryLayoutFileName,
+      dto.ownershipLegalDocuments.factoryLayoutFileMimeType,
+      'OwnershipLegalDocumentsChecklist',
+      (id) => { dto.ownershipLegalDocuments.factoryLayoutFile = id; },
+    );
+    await processFileField(
+      dto.ownershipLegalDocuments.leaseAgreementFile,
+      dto.ownershipLegalDocuments.leaseAgreementFileName,
+      dto.ownershipLegalDocuments.leaseAgreementFileMimeType,
+      'OwnershipLegalDocumentsChecklist',
+      (id) => { dto.ownershipLegalDocuments.leaseAgreementFile = id; },
+    );
+    await processFileField(
+      dto.ownershipLegalDocuments.propertyWarrantyFile,
+      dto.ownershipLegalDocuments.propertyWarrantyFileName,
+      dto.ownershipLegalDocuments.propertyWarrantyFileMimeType,
+      'OwnershipLegalDocumentsChecklist',
+      (id) => { dto.ownershipLegalDocuments.propertyWarrantyFile = id; },
+    );
+    await processFileField(
+      dto.ownershipLegalDocuments.agreementUndertakingFile,
+      dto.ownershipLegalDocuments.agreementUndertakingFileName,
+      dto.ownershipLegalDocuments.agreementUndertakingFileMimeType,
+      'OwnershipLegalDocumentsChecklist',
+      (id) => { dto.ownershipLegalDocuments.agreementUndertakingFile = id; },
+    );
+
+    // Human Resources Key
+    await processFileField(
+      dto.humanResourcesKey.qcPersonnelFile,
+      dto.humanResourcesKey.qcPersonnelFileName,
+      dto.humanResourcesKey.qcPersonnelFileMimeType,
+      'HumanResourcesKeyChecklist',
+      (id) => { dto.humanResourcesKey.qcPersonnelFile = id; },
+    );
+    await processFileField(
+      dto.humanResourcesKey.warehouseSupervisorFile,
+      dto.humanResourcesKey.warehouseSupervisorFileName,
+      dto.humanResourcesKey.warehouseSupervisorFileMimeType,
+      'HumanResourcesKeyChecklist',
+      (id) => { dto.humanResourcesKey.warehouseSupervisorFile = id; },
+    );
+    await processFileField(
+      dto.humanResourcesKey.dataEntryOperatorFile,
+      dto.humanResourcesKey.dataEntryOperatorFileName,
+      dto.humanResourcesKey.dataEntryOperatorFileMimeType,
+      'HumanResourcesKeyChecklist',
+      (id) => { dto.humanResourcesKey.dataEntryOperatorFile = id; },
+    );
+
+    // Location & Risk
+    await processFileField(
+      dto.locationRisk.warehouseOutsideFloodingAreaFile,
+      dto.locationRisk.warehouseOutsideFloodingAreaFileName,
+      dto.locationRisk.warehouseOutsideFloodingAreaFileMimeType,
+      'LocationRiskChecklist',
+      (id) => { dto.locationRisk.warehouseOutsideFloodingAreaFile = id; },
+    );
+
+    // Security & Perimeter
+    await processFileField(
+      dto.securityPerimeter.securedBoundaryWallFile,
+      dto.securityPerimeter.securedBoundaryWallFileName,
+      dto.securityPerimeter.securedBoundaryWallFileMimeType,
+      'SecurityPerimeterChecklist',
+      (id) => { dto.securityPerimeter.securedBoundaryWallFile = id; },
+    );
+    await processFileField(
+      dto.securityPerimeter.reinforcedBarbedWireFile,
+      dto.securityPerimeter.reinforcedBarbedWireFileName,
+      dto.securityPerimeter.reinforcedBarbedWireFileMimeType,
+      'SecurityPerimeterChecklist',
+      (id) => { dto.securityPerimeter.reinforcedBarbedWireFile = id; },
+    );
+    await processFileField(
+      dto.securityPerimeter.fullyGatedFile,
+      dto.securityPerimeter.fullyGatedFileName,
+      dto.securityPerimeter.fullyGatedFileMimeType,
+      'SecurityPerimeterChecklist',
+      (id) => { dto.securityPerimeter.fullyGatedFile = id; },
+    );
+    await processFileField(
+      dto.securityPerimeter.securityGuards24x7File,
+      dto.securityPerimeter.securityGuards24x7FileName,
+      dto.securityPerimeter.securityGuards24x7FileMimeType,
+      'SecurityPerimeterChecklist',
+      (id) => { dto.securityPerimeter.securityGuards24x7File = id; },
+    );
+    await processFileField(
+      dto.securityPerimeter.cctvCamerasFile,
+      dto.securityPerimeter.cctvCamerasFileName,
+      dto.securityPerimeter.cctvCamerasFileMimeType,
+      'SecurityPerimeterChecklist',
+      (id) => { dto.securityPerimeter.cctvCamerasFile = id; },
+    );
+
+    // Infrastructure & Utilities
+    await processFileField(
+      dto.infrastructureUtilities.functionalWeighbridgeFile,
+      dto.infrastructureUtilities.functionalWeighbridgeFileName,
+      dto.infrastructureUtilities.functionalWeighbridgeFileMimeType,
+      'InfrastructureUtilitiesChecklist',
+      (id) => { dto.infrastructureUtilities.functionalWeighbridgeFile = id; },
+    );
+    await processFileField(
+      dto.infrastructureUtilities.samplingTestingAreaFile,
+      dto.infrastructureUtilities.samplingTestingAreaFileName,
+      dto.infrastructureUtilities.samplingTestingAreaFileMimeType,
+      'InfrastructureUtilitiesChecklist',
+      (id) => { dto.infrastructureUtilities.samplingTestingAreaFile = id; },
+    );
+    await processFileField(
+      dto.infrastructureUtilities.calibratedInstrumentsFile,
+      dto.infrastructureUtilities.calibratedInstrumentsFileName,
+      dto.infrastructureUtilities.calibratedInstrumentsFileMimeType,
+      'InfrastructureUtilitiesChecklist',
+      (id) => { dto.infrastructureUtilities.calibratedInstrumentsFile = id; },
+    );
+    await processFileField(
+      dto.infrastructureUtilities.functionalOfficeFile,
+      dto.infrastructureUtilities.functionalOfficeFileName,
+      dto.infrastructureUtilities.functionalOfficeFileMimeType,
+      'InfrastructureUtilitiesChecklist',
+      (id) => { dto.infrastructureUtilities.functionalOfficeFile = id; },
+    );
+    await processFileField(
+      dto.infrastructureUtilities.operationalToiletsFile,
+      dto.infrastructureUtilities.operationalToiletsFileName,
+      dto.infrastructureUtilities.operationalToiletsFileMimeType,
+      'InfrastructureUtilitiesChecklist',
+      (id) => { dto.infrastructureUtilities.operationalToiletsFile = id; },
+    );
+    await processFileField(
+      dto.infrastructureUtilities.electricityGasUtilitiesFile,
+      dto.infrastructureUtilities.electricityGasUtilitiesFileName,
+      dto.infrastructureUtilities.electricityGasUtilitiesFileMimeType,
+      'InfrastructureUtilitiesChecklist',
+      (id) => { dto.infrastructureUtilities.electricityGasUtilitiesFile = id; },
+    );
+    await processFileField(
+      dto.infrastructureUtilities.backupGeneratorFile,
+      dto.infrastructureUtilities.backupGeneratorFileName,
+      dto.infrastructureUtilities.backupGeneratorFileMimeType,
+      'InfrastructureUtilitiesChecklist',
+      (id) => { dto.infrastructureUtilities.backupGeneratorFile = id; },
+    );
+    await processFileField(
+      dto.infrastructureUtilities.adequateResidentialArrangementsFile,
+      dto.infrastructureUtilities.adequateResidentialArrangementsFileName,
+      dto.infrastructureUtilities.adequateResidentialArrangementsFileMimeType,
+      'InfrastructureUtilitiesChecklist',
+      (id) => { dto.infrastructureUtilities.adequateResidentialArrangementsFile = id; },
+    );
+    await processFileField(
+      dto.infrastructureUtilities.axialAerationFansFile,
+      dto.infrastructureUtilities.axialAerationFansFileName,
+      dto.infrastructureUtilities.axialAerationFansFileMimeType,
+      'InfrastructureUtilitiesChecklist',
+      (id) => { dto.infrastructureUtilities.axialAerationFansFile = id; },
+    );
+    await processFileField(
+      dto.infrastructureUtilities.ventsExhaustFansFile,
+      dto.infrastructureUtilities.ventsExhaustFansFileName,
+      dto.infrastructureUtilities.ventsExhaustFansFileMimeType,
+      'InfrastructureUtilitiesChecklist',
+      (id) => { dto.infrastructureUtilities.ventsExhaustFansFile = id; },
+    );
+    await processFileField(
+      dto.infrastructureUtilities.technicalDrawingFile,
+      dto.infrastructureUtilities.technicalDrawingFileName,
+      dto.infrastructureUtilities.technicalDrawingFileMimeType,
+      'InfrastructureUtilitiesChecklist',
+      (id) => { dto.infrastructureUtilities.technicalDrawingFile = id; },
+    );
+    await processFileField(
+      dto.infrastructureUtilities.dryingFacilityFile,
+      dto.infrastructureUtilities.dryingFacilityFileName,
+      dto.infrastructureUtilities.dryingFacilityFileMimeType,
+      'InfrastructureUtilitiesChecklist',
+      (id) => { dto.infrastructureUtilities.dryingFacilityFile = id; },
+    );
+    await processFileField(
+      dto.infrastructureUtilities.temperatureSensorCablesFile,
+      dto.infrastructureUtilities.temperatureSensorCablesFileName,
+      dto.infrastructureUtilities.temperatureSensorCablesFileMimeType,
+      'InfrastructureUtilitiesChecklist',
+      (id) => { dto.infrastructureUtilities.temperatureSensorCablesFile = id; },
+    );
+
+    // Storage Facilities
+    await processFileField(
+      dto.storageFacilities.securedDoorsFile,
+      dto.storageFacilities.securedDoorsFileName,
+      dto.storageFacilities.securedDoorsFileMimeType,
+      'StorageFacilitiesChecklist',
+      (id) => { dto.storageFacilities.securedDoorsFile = id; },
+    );
+    await processFileField(
+      dto.storageFacilities.plasteredFlooringFile,
+      dto.storageFacilities.plasteredFlooringFileName,
+      dto.storageFacilities.plasteredFlooringFileMimeType,
+      'StorageFacilitiesChecklist',
+      (id) => { dto.storageFacilities.plasteredFlooringFile = id; },
+    );
+    await processFileField(
+      dto.storageFacilities.plasteredWallsFile,
+      dto.storageFacilities.plasteredWallsFileName,
+      dto.storageFacilities.plasteredWallsFileMimeType,
+      'StorageFacilitiesChecklist',
+      (id) => { dto.storageFacilities.plasteredWallsFile = id; },
+    );
+    await processFileField(
+      dto.storageFacilities.intactCeilingFile,
+      dto.storageFacilities.intactCeilingFileName,
+      dto.storageFacilities.intactCeilingFileMimeType,
+      'StorageFacilitiesChecklist',
+      (id) => { dto.storageFacilities.intactCeilingFile = id; },
+    );
+    await processFileField(
+      dto.storageFacilities.functionalWindowsFile,
+      dto.storageFacilities.functionalWindowsFileName,
+      dto.storageFacilities.functionalWindowsFileMimeType,
+      'StorageFacilitiesChecklist',
+      (id) => { dto.storageFacilities.functionalWindowsFile = id; },
+    );
+    await processFileField(
+      dto.storageFacilities.protectiveNettingFile,
+      dto.storageFacilities.protectiveNettingFileName,
+      dto.storageFacilities.protectiveNettingFileMimeType,
+      'StorageFacilitiesChecklist',
+      (id) => { dto.storageFacilities.protectiveNettingFile = id; },
+    );
+    await processFileField(
+      dto.storageFacilities.functionalExhaustFansFile,
+      dto.storageFacilities.functionalExhaustFansFileName,
+      dto.storageFacilities.functionalExhaustFansFileMimeType,
+      'StorageFacilitiesChecklist',
+      (id) => { dto.storageFacilities.functionalExhaustFansFile = id; },
+    );
+    await processFileField(
+      dto.storageFacilities.freeFromPestsFile,
+      dto.storageFacilities.freeFromPestsFileName,
+      dto.storageFacilities.freeFromPestsFileMimeType,
+      'StorageFacilitiesChecklist',
+      (id) => { dto.storageFacilities.freeFromPestsFile = id; },
+    );
+    await processFileField(
+      dto.storageFacilities.fireSafetyMeasuresFile,
+      dto.storageFacilities.fireSafetyMeasuresFileName,
+      dto.storageFacilities.fireSafetyMeasuresFileMimeType,
+      'StorageFacilitiesChecklist',
+      (id) => { dto.storageFacilities.fireSafetyMeasuresFile = id; },
+    );
+
+    // Registration Fee
+    await processFileField(
+      dto.registrationFee.bankPaymentSlip,
+      dto.registrationFee.bankPaymentSlipFileName,
+      dto.registrationFee.bankPaymentSlipMimeType,
+      'RegistrationFeeChecklist',
+      (id) => { dto.registrationFee.bankPaymentSlip = id; },
+    );
   }
 
   private mapUploadedDocumentsToDto(
@@ -597,7 +969,6 @@ export class WarehouseLocationChecklistService {
     warehouseLocationId: string,
     dto: CreateWarehouseLocationChecklistDto,
     userId: string,
-    files?: any,
     submit: boolean = false,
   ) {
     const warehouseLocation = await this.warehouseLocationRepository.findOne({
@@ -622,8 +993,8 @@ export class WarehouseLocationChecklistService {
       }
     }
 
-    const uploadedDocumentIds = files ? await this.uploadChecklistFiles(files, userId, warehouseLocationId) : {};
-    this.mapUploadedDocumentsToDto(dto, uploadedDocumentIds);
+    // Process base64 files from DTO
+    await this.processBase64FilesInDto(dto, userId, warehouseLocationId);
     this.validateChecklistFiles(dto);
 
     const savedChecklist = await this.dataSource.transaction(async (manager) => {
@@ -718,35 +1089,32 @@ export class WarehouseLocationChecklistService {
     warehouseLocationId: string,
     dto: CreateWarehouseLocationChecklistDto,
     userId: string,
-    files?: any,
     submit: boolean = false,
   ) {
     const warehouseLocation = await this.warehouseLocationRepository.findOne({
       where: { id: warehouseLocationId, userId },
     });
-  
+
     if (!warehouseLocation) {
       throw new NotFoundException('Warehouse location not found. Please create a warehouse location first.');
     }
-  
+
     if (![WarehouseLocationStatus.DRAFT, WarehouseLocationStatus.REJECTED, WarehouseLocationStatus.RESUBMITTED].includes(warehouseLocation.status)) {
       throw new BadRequestException('Checklist can only be updated while warehouse location is in draft, rejected, or resubmitted status.');
     }
-  
+
     const existingChecklist = await this.warehouseLocationChecklistRepository.findOne({
       where: { warehouseLocationId: warehouseLocation.id },
     });
-  
+
     if (!existingChecklist) {
       throw new NotFoundException('Checklist not found for this warehouse location. Please create it first.');
     }
-  
+
     dto.id = existingChecklist.id;
-  
-    console.log(existingChecklist, "existingChecklist")
-  
-    const uploadedDocumentIds = files ? await this.uploadChecklistFiles(files, userId, warehouseLocationId) : {};
-    this.mapUploadedDocumentsToDto(dto, uploadedDocumentIds);
+
+    // Process base64 files from DTO
+    await this.processBase64FilesInDto(dto, userId, warehouseLocationId);
     this.validateChecklistFiles(dto);
   
     let rejectedSectionIds: string[] = [];
