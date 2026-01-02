@@ -165,8 +165,8 @@ export class SettingRequestsService {
 
     // Prepare value fields
     let value = createDto.value ?? '';
-    let iv: string | undefined;
-    let authTag: string | undefined;
+    let iv: string | undefined = createDto.iv;
+    let authTag: string | undefined = createDto.authTag;
     let mimeType = createDto.mimeType;
     let originalName = createDto.originalName;
 
@@ -215,24 +215,65 @@ export class SettingRequestsService {
   /**
    * Create a setting request with file upload
    */
-  async createWithFile(
-    createDto: CreateSettingRequestDto,
-    file: any,
-    requestedBy?: string,
-  ): Promise<SettingRequestResponseDto> {
-    if (!file) {
-      throw new BadRequestException('No file provided');
+  /**
+   * Convert base64 string to file buffer
+   */
+  private convertBase64ToBuffer(
+    base64String: string,
+    fileName: string,
+    mimeType?: string
+  ): { buffer: Buffer; fileExtension: string } {
+    // Remove data URL prefix if present (e.g., "data:application/pdf;base64,")
+    let base64Data = base64String;
+    if (base64String.includes(',')) {
+      base64Data = base64String.split(',')[1];
     }
 
-    // Validate file size
-    if (file.size > MAX_FILE_SIZE) {
+    // Decode base64 to buffer
+    let buffer: Buffer;
+    try {
+      buffer = Buffer.from(base64Data, 'base64');
+    } catch (error) {
+      throw new BadRequestException('Invalid base64 file data');
+    }
+
+    // Validate file size (10MB max)
+    if (buffer.length > MAX_FILE_SIZE) {
       throw new BadRequestException(
-        `File size ${(file.size / 1024 / 1024).toFixed(2)}MB exceeds maximum allowed size of ${(MAX_FILE_SIZE / 1024 / 1024).toFixed(0)}MB`,
+        `File size ${(buffer.length / 1024 / 1024).toFixed(2)}MB exceeds maximum allowed size of ${(MAX_FILE_SIZE / 1024 / 1024).toFixed(0)}MB`
       );
     }
 
+    // Get file extension from filename
+    const fileExtension = path.extname(fileName).toLowerCase();
+
+    return { buffer, fileExtension };
+  }
+
+  async createWithFile(
+    createDto: CreateSettingRequestDto,
+    requestedBy?: string,
+  ): Promise<SettingRequestResponseDto> {
+    if (!createDto.value) {
+      throw new BadRequestException('File value (base64) is required');
+    }
+
+    if (!createDto.originalName) {
+      throw new BadRequestException('originalName is required when uploading a file');
+    }
+
+    if (!createDto.mimeType) {
+      throw new BadRequestException('mimeType is required when uploading a file');
+    }
+
+    // Convert base64 to buffer
+    const { buffer, fileExtension } = this.convertBase64ToBuffer(
+      createDto.value,
+      createDto.originalName,
+      createDto.mimeType
+    );
+
     // Validate file extension
-    const fileExtension = path.extname(file.originalname).toLowerCase();
     if (!ALLOWED_EXTENSIONS.includes(fileExtension)) {
       throw new BadRequestException(
         `File type '${fileExtension}' is not allowed. Allowed types: ${ALLOWED_EXTENSIONS.join(', ')}`,
@@ -240,7 +281,7 @@ export class SettingRequestsService {
     }
 
     // Validate MIME type
-    const detectedMimeType = await this.detectMimeType(file.buffer, fileExtension);
+    const detectedMimeType = await this.detectMimeType(buffer, fileExtension);
     const expectedMimeTypes = FILE_MIME_TYPE_MAP[fileExtension] || [];
     if (
       expectedMimeTypes.length > 0 &&
@@ -251,31 +292,38 @@ export class SettingRequestsService {
       );
     }
 
-    // Store original filename and MIME type
-    const originalName = file.originalname;
-    const mimeType = detectedMimeType || file.mimetype;
+    // Use provided mimeType or detected one
+    const mimeType = createDto.mimeType || detectedMimeType;
+    const originalName = createDto.originalName;
 
     // Generate unique filename for request: requests/{requestId}-{uuid}.{extension}
     const requestId = uuidv4();
     const sanitizedFilename = `request-${requestId}${fileExtension}`;
-    const filePath = path.join(SETTINGS_UPLOAD_DIR, sanitizedFilename);
+    const relativePath = path.join(SETTINGS_UPLOAD_DIR, sanitizedFilename);
+    // Resolve path relative to project root
+    const filePath = path.isAbsolute(relativePath)
+      ? relativePath
+      : path.join(process.cwd(), relativePath);
 
     // Encrypt file buffer
-    const { encrypted, iv, authTag } = encryptBuffer(file.buffer);
+    const { encrypted, iv, authTag } = encryptBuffer(buffer);
 
     // Save encrypted file to disk
     await fs.writeFile(filePath, encrypted);
 
     this.logger.log(
-      `📤 File uploaded for setting request: ${sanitizedFilename} (${(file.size / 1024).toFixed(2)}KB)`,
+      `📤 File uploaded for setting request: ${sanitizedFilename} (${(buffer.length / 1024).toFixed(2)}KB)`,
     );
 
-    // Create request with file path
+    // Create request with file path (store relative path in database)
+    // IMPORTANT: Include iv and authTag so the file can be decrypted later
     const createDtoWithFile: CreateSettingRequestDto = {
       ...createDto,
-      value: filePath,
+      value: relativePath, // Store relative path, not absolute
       mimeType,
       originalName,
+      iv, // Store encryption IV for decryption
+      authTag, // Store encryption authTag for decryption
     };
 
     return this.create(createDtoWithFile, requestedBy);
@@ -420,8 +468,16 @@ export class SettingRequestsService {
           const finalFilename = `${request.key}-${uuidv4()}${fileExtension}`;
           const finalPath = path.join(SETTINGS_UPLOAD_DIR, finalFilename);
           
+          // Resolve paths relative to project root
+          const sourcePath = path.isAbsolute(request.value) 
+            ? request.value 
+            : path.join(process.cwd(), request.value);
+          const targetPath = path.isAbsolute(finalPath)
+            ? finalPath
+            : path.join(process.cwd(), finalPath);
+          
           try {
-            await fs.rename(request.value, finalPath);
+            await fs.rename(sourcePath, targetPath);
             finalValue = finalPath;
             this.logger.log(`📁 Moved file from request to final location: ${finalPath}`);
           } catch (error) {
@@ -477,7 +533,10 @@ export class SettingRequestsService {
           // Delete old file if it exists
           if (existingSetting.value && existingSetting.value.startsWith('uploads/')) {
             try {
-              await fs.unlink(existingSetting.value);
+              const oldFilePath = path.isAbsolute(existingSetting.value)
+                ? existingSetting.value
+                : path.join(process.cwd(), existingSetting.value);
+              await fs.unlink(oldFilePath);
               this.logger.log(`🗑️  Deleted old file: ${existingSetting.value}`);
             } catch (error) {
               this.logger.warn(`Failed to delete old file: ${existingSetting.value}`, error);
@@ -489,8 +548,16 @@ export class SettingRequestsService {
           const finalFilename = `${request.key}-${uuidv4()}${fileExtension}`;
           const finalPath = path.join(SETTINGS_UPLOAD_DIR, finalFilename);
           
+          // Resolve paths relative to project root
+          const sourcePath = path.isAbsolute(request.value) 
+            ? request.value 
+            : path.join(process.cwd(), request.value);
+          const targetPath = path.isAbsolute(finalPath)
+            ? finalPath
+            : path.join(process.cwd(), finalPath);
+          
           try {
-            await fs.rename(request.value, finalPath);
+            await fs.rename(sourcePath, targetPath);
             finalValue = finalPath;
             this.logger.log(`📁 Moved file from request to final location: ${finalPath}`);
           } catch (error) {

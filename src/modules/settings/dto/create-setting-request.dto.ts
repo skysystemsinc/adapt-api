@@ -13,7 +13,10 @@ export class CreateSettingRequestDto {
   @IsOptional()
   key?: string;
 
-  @ApiProperty({ description: 'Setting value (required for CREATE/UPDATE, optional for DELETE)', required: false })
+  @ApiProperty({ 
+    description: 'Setting value (required for CREATE/UPDATE, optional for DELETE). For file settings, this should be a base64-encoded string.', 
+    required: false 
+  })
   @IsString()
   @IsOptional()
   value?: string;
@@ -27,6 +30,16 @@ export class CreateSettingRequestDto {
   @IsString()
   @IsOptional()
   originalName?: string;
+
+  @ApiProperty({ description: 'Initialization vector (IV) for encrypted file settings', required: false })
+  @IsString()
+  @IsOptional()
+  iv?: string;
+
+  @ApiProperty({ description: 'Authentication tag for encrypted file settings', required: false })
+  @IsString()
+  @IsOptional()
+  authTag?: string;
 
   @ApiProperty({ description: 'Action: create, update, or delete', enum: SettingRequestAction, required: false })
   @IsEnum(SettingRequestAction)

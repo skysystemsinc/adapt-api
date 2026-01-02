@@ -4,6 +4,7 @@ import {
   UseGuards,
   Res,
   NotFoundException,
+  BadRequestException,
   Logger,
   Param,
 } from '@nestjs/common';
@@ -43,23 +44,32 @@ export class SettingsDownloadController {
         throw new NotFoundException(`File for setting '${key}' is empty`);
       }
 
+      // Validate buffer is actually a Buffer instance
+      if (!Buffer.isBuffer(buffer)) {
+        this.logger.error(`Buffer is not a Buffer instance for setting '${key}'`);
+        throw new BadRequestException(`Invalid file buffer for setting '${key}'`);
+      }
+
       // Log what we're sending
       this.logger.log(`📤 Downloading file for setting '${key}': filename=${filename}, mimeType=${mimeType}, size=${buffer.length} bytes`);
 
       // Encode filename for Content-Disposition header (handles special characters)
       const encodedFilename = encodeURIComponent(filename);
 
-      // Set headers for file download
-      res.setHeader('Content-Type', mimeType);
+      // Set headers for file download - ensure proper binary content type
+      res.setHeader('Content-Type', mimeType || 'application/octet-stream');
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodedFilename}`);
       res.setHeader('Content-Length', buffer.length.toString());
       res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Accept-Ranges', 'bytes');
 
-      // Send decrypted buffer
-      res.send(buffer);
+      // Send decrypted buffer as binary data
+      // Use end() to ensure binary data is sent correctly without any JSON encoding
+      res.end(buffer, 'binary');
       this.logger.log(`✅ File downloaded and decrypted for setting '${key}': ${filename} (${buffer.length} bytes, Content-Type: ${mimeType})`);
     } catch (error) {
-      if (error instanceof NotFoundException) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error;
       }
       this.logger.error(`Error downloading file for setting '${key}':`, error);
