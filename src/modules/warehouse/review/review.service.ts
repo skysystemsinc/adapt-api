@@ -212,21 +212,21 @@ export class ReviewService {
           finalHodName = user.email || null;
         }
 
-        // Create CEO review for all CEO users
+        // Create only one CEO review record (using first CEO's userId)
+        // All CEOs will receive email notifications, but share the same review record
         if (ceoUserList && ceoUserList.length > 0) {
-          for (const ceoUser of ceoUserList) {
-            if (ceoUser?.id) {
-              const ceoReview = reviewRepository.create({
-                applicationId: review.applicationId,
-                applicationLocationId: review.applicationLocationId,
-                type: 'CEO',
-                isSubmitted: true,
-                userId: ceoUser.id,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              });
-              await reviewRepository.save(ceoReview);
-            }
+          const firstCeoUser = ceoUserList[0];
+          if (firstCeoUser?.id) {
+            const ceoReview = reviewRepository.create({
+              applicationId: review.applicationId,
+              applicationLocationId: review.applicationLocationId,
+              type: 'CEO',
+              isSubmitted: true,
+              userId: firstCeoUser.id,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            });
+            await reviewRepository.save(ceoReview);
           }
         }
       }
