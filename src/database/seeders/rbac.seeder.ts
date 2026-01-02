@@ -465,6 +465,7 @@ export class RBACSeeder {
         Permissions.VIEW_WAREHOUSE_APPLICATION_ASSIGNMENT,
         Permissions.IS_HR,
         Permissions.VIEW_KYC,
+        Permissions.REVIEW_KYC_APPROVAL,
       ];
 
       for (const permissionName of hrHodPermissions) {
@@ -502,6 +503,7 @@ export class RBACSeeder {
         Permissions.VIEW_WAREHOUSE_APPLICATION_ASSIGNMENT,
         Permissions.IS_FINANCE,
         Permissions.VIEW_KYC,
+        Permissions.REVIEW_KYC_APPROVAL,
       ];
 
       for (const permissionName of financeHodPermissions) {
@@ -539,6 +541,7 @@ export class RBACSeeder {
         Permissions.VIEW_WAREHOUSE_APPLICATION_ASSIGNMENT,
         Permissions.IS_LEGAL,
         Permissions.VIEW_KYC,
+        Permissions.REVIEW_KYC_APPROVAL,
       ];
 
       for (const permissionName of legalHodPermissions) {
@@ -576,6 +579,7 @@ export class RBACSeeder {
         Permissions.VIEW_WAREHOUSE_APPLICATION_ASSIGNMENT,
         Permissions.IS_INSPECTION,
         Permissions.VIEW_KYC,
+        Permissions.REVIEW_KYC_APPROVAL,
       ];
 
       for (const permissionName of inspectionHodPermissions) {
@@ -613,6 +617,7 @@ export class RBACSeeder {
         Permissions.VIEW_WAREHOUSE_APPLICATION_ASSIGNMENT,
         Permissions.IS_SECURITY,
         Permissions.VIEW_KYC,
+        Permissions.REVIEW_KYC_APPROVAL,
       ];
 
       for (const permissionName of securityHodPermissions) {
@@ -650,6 +655,7 @@ export class RBACSeeder {
         Permissions.VIEW_WAREHOUSE_APPLICATION_ASSIGNMENT,
         Permissions.IS_TECHNICAL,
         Permissions.VIEW_KYC,
+        Permissions.REVIEW_KYC_APPROVAL,
       ];
 
       for (const permissionName of technicalHodPermissions) {
@@ -687,6 +693,7 @@ export class RBACSeeder {
         Permissions.VIEW_WAREHOUSE_APPLICATION_ASSIGNMENT,
         Permissions.IS_ESG,
         Permissions.VIEW_KYC,
+        Permissions.REVIEW_KYC_APPROVAL,
       ];
 
       for (const permissionName of esgHodPermissions) {
