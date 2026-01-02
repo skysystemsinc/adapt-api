@@ -57,6 +57,45 @@ export class WeighingsService {
     }
   }
 
+  /**
+   * Convert base64 string to file-like object (Multer-compatible)
+   */
+  private convertBase64ToFile(
+    base64String: string,
+    fileName: string,
+    mimeType?: string
+  ): any {
+    // Remove data URL prefix if present (e.g., "data:application/pdf;base64,")
+    let base64Data = base64String;
+    if (base64String.includes(',')) {
+      base64Data = base64String.split(',')[1];
+    }
+
+    // Decode base64 to buffer
+    let buffer: Buffer;
+    try {
+      buffer = Buffer.from(base64Data, 'base64');
+    } catch (error) {
+      throw new BadRequestException('Invalid base64 file data');
+    }
+
+    // Validate file size (10MB max)
+    const maxSizeBytes = 10 * 1024 * 1024;
+    if (buffer.length > maxSizeBytes) {
+      throw new BadRequestException(
+        `File size ${(buffer.length / 1024 / 1024).toFixed(2)}MB exceeds maximum allowed size of ${(maxSizeBytes / 1024 / 1024).toFixed(0)}MB`
+      );
+    }
+
+    // Create file-like object that matches Multer file structure
+    return {
+      buffer,
+      originalname: fileName,
+      size: buffer.length,
+      mimetype: mimeType || 'application/octet-stream',
+    };
+  }
+
   private async uploadWarehouseDocument(
     file: any,
     userId: string,
@@ -217,8 +256,7 @@ export class WeighingsService {
   async create(
     warehouseLocationId: string,
     createWeighingDto: CreateWeighingDto,
-    userId: string,
-    weighbridgeCalibrationCertificateFile: any
+    userId: string
   ) {
     const warehouseLocation = await this.warehouseLocationRepository.findOne({
       where: { id: warehouseLocationId, userId },
@@ -232,9 +270,38 @@ export class WeighingsService {
       throw new BadRequestException('Weighing can only be added while application is in draft status');
     }
 
-    // Validate that file is provided
-    if (!weighbridgeCalibrationCertificateFile) {
+    // Extract certificate data from DTO
+    const {
+      weighbridgeCalibrationCertificate,
+      weighbridgeCalibrationCertificateFileName,
+      weighbridgeCalibrationCertificateMimeType,
+      ...weighingData
+    } = createWeighingDto;
+
+    // Validate that certificate is provided (for create, it's required)
+    if (!weighbridgeCalibrationCertificate || (typeof weighbridgeCalibrationCertificate === 'string' && weighbridgeCalibrationCertificate.trim() === '')) {
       throw new BadRequestException('Weighbridge calibration certificate file is required');
+    }
+
+    // Convert base64 to file-like object if it's a base64 string
+    let certificateFile: any = null;
+    let isDocumentId = false;
+
+    // Check if it's a base64 string (starts with 'data:' or is a long string) or a document ID (UUID format)
+    if (weighbridgeCalibrationCertificate.startsWith('data:') || 
+        (!weighbridgeCalibrationCertificate.includes('-') && weighbridgeCalibrationCertificate.length > 50)) {
+      // It's a base64 string
+      if (!weighbridgeCalibrationCertificateFileName) {
+        throw new BadRequestException('weighbridgeCalibrationCertificateFileName is required when certificate is base64');
+      }
+      certificateFile = this.convertBase64ToFile(
+        weighbridgeCalibrationCertificate,
+        weighbridgeCalibrationCertificateFileName,
+        weighbridgeCalibrationCertificateMimeType
+      );
+    } else {
+      // It's likely a document ID - we'll handle it differently
+      isDocumentId = true;
     }
 
     const existingWeighing = await this.weighingRepository.findOne({
@@ -242,21 +309,74 @@ export class WeighingsService {
       relations: ['weighbridgeCalibrationCertificate'],
     });
 
-    // Remove file field from DTO before saving
-    const { weighbridgeCalibrationCertificate, ...weighingData } = createWeighingDto;
-
     if (existingWeighing) {
       Object.assign(existingWeighing, weighingData);
       const savedWeighing = await this.weighingRepository.save(existingWeighing);
 
-      // Delete old file if it exists
-      if (existingWeighing.weighbridgeCalibrationCertificate) {
-        await this.deleteWarehouseDocument(existingWeighing.weighbridgeCalibrationCertificate.id);
+      // Handle certificate: base64 file or document ID
+      if (isDocumentId) {
+        // If it's a document ID, verify it exists and link it
+        const existingDocument = await this.warehouseDocumentRepository.findOne({
+          where: { id: weighbridgeCalibrationCertificate }
+        });
+        if (!existingDocument) {
+          throw new BadRequestException('Invalid document ID provided');
+        }
+        // Delete old file if it exists and is different
+        if (savedWeighing.weighbridgeCalibrationCertificate && 
+            savedWeighing.weighbridgeCalibrationCertificate.id !== weighbridgeCalibrationCertificate) {
+          await this.deleteWarehouseDocument(savedWeighing.weighbridgeCalibrationCertificate.id);
+        }
+        savedWeighing.weighbridgeCalibrationCertificate = existingDocument;
+      } else {
+        // Delete old file if it exists
+        if (savedWeighing.weighbridgeCalibrationCertificate) {
+          await this.deleteWarehouseDocument(savedWeighing.weighbridgeCalibrationCertificate.id);
+        }
+
+        // Upload and link the certificate file
+        const documentResult = await this.uploadWarehouseDocument(
+          certificateFile,
+          userId,
+          'Weighing',
+          savedWeighing.id,
+          'weighbridgeCalibrationCertificate'
+        );
+
+        const certificateDocument = await this.warehouseDocumentRepository.findOne({
+          where: { id: documentResult.id }
+        });
+
+        if (certificateDocument) {
+          savedWeighing.weighbridgeCalibrationCertificate = certificateDocument;
+        }
       }
 
+      await this.weighingRepository.save(savedWeighing);
+      return savedWeighing;
+    }
+
+    const weighing = this.weighingRepository.create({
+      warehouseLocationId,
+      ...weighingData,
+    });
+
+    const savedWeighing = await this.weighingRepository.save(weighing);
+
+    // Handle certificate: base64 file or document ID
+    if (isDocumentId) {
+      // If it's a document ID, verify it exists and link it
+      const existingDocument = await this.warehouseDocumentRepository.findOne({
+        where: { id: weighbridgeCalibrationCertificate }
+      });
+      if (!existingDocument) {
+        throw new BadRequestException('Invalid document ID provided');
+      }
+      savedWeighing.weighbridgeCalibrationCertificate = existingDocument;
+    } else {
       // Upload and link the certificate file
       const documentResult = await this.uploadWarehouseDocument(
-        weighbridgeCalibrationCertificateFile,
+        certificateFile,
         userId,
         'Weighing',
         savedWeighing.id,
@@ -269,36 +389,10 @@ export class WeighingsService {
 
       if (certificateDocument) {
         savedWeighing.weighbridgeCalibrationCertificate = certificateDocument;
-        await this.weighingRepository.save(savedWeighing);
       }
-
-      return savedWeighing;
     }
 
-    const weighing = this.weighingRepository.create({
-      warehouseLocationId,
-      ...weighingData,
-    });
-
-    const savedWeighing = await this.weighingRepository.save(weighing);
-
-    // Upload and link the certificate file
-    const documentResult = await this.uploadWarehouseDocument(
-      weighbridgeCalibrationCertificateFile,
-      userId,
-      'Weighing',
-      savedWeighing.id,
-      'weighbridgeCalibrationCertificate'
-    );
-
-    const certificateDocument = await this.warehouseDocumentRepository.findOne({
-      where: { id: documentResult.id }
-    });
-
-    if (certificateDocument) {
-      savedWeighing.weighbridgeCalibrationCertificate = certificateDocument;
-      await this.weighingRepository.save(savedWeighing);
-    }
+    await this.weighingRepository.save(savedWeighing);
 
     await this.warehouseLocationRepository.update(warehouseLocationId, {
       weighing: savedWeighing,
@@ -313,8 +407,7 @@ export class WeighingsService {
   async updateByWarehouseLocationId(
     warehouseLocationId: string,
     updateWeighingDto: CreateWeighingDto,
-    userId: string,
-    weighbridgeCalibrationCertificateFile?: any
+    userId: string
   ) {
     // Verify warehouse location exists and belongs to user
     const warehouseLocation = await this.warehouseLocationRepository.findOne({
@@ -369,8 +462,16 @@ export class WeighingsService {
         await weighingHistoryRepo.save(historyRecord);
       }
 
-      // Remove file field from DTO before saving
-      const { weighbridgeCalibrationCertificate, ...weighingData } = updateWeighingDto;
+      // Extract certificate data from DTO (optional for updates)
+      const {
+        weighbridgeCalibrationCertificate,
+        weighbridgeCalibrationCertificateFileName,
+        weighbridgeCalibrationCertificateMimeType,
+        ...weighingData
+      } = updateWeighingDto;
+
+      // If no certificate provided in update, keep existing one
+      // The certificate handling will be done outside the transaction
 
       // Overwrite existing weighing with new information
       existingWeighing.weighbridgeAvailable = weighingData.weighbridgeAvailable;
@@ -383,65 +484,79 @@ export class WeighingsService {
       existingWeighing.weighbridgeOwnerOperatorName = weighingData.weighbridgeOwnerOperatorName ?? undefined;
       existingWeighing.weighbridgeAddressLocation = weighingData.weighbridgeAddressLocation ?? undefined;
       existingWeighing.weighbridgeDistanceFromFacility = weighingData.weighbridgeDistanceFromFacility ?? undefined;
-      // Remove this line - document relation is handled after transaction
-      // existingWeighing.weighbridgeCalibrationCertificate = weighbridgeCalibrationCertificate ?? undefined;
 
-      return weighingRepo.save(existingWeighing);
+      return { savedWeighing: await weighingRepo.save(existingWeighing), certificateData: {
+        weighbridgeCalibrationCertificate,
+        weighbridgeCalibrationCertificateFileName,
+        weighbridgeCalibrationCertificateMimeType,
+      } };
     });
 
-    // Handle file upload/update (outside transaction)
-    if (weighbridgeCalibrationCertificateFile) {
-      // New file provided - delete old file and upload new one
-      if (result.weighbridgeCalibrationCertificate) {
-        await this.deleteWarehouseDocument(result.weighbridgeCalibrationCertificate.id);
+    // Handle certificate upload/update (outside transaction)
+    if (result.certificateData.weighbridgeCalibrationCertificate) {
+      const {
+        weighbridgeCalibrationCertificate,
+        weighbridgeCalibrationCertificateFileName,
+        weighbridgeCalibrationCertificateMimeType,
+      } = result.certificateData;
+
+      // Convert base64 to file-like object if it's a base64 string
+      let certificateFile: any = null;
+      let isDocumentId = false;
+
+      // Check if it's a base64 string (starts with 'data:' or is a long string) or a document ID (UUID format)
+      if (weighbridgeCalibrationCertificate.startsWith('data:') || 
+          (!weighbridgeCalibrationCertificate.includes('-') && weighbridgeCalibrationCertificate.length > 50)) {
+        // It's a base64 string
+        if (!weighbridgeCalibrationCertificateFileName) {
+          throw new BadRequestException('weighbridgeCalibrationCertificateFileName is required when certificate is base64');
+        }
+        certificateFile = this.convertBase64ToFile(
+          weighbridgeCalibrationCertificate,
+          weighbridgeCalibrationCertificateFileName,
+          weighbridgeCalibrationCertificateMimeType
+        );
+      } else {
+        // It's likely a document ID
+        isDocumentId = true;
       }
 
-      const documentResult = await this.uploadWarehouseDocument(
-        weighbridgeCalibrationCertificateFile,
-        userId,
-        'Weighing',
-        result.id,
-        'weighbridgeCalibrationCertificate'
-      );
-
-      const certificateDocument = await this.warehouseDocumentRepository.findOne({
-        where: { id: documentResult.id }
-      });
-
-      if (certificateDocument) {
-        result.weighbridgeCalibrationCertificate = certificateDocument;
-        await this.weighingRepository.save(result);
-      }
-    } else {
-      // No new file provided - handle string (document ID) in DTO or keep existing
-      const { weighbridgeCalibrationCertificate } = updateWeighingDto;
-
-      if (weighbridgeCalibrationCertificate && typeof weighbridgeCalibrationCertificate === 'string') {
-        // User sent document ID as string - validate it exists and belongs to this weighing
+      if (isDocumentId) {
+        // If it's a document ID, verify it exists and link it
         const existingDocument = await this.warehouseDocumentRepository.findOne({
-          where: {
-            id: weighbridgeCalibrationCertificate,
-            documentableType: 'Weighing',
-            documentableId: result.id,
-            documentType: 'weighbridgeCalibrationCertificate'
-          }
+          where: { id: weighbridgeCalibrationCertificate }
+        });
+        if (!existingDocument) {
+          throw new BadRequestException('Invalid document ID provided');
+        }
+        // Delete old file if it exists and is different
+        if (result.savedWeighing.weighbridgeCalibrationCertificate && 
+            result.savedWeighing.weighbridgeCalibrationCertificate.id !== weighbridgeCalibrationCertificate) {
+          await this.deleteWarehouseDocument(result.savedWeighing.weighbridgeCalibrationCertificate.id);
+        }
+        result.savedWeighing.weighbridgeCalibrationCertificate = existingDocument;
+      } else {
+        // New file provided - delete old file and upload new one
+        if (result.savedWeighing.weighbridgeCalibrationCertificate) {
+          await this.deleteWarehouseDocument(result.savedWeighing.weighbridgeCalibrationCertificate.id);
+        }
+
+        const documentResult = await this.uploadWarehouseDocument(
+          certificateFile,
+          userId,
+          'Weighing',
+          result.savedWeighing.id,
+          'weighbridgeCalibrationCertificate'
+        );
+
+        const certificateDocument = await this.warehouseDocumentRepository.findOne({
+          where: { id: documentResult.id }
         });
 
-        if (!existingDocument) {
-          throw new BadRequestException('Invalid document ID provided or document does not belong to this weighing');
+        if (certificateDocument) {
+          result.savedWeighing.weighbridgeCalibrationCertificate = certificateDocument;
+          await this.weighingRepository.save(result.savedWeighing);
         }
-
-        // Keep the existing document
-        result.weighbridgeCalibrationCertificate = existingDocument;
-        await this.weighingRepository.save(result);
-      } else {
-        // No file and no document ID in DTO - ensure existing certificate is preserved
-        if (!existingWeighing.weighbridgeCalibrationCertificate) {
-          throw new BadRequestException('Weighbridge calibration certificate is required');
-        }
-        // Keep existing certificate
-        result.weighbridgeCalibrationCertificate = existingWeighing.weighbridgeCalibrationCertificate;
-        await this.weighingRepository.save(result);
       }
     }
 
@@ -466,7 +581,7 @@ export class WeighingsService {
           where: {
             assignmentId: In(assignments.map((a) => a.id)),
             sectionType: '5-weighing',
-            resourceId: existingWeighing.id,
+            resourceId: result.savedWeighing.id,
           },
         });
 
@@ -479,16 +594,12 @@ export class WeighingsService {
       await this.warehouseLocationService.trackWarehouseLocationResubmissionAndUpdateStatus(
         warehouseLocationId,
         '5-weighing',
-        existingWeighing.id,
+        result.savedWeighing.id,
         assignmentSectionId ?? undefined,
       );
     }
 
-    return {
-      message: 'Weighing updated successfully',
-      weighingId: existingWeighing.id,
-      applicationId: warehouseLocationId,
-    };
+    return result.savedWeighing;
   }
 
   findAll() {

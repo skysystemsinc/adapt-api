@@ -55,6 +55,42 @@ export class ProfessionalExperienceService {
     }
   }
 
+  private convertBase64ToFile(
+    base64String: string,
+    fileName: string,
+    mimeType?: string
+  ): any {
+    // Remove data URL prefix if present (e.g., "data:application/pdf;base64,")
+    let base64Data = base64String;
+    if (base64String.includes(',')) {
+      base64Data = base64String.split(',')[1];
+    }
+
+    // Decode base64 to buffer
+    let buffer: Buffer;
+    try {
+      buffer = Buffer.from(base64Data, 'base64');
+    } catch (error) {
+      throw new BadRequestException('Invalid base64 file data');
+    }
+
+    // Validate file size (10MB max)
+    const maxSizeBytes = 10 * 1024 * 1024;
+    if (buffer.length > maxSizeBytes) {
+      throw new BadRequestException(
+        `File size ${(buffer.length / 1024 / 1024).toFixed(2)}MB exceeds maximum allowed size of ${(maxSizeBytes / 1024 / 1024).toFixed(0)}MB`
+      );
+    }
+
+    // Create file-like object that matches Multer file structure
+    return {
+      buffer,
+      originalname: fileName,
+      size: buffer.length,
+      mimetype: mimeType || 'application/octet-stream',
+    };
+  }
+
   private async uploadWarehouseDocument(
     file: any,
     userId: string,
@@ -213,8 +249,7 @@ export class ProfessionalExperienceService {
   async create(
     hrId: string,
     createProfessionalExperienceDto: CreateProfessionalExperienceDto,
-    userId: string,
-    experienceLetterFile?: any
+    userId: string
   ) {
     const humanResource = await this.humanResourceRepository.findOne({
       where: { id: hrId },
@@ -224,7 +259,7 @@ export class ProfessionalExperienceService {
       throw new NotFoundException('HR entry not found');
     }
 
-    const { experienceLetter, ...experienceData } = createProfessionalExperienceDto;
+    const { experienceLetter, experienceLetterFileName, experienceLetterMimeType, ...experienceData } = createProfessionalExperienceDto;
 
     // Validate that date of appointment is not after date of leaving
     if (experienceData.dateOfAppointment && experienceData.dateOfLeaving) {
@@ -235,8 +270,31 @@ export class ProfessionalExperienceService {
       }
     }
 
+    // Process base64 experience letter file if provided
+    let experienceLetterFile: any = null;
+    let isDocumentId = false;
+    
+    if (experienceLetter) {
+      // Check if it's base64 (starts with "data:" or is a very long string without dashes)
+      const isBase64 = experienceLetter.startsWith('data:') || 
+                      (!experienceLetter.includes('-') && experienceLetter.length > 50);
+      
+      if (isBase64) {
+        if (!experienceLetterFileName) {
+          throw new BadRequestException('experienceLetterFileName is required when experienceLetter is base64');
+        }
+        experienceLetterFile = this.convertBase64ToFile(
+          experienceLetter,
+          experienceLetterFileName,
+          experienceLetterMimeType
+        );
+      } else {
+        isDocumentId = true;
+      }
+    }
+
     // Validate that experience letter is required when date of leaving is provided
-    if (experienceData.dateOfLeaving && !experienceLetterFile && !experienceLetter) {
+    if (experienceData.dateOfLeaving && !experienceLetterFile && !isDocumentId) {
       throw new BadRequestException('Experience Letter is required when Date of Leaving is provided');
     }
 
@@ -276,6 +334,24 @@ export class ProfessionalExperienceService {
         savedExperience.experienceLetter = letterDocument;
         await this.professionalExperienceRepository.save(savedExperience);
       }
+    } else if (isDocumentId && experienceLetter) {
+      // Link existing document
+      const existingDocument = await this.warehouseDocumentRepository.findOne({
+        where: { id: experienceLetter }
+      });
+
+      if (!existingDocument) {
+        throw new BadRequestException('Invalid document ID provided');
+      }
+
+      // Update document to link to this experience
+      existingDocument.documentableType = 'ProfessionalExperience';
+      existingDocument.documentableId = savedExperience.id;
+      existingDocument.documentType = 'experienceLetter';
+      await this.warehouseDocumentRepository.save(existingDocument);
+
+      savedExperience.experienceLetter = existingDocument;
+      await this.professionalExperienceRepository.save(savedExperience);
     }
 
     return savedExperience;
@@ -285,8 +361,7 @@ export class ProfessionalExperienceService {
     expId: string,
     hrId: string,
     updateProfessionalExperienceDto: CreateProfessionalExperienceDto,
-    userId: string,
-    experienceLetterFile?: any
+    userId: string
   ) {
     const experience = await this.professionalExperienceRepository.findOne({
       where: { id: expId, humanResourceId: hrId },
@@ -309,7 +384,30 @@ export class ProfessionalExperienceService {
       throw new BadRequestException('Professional experience can only be updated while application is in draft, rejected, or resubmitted status');
     }
   
-    const { experienceLetter, duration, ...experienceData } = updateProfessionalExperienceDto;
+    const { experienceLetter, experienceLetterFileName, experienceLetterMimeType, duration, ...experienceData } = updateProfessionalExperienceDto;
+    
+    // Process base64 experience letter file if provided
+    let experienceLetterFile: any = null;
+    let isDocumentId = false;
+    
+    if (experienceLetter) {
+      // Check if it's base64 (starts with "data:" or is a very long string without dashes)
+      const isBase64 = experienceLetter.startsWith('data:') || 
+                      (!experienceLetter.includes('-') && experienceLetter.length > 50);
+      
+      if (isBase64) {
+        if (!experienceLetterFileName) {
+          throw new BadRequestException('experienceLetterFileName is required when experienceLetter is base64');
+        }
+        experienceLetterFile = this.convertBase64ToFile(
+          experienceLetter,
+          experienceLetterFileName,
+          experienceLetterMimeType
+        );
+      } else {
+        isDocumentId = true;
+      }
+    }
   
     // Validate that date of appointment is not after date of leaving
     const finalAppointmentDate = experienceData.dateOfAppointment ?? experience.dateOfAppointment;
@@ -324,7 +422,7 @@ export class ProfessionalExperienceService {
   
     // Validate that experience letter is required when date of leaving is provided
     const finalLeavingDateForValidation = experienceData.dateOfLeaving ?? experience.dateOfLeaving;
-    const hasExperienceLetter = experienceLetterFile || experienceLetter || experience.experienceLetter;
+    const hasExperienceLetter = experienceLetterFile || isDocumentId || experience.experienceLetter;
     if (finalLeavingDateForValidation && !hasExperienceLetter) {
       throw new BadRequestException('Experience Letter is required when Date of Leaving is provided');
     }
@@ -367,10 +465,11 @@ export class ProfessionalExperienceService {
   
     // Handle file upload/update (outside transaction)
     if (experienceLetterFile) {
+      // New base64 file - delete old one if exists
       if (experience.experienceLetter) {
         await this.deleteWarehouseDocument(experience.experienceLetter.id);
       }
-  
+
       const documentResult = await this.uploadWarehouseDocument(
         experienceLetterFile,
         userId,
@@ -378,36 +477,36 @@ export class ProfessionalExperienceService {
         result.id,
         'experienceLetter'
       );
-  
+
       const letterDocument = await this.warehouseDocumentRepository.findOne({
         where: { id: documentResult.id }
       });
-  
+
       if (letterDocument) {
         result.experienceLetter = letterDocument;
         await this.professionalExperienceRepository.save(result);
       }
-    } else {
-      if (experienceLetter && typeof experienceLetter === 'string') {
-        const existingDocument = await this.warehouseDocumentRepository.findOne({
-          where: { 
-            id: experienceLetter,
-            documentableType: 'ProfessionalExperience',
-            documentableId: result.id,
-            documentType: 'experienceLetter'
-          }
-        });
-  
-        if (!existingDocument) {
-          throw new BadRequestException('Invalid document ID provided or document does not belong to this experience');
+    } else if (isDocumentId && experienceLetter) {
+      // Existing document ID - verify and link
+      const existingDocument = await this.warehouseDocumentRepository.findOne({
+        where: { 
+          id: experienceLetter,
+          documentableType: 'ProfessionalExperience',
+          documentableId: result.id,
+          documentType: 'experienceLetter'
         }
-  
-        result.experienceLetter = existingDocument;
-        await this.professionalExperienceRepository.save(result);
-      } else {
-        result.experienceLetter = experience.experienceLetter;
-        await this.professionalExperienceRepository.save(result);
+      });
+
+      if (!existingDocument) {
+        throw new BadRequestException('Invalid document ID provided or document does not belong to this experience');
       }
+
+      result.experienceLetter = existingDocument;
+      await this.professionalExperienceRepository.save(result);
+    } else {
+      // No letter provided - keep existing
+      result.experienceLetter = experience.experienceLetter;
+      await this.professionalExperienceRepository.save(result);
     }
   
     // Track resubmission if application was REJECTED

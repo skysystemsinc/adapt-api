@@ -76,6 +76,42 @@ export class HumanResourceService {
     }
   }
 
+  private convertBase64ToFile(
+    base64String: string,
+    fileName: string,
+    mimeType?: string
+  ): any {
+    // Remove data URL prefix if present (e.g., "data:application/pdf;base64,")
+    let base64Data = base64String;
+    if (base64String.includes(',')) {
+      base64Data = base64String.split(',')[1];
+    }
+
+    // Decode base64 to buffer
+    let buffer: Buffer;
+    try {
+      buffer = Buffer.from(base64Data, 'base64');
+    } catch (error) {
+      throw new BadRequestException('Invalid base64 file data');
+    }
+
+    // Validate file size (10MB max)
+    const maxSizeBytes = 10 * 1024 * 1024;
+    if (buffer.length > maxSizeBytes) {
+      throw new BadRequestException(
+        `File size ${(buffer.length / 1024 / 1024).toFixed(2)}MB exceeds maximum allowed size of ${(maxSizeBytes / 1024 / 1024).toFixed(0)}MB`
+      );
+    }
+
+    // Create file-like object that matches Multer file structure
+    return {
+      buffer,
+      originalname: fileName,
+      size: buffer.length,
+      mimetype: mimeType || 'application/octet-stream',
+    };
+  }
+
   private async uploadWarehouseDocument(
     file: any,
     userId: string,
@@ -249,9 +285,8 @@ export class HumanResourceService {
    */
   async createPersonalDetails(
     warehouseLocationId: string,
-    CreateHumanResourceDto: CreateHumanResourceDto,
+    createHumanResourceDto: CreateHumanResourceDto,
     userId: string,
-    photographFile?: any,
     hrId?: string
   ) {
     const warehouseLocation = await this.warehouseLocationRepository.findOne({
@@ -267,7 +302,30 @@ export class HumanResourceService {
       throw new BadRequestException('HR information can only be added/updated while application is in draft, rejected, or resubmitted status');
     }
   
-    const { photograph, ...personalDetailsData } = CreateHumanResourceDto;
+    const { photograph, photographFileName, photographMimeType, ...personalDetailsData } = createHumanResourceDto;
+    
+    // Process base64 photograph if provided
+    let photographFile: any = null;
+    let isDocumentId = false;
+    
+    if (photograph) {
+      // Check if it's base64 (starts with "data:" or is a very long string without dashes)
+      const isBase64 = photograph.startsWith('data:') || 
+                      (!photograph.includes('-') && photograph.length > 50);
+      
+      if (isBase64) {
+        if (!photographFileName) {
+          throw new BadRequestException('photographFileName is required when photograph is base64');
+        }
+        photographFile = this.convertBase64ToFile(
+          photograph,
+          photographFileName,
+          photographMimeType
+        );
+      } else {
+        isDocumentId = true;
+      }
+    }
   
     if (hrId) {
       const existingHR = await this.humanResourceRepository.findOne({
@@ -310,10 +368,11 @@ export class HumanResourceService {
   
       // Handle photograph file upload/update (outside transaction)
       if (photographFile) {
+        // New base64 file - delete old one if exists
         if (existingHR.photograph) {
           await this.deleteWarehouseDocument(existingHR.photograph.id);
         }
-  
+
         const documentResult = await this.uploadWarehouseDocument(
           photographFile,
           userId,
@@ -321,36 +380,36 @@ export class HumanResourceService {
           result.id,
           'photograph'
         );
-  
+
         const photographDocument = await this.warehouseDocumentRepository.findOne({
           where: { id: documentResult.id }
         });
-  
+
         if (photographDocument) {
           result.photograph = photographDocument;
           await this.humanResourceRepository.save(result);
         }
-      } else {
-        if (photograph && typeof photograph === 'string') {
-          const existingDocument = await this.warehouseDocumentRepository.findOne({
-            where: { 
-              id: photograph,
-              documentableType: 'HumanResource',
-              documentableId: result.id,
-              documentType: 'photograph'
-            }
-          });
-  
-          if (!existingDocument) {
-            throw new BadRequestException('Invalid document ID provided or document does not belong to this HR entry');
+      } else if (isDocumentId && photograph) {
+        // Existing document ID - verify and link
+        const existingDocument = await this.warehouseDocumentRepository.findOne({
+          where: { 
+            id: photograph,
+            documentableType: 'HumanResource',
+            documentableId: result.id,
+            documentType: 'photograph'
           }
-  
-          result.photograph = existingDocument;
-          await this.humanResourceRepository.save(result);
-        } else {
-          result.photograph = existingHR.photograph;
-          await this.humanResourceRepository.save(result);
+        });
+
+        if (!existingDocument) {
+          throw new BadRequestException('Invalid document ID provided or document does not belong to this HR entry');
         }
+
+        result.photograph = existingDocument;
+        await this.humanResourceRepository.save(result);
+      } else {
+        // No photograph provided - keep existing
+        result.photograph = existingHR.photograph;
+        await this.humanResourceRepository.save(result);
       }
   
       // Track resubmission if application was REJECTED
@@ -393,16 +452,17 @@ export class HumanResourceService {
       return result;
     }
   
-    // Create new HR entry (unchanged logic)
+    // Create new HR entry
     const { dateOfBirth, ...restPersonalDetails } = personalDetailsData;
     const humanResource = this.humanResourceRepository.create({
       warehouseLocationId,
       ...restPersonalDetails,
       dateOfBirth: dateOfBirth ?? undefined,
     });
-  
+
     const savedHR = await this.humanResourceRepository.save(humanResource);
-  
+
+    // Handle photograph file upload
     if (photographFile) {
       const documentResult = await this.uploadWarehouseDocument(
         photographFile,
@@ -411,17 +471,35 @@ export class HumanResourceService {
         savedHR.id,
         'photograph'
       );
-  
+
       const photographDocument = await this.warehouseDocumentRepository.findOne({
         where: { id: documentResult.id }
       });
-  
+
       if (photographDocument) {
         savedHR.photograph = photographDocument;
         await this.humanResourceRepository.save(savedHR);
       }
+    } else if (isDocumentId && photograph) {
+      // Link existing document
+      const existingDocument = await this.warehouseDocumentRepository.findOne({
+        where: { id: photograph }
+      });
+
+      if (!existingDocument) {
+        throw new BadRequestException('Invalid document ID provided');
+      }
+
+      // Update document to link to this HR entry
+      existingDocument.documentableType = 'HumanResource';
+      existingDocument.documentableId = savedHR.id;
+      existingDocument.documentType = 'photograph';
+      await this.warehouseDocumentRepository.save(existingDocument);
+
+      savedHR.photograph = existingDocument;
+      await this.humanResourceRepository.save(savedHR);
     }
-  
+
     return savedHR;
   }
 

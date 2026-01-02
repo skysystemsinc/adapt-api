@@ -1,7 +1,6 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, UseInterceptors, UploadedFile, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, Query } from '@nestjs/common';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
-import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiConsumes, ApiBody, ApiOperation, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiBody, ApiOperation, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { HumanResourceService } from './human-resource.service';
 import { CreateHumanResourceDto } from './dto/create-human-resource.dto';
 import { CreateDeclarationDto } from './declaration/dto/create-declaration.dto';
@@ -39,51 +38,33 @@ export class HumanResourceController {
 
   @Post(':id/human-resources/personal-details')
   @ApiOperation({ summary: 'Create HR entry with personal details' })
-  @ApiConsumes('multipart/form-data')
   @ApiBody({
     type: CreateHumanResourceDto,
-    description: 'Personal details data with optional photograph file'
+    description: 'Personal details data with photograph as base64 string or document ID'
   })
-  @UseInterceptors(
-    FileInterceptor('photograph', {
-      limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB max
-      },
-    }),
-  )
   async createPersonalDetails(
     @Param('id') id: string,
-    @Body() CreateHumanResourceDto: CreateHumanResourceDto,
-    @UploadedFile() photographFile: any,
+    @Body() createHumanResourceDto: CreateHumanResourceDto,
     @Request() req: any
   ) {
     const userId = req.user.sub;
-    return this.humanResourceService.createPersonalDetails(id, CreateHumanResourceDto, userId, photographFile);
+    return this.humanResourceService.createPersonalDetails(id, createHumanResourceDto, userId);
   }
 
   @Patch(':id/human-resources/:hrId/personal-details')
   @ApiOperation({ summary: 'Update personal details for HR entry' })
-  @ApiConsumes('multipart/form-data')
   @ApiBody({
     type: CreateHumanResourceDto,
-    description: 'Personal details data with optional photograph file'
+    description: 'Personal details data with photograph as base64 string or document ID'
   })
-  @UseInterceptors(
-    FileInterceptor('photograph', {
-      limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB max
-      },
-    }),
-  )
   async updatePersonalDetails(
     @Param('id') id: string,
     @Param('hrId') hrId: string,
-    @Body() CreateHumanResourceDto: CreateHumanResourceDto,
-    @UploadedFile() photographFile: any,
+    @Body() createHumanResourceDto: CreateHumanResourceDto,
     @Request() req: any
   ) {
     const userId = req.user.sub;
-    return this.humanResourceService.createPersonalDetails(id, CreateHumanResourceDto, userId, photographFile, hrId);
+    return this.humanResourceService.createPersonalDetails(id, createHumanResourceDto, userId, hrId);
   }
 
   @Post(':id/human-resources/:hrId/declaration')
@@ -100,53 +81,35 @@ export class HumanResourceController {
 
   @Post(':id/human-resources/:hrId/academic-qualifications')
   @ApiOperation({ summary: 'Create academic qualification for HR entry' })
-  @ApiConsumes('multipart/form-data')
   @ApiBody({
     type: CreateAcademicQualificationDto,
-    description: 'Academic qualification data with optional certificate file'
+    description: 'Academic qualification data with certificate as base64 string or document ID'
   })
-  @UseInterceptors(
-    FileInterceptor('academicCertificate', {
-      limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB max
-      },
-    }),
-  )
   async createAcademicQualification(
     @Param('id') id: string,
     @Param('hrId') hrId: string,
     @Body() createAcademicQualificationDto: CreateAcademicQualificationDto,
-    @UploadedFile() certificateFile: any,
     @Request() req: any
   ) {
     const userId = req.user.sub;
-    return this.academicQualificationService.create(hrId, createAcademicQualificationDto, userId, certificateFile);
+    return this.academicQualificationService.create(hrId, createAcademicQualificationDto, userId);
   }
 
   @Patch(':id/human-resources/:hrId/academic-qualifications/:qualId')
   @ApiOperation({ summary: 'Update academic qualification' })
-  @ApiConsumes('multipart/form-data')
   @ApiBody({
     type: CreateAcademicQualificationDto,
-    description: 'Academic qualification data with optional certificate file'
+    description: 'Academic qualification data with certificate as base64 string or document ID'
   })
-  @UseInterceptors(
-    FileInterceptor('academicCertificate', {
-      limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB max
-      },
-    }),
-  )
   async updateAcademicQualification(
     @Param('id') id: string,
     @Param('hrId') hrId: string,
     @Param('qualId') qualId: string,
     @Body() createAcademicQualificationDto: CreateAcademicQualificationDto,
-    @UploadedFile() certificateFile: any,
     @Request() req: any
   ) {
     const userId = req.user.sub;
-    return this.academicQualificationService.update(qualId, hrId, createAcademicQualificationDto, userId, certificateFile);
+    return this.academicQualificationService.update(qualId, hrId, createAcademicQualificationDto, userId);
   }
 
   @Delete(':id/human-resources/:hrId/academic-qualifications/:qualId')
@@ -161,53 +124,35 @@ export class HumanResourceController {
 
   @Post(':id/human-resources/:hrId/professional-qualifications')
   @ApiOperation({ summary: 'Create professional qualification for HR entry' })
-  @ApiConsumes('multipart/form-data')
   @ApiBody({
     type: CreateProfessionalQualificationDto,
-    description: 'Professional qualification data with optional certificate file'
+    description: 'Professional qualification data with certificate as base64 string or document ID'
   })
-  @UseInterceptors(
-    FileInterceptor('professionalCertificate', {
-      limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB max
-      },
-    }),
-  )
   async createProfessionalQualification(
     @Param('id') id: string,
     @Param('hrId') hrId: string,
     @Body() createProfessionalQualificationDto: CreateProfessionalQualificationDto,
-    @UploadedFile() certificateFile: any,
     @Request() req: any
   ) {
     const userId = req.user.sub;
-    return this.professionalQualificationService.create(hrId, createProfessionalQualificationDto, userId, certificateFile);
+    return this.professionalQualificationService.create(hrId, createProfessionalQualificationDto, userId);
   }
 
   @Patch(':id/human-resources/:hrId/professional-qualifications/:qualId')
   @ApiOperation({ summary: 'Update professional qualification' })
-  @ApiConsumes('multipart/form-data')
   @ApiBody({
     type: CreateProfessionalQualificationDto,
-    description: 'Professional qualification data with optional certificate file'
+    description: 'Professional qualification data with certificate as base64 string or document ID'
   })
-  @UseInterceptors(
-    FileInterceptor('professionalCertificate', {
-      limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB max
-      },
-    }),
-  )
   async updateProfessionalQualification(
     @Param('id') id: string,
     @Param('hrId') hrId: string,
     @Param('qualId') qualId: string,
     @Body() createProfessionalQualificationDto: CreateProfessionalQualificationDto,
-    @UploadedFile() certificateFile: any,
     @Request() req: any
   ) {
     const userId = req.user.sub;
-    return this.professionalQualificationService.update(qualId, hrId, createProfessionalQualificationDto, userId, certificateFile);
+    return this.professionalQualificationService.update(qualId, hrId, createProfessionalQualificationDto, userId);
   }
 
   @Delete(':id/human-resources/:hrId/professional-qualifications/:qualId')
@@ -222,53 +167,35 @@ export class HumanResourceController {
 
   @Post(':id/human-resources/:hrId/trainings')
   @ApiOperation({ summary: 'Create training for HR entry' })
-  @ApiConsumes('multipart/form-data')
   @ApiBody({
     type: CreateTrainingDto,
-    description: 'Training data with optional certificate file'
+    description: 'Training data with certificate as base64 string or document ID'
   })
-  @UseInterceptors(
-    FileInterceptor('trainingCertificate', {
-      limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB max
-      },
-    }),
-  )
   async createTraining(
     @Param('id') id: string,
     @Param('hrId') hrId: string,
     @Body() createTrainingDto: CreateTrainingDto,
-    @UploadedFile() certificateFile: any,
     @Request() req: any
   ) {
     const userId = req.user.sub;
-    return this.trainingService.create(hrId, createTrainingDto, userId, certificateFile);
+    return this.trainingService.create(hrId, createTrainingDto, userId);
   }
 
   @Patch(':id/human-resources/:hrId/trainings/:trainingId')
   @ApiOperation({ summary: 'Update training' })
-  @ApiConsumes('multipart/form-data')
   @ApiBody({
     type: CreateTrainingDto,
-    description: 'Training data with optional certificate file'
+    description: 'Training data with certificate as base64 string or document ID'
   })
-  @UseInterceptors(
-    FileInterceptor('trainingCertificate', {
-      limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB max
-      },
-    }),
-  )
   async updateTraining(
     @Param('id') id: string,
     @Param('hrId') hrId: string,
     @Param('trainingId') trainingId: string,
     @Body() createTrainingDto: CreateTrainingDto,
-    @UploadedFile() certificateFile: any,
     @Request() req: any
   ) {
     const userId = req.user.sub;
-    return this.trainingService.update(trainingId, hrId, createTrainingDto, userId, certificateFile);
+    return this.trainingService.update(trainingId, hrId, createTrainingDto, userId);
   }
 
   @Delete(':id/human-resources/:hrId/trainings/:trainingId')
@@ -283,53 +210,35 @@ export class HumanResourceController {
 
   @Post(':id/human-resources/:hrId/professional-experiences')
   @ApiOperation({ summary: 'Create professional experience for HR entry' })
-  @ApiConsumes('multipart/form-data')
   @ApiBody({
     type: CreateProfessionalExperienceDto,
-    description: 'Professional experience data with optional experience letter file'
+    description: 'Professional experience data with experience letter as base64 string or document ID'
   })
-  @UseInterceptors(
-    FileInterceptor('experienceLetter', {
-      limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB max
-      },
-    }),
-  )
   async createProfessionalExperience(
     @Param('id') id: string,
     @Param('hrId') hrId: string,
     @Body() createProfessionalExperienceDto: CreateProfessionalExperienceDto,
-    @UploadedFile() experienceLetterFile: any,
     @Request() req: any
   ) {
     const userId = req.user.sub;
-    return this.professionalExperienceService.create(hrId, createProfessionalExperienceDto, userId, experienceLetterFile);
+    return this.professionalExperienceService.create(hrId, createProfessionalExperienceDto, userId);
   }
 
   @Patch(':id/human-resources/:hrId/professional-experiences/:expId')
   @ApiOperation({ summary: 'Update professional experience' })
-  @ApiConsumes('multipart/form-data')
   @ApiBody({
     type: CreateProfessionalExperienceDto,
-    description: 'Professional experience data with optional experience letter file'
+    description: 'Professional experience data with experience letter as base64 string or document ID'
   })
-  @UseInterceptors(
-    FileInterceptor('experienceLetter', {
-      limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB max
-      },
-    }),
-  )
   async updateProfessionalExperience(
     @Param('id') id: string,
     @Param('hrId') hrId: string,
     @Param('expId') expId: string,
     @Body() createProfessionalExperienceDto: CreateProfessionalExperienceDto,
-    @UploadedFile() experienceLetterFile: any,
     @Request() req: any
   ) {
     const userId = req.user.sub;
-    return this.professionalExperienceService.update(expId, hrId, createProfessionalExperienceDto, userId, experienceLetterFile);
+    return this.professionalExperienceService.update(expId, hrId, createProfessionalExperienceDto, userId);
   }
 
   @Delete(':id/human-resources/:hrId/professional-experiences/:expId')

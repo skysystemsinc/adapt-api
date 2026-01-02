@@ -49,18 +49,27 @@ export class CreateWeighingDto {
   weighbridgeDistanceFromFacility?: string;
 
   @ApiProperty({
-    type: 'string',
-    format: 'binary',
-    description: 'Weighbridge calibration certificate file (PDF, PNG, JPG, JPEG, DOC, DOCX). Max size: 10MB',
-    required: true,
-  })
-  @Transform(({ value }) => {
-    // Transform empty strings to undefined to avoid validation errors
-    // The actual file is handled by FileInterceptor, not the DTO
-    if (value === '' || value === null) return undefined;
-    return value;
+    description: 'Weighbridge calibration certificate as base64-encoded string or existing document ID (required for create, optional for update)',
+    example: 'data:application/pdf;base64,JVBERi0xLjQK...',
+    required: false,
   })
   @IsOptional()
-  @Exclude()
-  weighbridgeCalibrationCertificate?: any;
+  @IsString()
+  weighbridgeCalibrationCertificate?: string;
+
+  @ApiProperty({
+    description: 'Original filename for calibration certificate (required if weighbridgeCalibrationCertificate is base64)',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  weighbridgeCalibrationCertificateFileName?: string;
+
+  @ApiProperty({
+    description: 'MIME type for calibration certificate (required if weighbridgeCalibrationCertificate is base64)',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  weighbridgeCalibrationCertificateMimeType?: string;
 }
